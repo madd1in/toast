@@ -64,6 +64,9 @@ function arm(c, px, py, ang, sleeve, sleeveLen, skin, len, w, hand = 5.5) {
   c.restore();
 }
 function mouthOpen(a, t) { return !!a.talking && Math.floor(t / 115) % 2 === 0; }
+function blinking(a, t) { return ((t + (a.seed || 0) * 1777) % 3900) < 130; }
+// Pupille – oder ein geschlossenes Lid, wenn die Figur gerade blinzelt
+function pupil(c, a, t, x, y, r) { if (blinking(a, t)) L(c, [x - r * 2.2, y, x + r * 2.2, y], 2.2); else E(c, x, y, r, r * 1.15, OUT, 0); }
 function swing(a) { return a.walking ? Math.sin(a.phase) : 0; }
 function bobY(a, t) { return a.walking ? -Math.abs(Math.cos(a.phase)) * 3 : Math.sin(t * 0.002 + (a.seed || 0)) * 0.7; }
 
@@ -93,7 +96,7 @@ CHAR.bernard = (c, a, t) => {
   });
   E(c, 12, -189, 7.5, 7.5, '#eaf5ff'); E(c, 27, -189, 7.5, 7.5, '#eaf5ff');
   L(c, [4.5, -189, -8, -187], 2.5);
-  E(c, 14, -188, 2, 2.2, OUT, 0); E(c, 29, -188, 2, 2.2, OUT, 0);
+  pupil(c, a, t, 14, -188, 2); pupil(c, a, t, 29, -188, 2);
   E(c, 29, -177, 8, 6.5, '#efb48c');
   if (mo) E(c, 18, -165, 5, 4, '#7a2222', 2); else L(c, [12, -165, 22, -166], 2.5);
   arm(c, 7, -144, -0.12 + sw * 0.45, shirt, 18, skin, 50, 9);
@@ -117,7 +120,7 @@ CHAR.hoagie = (c, a, t) => {
   S(c, '#c8322e', 3, () => { c.moveTo(-15, -158); c.quadraticCurveTo(-12, -184, 10, -183); c.quadraticCurveTo(30, -182, 29, -160); c.closePath(); });
   P(c, [-13, -162, -36, -157, -34, -150, -11, -155], '#9e2420');
   L(c, [12, -182, 12, -161], 2, '#9e2420');
-  E(c, 18, -154, 2.2, 2.8, OUT, 0); E(c, 27, -154, 2.2, 2.8, OUT, 0);
+  pupil(c, a, t, 18, -154, 2.3); pupil(c, a, t, 27, -154, 2.3);
   L(c, [13, -160, 21, -161], 3); L(c, [24, -161, 31, -159], 3);
   E(c, 30, -147, 6.5, 5, '#df9a72');
   if (mo) E(c, 20, -136, 7, 5, '#6e1f1f', 2.5);
@@ -151,8 +154,8 @@ CHAR.laverne = (c, a, t) => {
   R(c, -2, -158, 8, 16, skin, 3, 3);
   E(c, 6, -168, 17, 20, skin);
   P(c, [-12, -176, -14, -196, -2, -188, 2, -208, 10, -190, 20, -204, 22, -186, 32, -190, 24, -176, 14, -182, 4, -178], hair);
-  E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5);
-  E(c, 15, -169, 2, 2.2, OUT, 0); E(c, 27, -169, 2, 2.2, OUT, 0);
+  if (blinking(a, t)) { E(c, 13, -170, 5.5, 6.5, skin, 2.5); E(c, 25, -170, 5, 6.5, skin, 2.5); L(c, [8, -170, 18, -170], 2.2); L(c, [21, -170, 30, -170], 2.2); }
+  else { E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5); E(c, 15, -169, 2, 2.2, OUT, 0); E(c, 27, -169, 2, 2.2, OUT, 0); }
   E(c, 26, -159, 3.5, 3, '#efc4ac', 2);
   if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else L(c, [14, -151, 21, -152], 2.5);
   arm(c, 6, -138, -0.15 + sw * 0.45, dress, 36, skin, 48, 8);
@@ -174,7 +177,7 @@ CHAR.drfred = (c, a, t) => {
   E(c, 10, -142, 20, 22, skin);
   E(c, 4, -157, 9, 4.5, 'rgba(255,255,255,0.4)', 0);
   E(c, 16, -148, 8, 8, '#d7f0ff', 4); E(c, 31, -148, 8, 8, '#d7f0ff', 4);
-  E(c, 17, -147, 3, 3, OUT, 0); E(c, 32, -147, 3, 3, OUT, 0);
+  pupil(c, a, t, 17, -147, 3); pupil(c, a, t, 32, -147, 3);
   E(c, 35, -137, 9, 6.5, '#e9a888');
   if (mo) E(c, 25, -126, 6, 4.5, '#6a1a1a', 2); else L(c, [19, -127, 29, -126], 2.5);
   arm(c, 8, -118, -0.2 + sw * 0.3, coat, 40, skin, 46, 10);
@@ -198,7 +201,7 @@ CHAR.gertrude = (c, a, t) => {
   E(c, 5, -160, 17, 19, skin);
   E(c, 2, -176, 21, 9, '#ffffff');
   E(c, 17, -153, 5, 3.5, 'rgba(240,120,130,0.6)', 0);
-  E(c, 12, -163, 2, 2.4, OUT, 0); E(c, 22, -163, 2, 2.4, OUT, 0);
+  pupil(c, a, t, 12, -163, 2.1); pupil(c, a, t, 22, -163, 2.1);
   E(c, 24, -156, 4, 3.5, '#eeb090', 2);
   if (mo) E(c, 17, -147, 5, 4, '#7a2222', 2);
   else S(c, null, 2.5, () => { c.moveTo(12, -149); c.quadraticCurveTo(17, -145, 22, -149); });
@@ -227,7 +230,7 @@ CHAR.hancock = (c, a, t) => {
   E(c, 2, -174, 16, 8, '#f4f4f4', 2.5);
   P(c, [-24, -176, 30, -176, 22, -186, 4, -199, -14, -187], '#1d1d1d');
   L(c, [-22, -177, 28, -177], 2, '#d8b040');
-  E(c, 12, -163, 2, 2.4, OUT, 0); E(c, 22, -163, 2, 2.4, OUT, 0);
+  pupil(c, a, t, 12, -163, 2.1); pupil(c, a, t, 22, -163, 2.1);
   E(c, 25, -155, 5, 4, '#e9aa88', 2);
   if (mo) E(c, 17, -146, 5, 4, '#7a2222', 2); else L(c, [12, -147, 21, -147], 2.5);
   c.save(); c.translate(12, -138);
@@ -330,7 +333,16 @@ function drawPortrait(c, id, x, y, r, bg) {
   c.fillStyle = bg; c.fillRect(x - r, y - r, r * 2, r * 2);
   const [hx, hy, s] = PORTRAIT[id];
   c.translate(x - hx * s, y - hy * s + 6); c.scale(s, s);
-  CHAR[id](c, { talking: false, walking: false, phase: 0, seed: 0 }, 0);
+  CHAR[id](c, { talking: false, walking: false, phase: 0, seed: 1 }, 0);
+  c.restore();
+}
+// Pokal-Symbol für Erfolge
+function trophy(c, x, y, s = 1) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  S(c, '#ffd23a', 2.5, () => { c.moveTo(-10, -12); c.lineTo(10, -12); c.quadraticCurveTo(10, 4, 0, 6); c.quadraticCurveTo(-10, 4, -10, -12); c.closePath(); });
+  S(c, null, 2.5, () => { c.moveTo(-10, -8); c.quadraticCurveTo(-17, -8, -15, -1); c.quadraticCurveTo(-13, 3, -7, 2); });
+  S(c, null, 2.5, () => { c.moveTo(10, -8); c.quadraticCurveTo(17, -8, 15, -1); c.quadraticCurveTo(13, 3, 7, 2); });
+  R(c, -2, 6, 4, 5, '#ffd23a', 2); R(c, -7, 11, 14, 4, '#ffd23a', 2, 1);
   c.restore();
 }
 

@@ -10,36 +10,36 @@ function mkA(id, name, kind, color, h, bw, o = {}) {
 }
 
 const ACT = {
-  bernard: mkA('bernard', 'Bernard', 'bernard', '#8fd6ff', 214, 46, { voice: { pitch: 1.45, rate: 1.08 }, look: 'Bernard. Genie, Nerd, Hüter des Gut-O-Maten.' }),
-  hoagie: mkA('hoagie', 'Hoagie', 'hoagie', '#ffb15a', 186, 72, { voice: { pitch: 0.55, rate: 0.92 }, look: 'Hoagie. Roadie, Philosoph, Feinschmecker.' }),
-  laverne: mkA('laverne', 'Laverne', 'laverne', '#a6ff8f', 212, 48, { voice: { pitch: 1.7, rate: 1.12 }, look: 'Laverne. Medizinstudentin mit sehr eigenen Interessen.' }),
+  bernard: mkA('bernard', 'Bernard', 'bernard', '#8fd6ff', 214, 46, { voice: { pitch: 1.45, rate: 1.08, blip: 310, wave: 'square' }, look: 'Bernard. Genie, Nerd, Hüter des Gut-O-Maten.' }),
+  hoagie: mkA('hoagie', 'Hoagie', 'hoagie', '#ffb15a', 186, 72, { voice: { pitch: 0.55, rate: 0.92, blip: 115, wave: 'sawtooth' }, look: 'Hoagie. Roadie, Philosoph, Feinschmecker.' }),
+  laverne: mkA('laverne', 'Laverne', 'laverne', '#a6ff8f', 212, 48, { voice: { pitch: 1.7, rate: 1.12, blip: 430, wave: 'triangle' }, look: 'Laverne. Medizinstudentin mit sehr eigenen Interessen.' }),
   drfred: mkA('drfred', 'Dr. Fred', 'drfred', '#ffffff', 172, 58, {
-    voice: { pitch: 1.25, rate: 1.3 },
+    voice: { pitch: 1.25, rate: 1.3, blip: 250, wave: 'square' },
     look: 'Dr. Fred Edison. Erfinder des Chrono-Klos, des Gut-O-Mats und einer Frisur, die die Schwerkraft ignoriert.',
     refuse: 'Behalt das, Junge. Ich habe schon genug Kram. Ich habe sogar Kram für meinen Kram.',
   }),
   green: mkA('green', 'Grüner Tentakel', 'green', '#9dff7a', 160, 64, {
-    voice: { pitch: 1.5, rate: 1.05 }, talkDist: 92,
+    voice: { pitch: 1.5, rate: 1.05, blip: 360, wave: 'triangle' }, talkDist: 92,
     look: 'Grüner Tentakel. Der nette Bruder. Träumt von einer Karriere als Rockstar.',
     refuse: 'Danke, aber ich brauche nur Applaus. Und vielleicht ein Mikrofon.',
   }),
   gertrude: mkA('gertrude', 'Gertrude', 'gertrude', '#ffc4e1', 190, 84, {
-    voice: { pitch: 1.35, rate: 1.0 }, talkDist: 92,
+    voice: { pitch: 1.35, rate: 1.0, blip: 380, wave: 'triangle' }, talkDist: 92,
     look: 'Gertrude Edison. Wirtin, Bäckerin, Ur-Ur-Ur-Ur-Oma von Dr. Fred. Sie sieht sehr viel netter aus als er.',
     refuse: () => fl().brot ? 'Lieb von dir, Junge, aber ich habe alles, was ich brauche.' : 'Wie lieb! Aber was soll ich damit? Für mein Brot brauche ich Zucker!',
   }),
   hancock: mkA('hancock', 'John Hancock', 'hancock', '#c6d4ff', 200, 56, {
-    voice: { pitch: 0.8, rate: 0.95 },
+    voice: { pitch: 0.8, rate: 0.95, blip: 165, wave: 'square' },
     look: 'John Hancock. Er übt seine Unterschrift. Sie ist schon jetzt größer als ich.',
     refuse: 'Oh, ein Geschenk! Ich unterschreibe es Euch! *kritzel* So. Jetzt ist es wertvoll. Behaltet es.',
   }),
   wache: mkA('wache', 'Tentakel-Wache', 'guard', '#ffb070', 196, 72, {
-    voice: { pitch: 0.6, rate: 0.9 }, fixedDir: true,
+    voice: { pitch: 0.6, rate: 0.9, blip: 105, wave: 'sawtooth' }, fixedDir: true,
     look: 'Eine Tentakel-Wache mit Helm und Speer. Sie sieht aus, als hätte sie seit vierzig Jahren nicht geschlafen.',
     refuse: 'Bestechung? Nur mit Kaffee. ...Ich meine: Nein! Keine Bestechung!',
   }),
   lila: mkA('lila', 'Lila Tentakel', 'purple', '#e3a6ff', 186, 84, {
-    voice: { pitch: 0.45, rate: 0.95 }, scaleMul: 1.1, talkDist: 96,
+    voice: { pitch: 0.45, rate: 0.95, blip: 135, wave: 'sawtooth' }, scaleMul: 1.1, talkDist: 96,
     look: 'Lila Tentakel. Herrscher der Welt, Besitzer zweier Arme, Erfinder der schlechten Laune.',
     refuse: 'Pfui. Bring mir was Knuspriges. Oder knie nieder. Beides wäre okay.',
   }),
@@ -57,8 +57,27 @@ const START_POS = {
   lila: { room: 'thron', x: 656, y: 338, dir: -1 },
 };
 function newState() {
-  return { cur: 'bernard', flags: { regler: 'bad', beet: 0 }, inv: { bernard: ['rechner'], hoagie: ['sticks'], laverne: ['steth'] } };
+  return {
+    cur: 'bernard', flags: { regler: 'bad', beet: 0 }, inv: { bernard: ['rechner'], hoagie: ['sticks'], laverne: ['steth'] },
+    looked: {}, talked: {}, stats: { sent: 0, ms: 0 }, progress: 0,
+  };
 }
+const NPCS = ['drfred', 'green', 'gertrude', 'hancock', 'wache', 'lila'];
+// Meilensteine für die Fortschrittsanzeige und den "Rätsel gelöst"-Jingle
+const MILESTONES = ['kaffee', 'brot', 'tree', 'zelle', 'cellIn', 'breadIn', 'toast', 'guardGone'];
+function progress() { const f = fl(); return MILESTONES.filter(m => m === 'breadIn' ? (f.breadIn || f.toast) : f[m]).length; }
+const ACH = [
+  { id: 'post', name: 'Klo-Express', desc: 'Den ersten Gegenstand durch die Zeit geschickt.' },
+  { id: 'apfel', name: 'Vitamin Kolonie', desc: 'Hoagie hat einen Apfel aus dem Jahr 1776 gegessen.' },
+  { id: 'baum', name: 'Gärtner der Geschichte', desc: 'Einen Baum gepflanzt, der 200 Jahre lang wächst.' },
+  { id: 'kaffee', name: 'Koffein-Kurier', desc: 'Die Tentakel-Wache in die Pause geschickt.' },
+  { id: 'boese', name: 'Fast superböse', desc: 'Den Gut-O-Mat auf SUPERBÖSE starten wollen.' },
+  { id: 'sticks', name: 'Archäologe', desc: 'Hoagies Drumsticks nach 250 Jahren gefunden.' },
+  { id: 'rock', name: 'Tentakel-Rock', desc: 'Dem Grünen Tentakel zu seinem ersten Solo verholfen.' },
+  { id: 'plausch', name: 'Plaudertasche', desc: 'Mit allen sechs Figuren gesprochen.' },
+  { id: 'neugier', name: 'Neugiernase', desc: '25 verschiedene Dinge angeschaut.' },
+  { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
+];
 
 const byChar = m => () => m[curId()] || m.bernard;
 const ITEMS = {
@@ -126,7 +145,7 @@ RULES['open o:zucker'] = line('Sie ist schon offen. Zuckerdosen sind sehr vertra
 RULES['look o:uhr_heute'] = line(() => fl().sticksInClock && !fl().altsticks ? 'Moment... unten im Uhrkasten liegt etwas. Das war vorhin noch nicht da!' : 'Eine alte Standuhr. Laut Plakette von 1776. Sie geht immer noch. Meistens rückwärts.');
 RULES['open o:uhr_heute'] = async () => {
   if (fl().sticksInClock && !fl().altsticks) {
-    fl().altsticks = true; addItem('altsticks');
+    fl().altsticks = true; addItem('altsticks'); unlock('sticks');
     await s('Uralte Drumsticks! Mit Spinnweben! Hoagie, hast du die 1776 hier reingelegt?');
     await s('Das ist das Erstaunlichste, was ich je gesehen habe. Und ich habe Dr. Fred beim Frühstück gesehen.');
   } else await s('Im Uhrkasten: Staub, eine tote Motte und ein Zettel: "Hier nichts verstecken. – Fred".');
@@ -150,8 +169,11 @@ RULES['use i:muenze o:automat'] = async () => {
   await s('*Klonk* *Gluckgluck* ... Ein Becher Kaffee. Er blubbert. Kaffee sollte nicht blubbern.');
 };
 RULES['give i:altsticks a:green'] = async () => {
-  await say('green', 'Drumsticks?! Aus dem Jahr 1776?! Bernard, das ist der Anfang meiner Band!');
-  await say('green', '...Ach, behalt sie. Mir fällt gerade ein, dass ich keine Hände habe.');
+  await say('green', 'Drumsticks?! Aus dem Jahr 1776?! Bernard, das ist der Anfang meiner Band! Darf ich mal?');
+  ACT.green.talking = true; Sound.sfx('riff'); shake(1800, 3); await wait(2300); ACT.green.talking = false;
+  await say('green', 'WOOOH! TENTAKEL-ROCK LEBT!');
+  unlock('rock');
+  await say('green', '...Behalt sie lieber. Mir fällt gerade ein, dass ich keine Hände habe. Das war Telekinese.');
 };
 
 // ---------- Gegenwart: Labor ----------
@@ -186,14 +208,14 @@ async function LEVER() {
   if (!f.cellIn) { Sound.sfx('bad'); return s('Nichts passiert. Der Gut-O-Mat hat keinen Strom.'); }
   if (!f.breadIn) { Sound.sfx('hum'); return s('Er brummt, aber ohne Brot kommt kein Toast raus. Das ist Wissenschaft.'); }
   if (f.regler !== 'good') {
-    Sound.sfx('bad');
+    Sound.sfx('bad'); shake(400, 4); unlock('boese');
     await say('drfred', 'HALT! STOPP! Der Regler steht auf SUPERBÖSE!');
     await say('drfred', 'Willst du Lila etwa noch böser machen? Dann kriegt er zu den Armen auch noch Beine!');
     await s('Hups.');
     return;
   }
-  G.machineShake = G.t; Sound.sfx('hum'); await wait(1700);
-  Sound.sfx('pop'); G.toastPop = G.t; await wait(900);
+  G.machineShake = G.t; Sound.sfx('hum'); shake(1700, 2.5); await wait(1700);
+  Sound.sfx('pop'); G.toastPop = G.t; shake(300, 6); await wait(900);
   f.toast = true; f.breadIn = false; addItem('toast');
   await s('Der Gut-Toast! Er ist warm. Und irgendwie... freundlich.');
   await say('drfred', 'JAAA! Schnell, schick ihn zu Laverne, solange er knusprig ist!');
@@ -209,7 +231,7 @@ async function BAKE() {
   await say('gertrude', 'Wartet hier, ich backe sofort!');
   ACT.gertrude.fixedDir = false;
   await walkTo('gertrude', 130, 384); ACT.gertrude.dir = -1;
-  await fadeTo(1, 300); G.caption = 'Etwas später ...'; Sound.sfx('bake'); await wait(1800); G.caption = null;
+  await fadeTo(1, 300, 'black'); G.caption = 'Etwas später ...'; Sound.sfx('bake'); await wait(1800); G.caption = null;
   ACT.gertrude.x = 150; await fadeTo(0, 300);
   await walkTo('gertrude', 196, 398); ACT.gertrude.dir = 1;
   fl().brot = true; addItem('brot', 'hoagie');
@@ -230,7 +252,7 @@ RULES['pick o:obstschale'] = async () => {
 };
 RULES['use i:apfel'] = async () => {
   Sound.sfx('chomp'); await wait(700);
-  takeItem('apfel'); addItem('butzen', curId(), true);
+  takeItem('apfel'); addItem('butzen', curId(), true); unlock('apfel');
   await s('Mampf... mampf... Lecker. Den Rest hebe ich auf. Man weiß nie.');
 };
 RULES['look o:uhr_1776'] = line('Eine nagelneue Standuhr. Sie tickt laut und stolz. Ich wette, die steht hier noch in 250 Jahren.');
@@ -287,16 +309,16 @@ async function PLANT_WATER() {
   takeItem('wasser'); addItem('eimer', curId(), true);
   Sound.sfx('splash');
   await s('Ein bisschen Wasser für den kleinen Kerl...');
-  fl().beet = 3; fl().tree = true; Sound.sfx('grow'); await wait(900);
+  fl().beet = 3; fl().tree = true; Sound.sfx('grow'); unlock('baum'); await wait(900);
   await s('Er wächst! Okay, nur ein winziges bisschen. Aber in zweihundert Jahren ist der riesig!');
-  await fadeTo(1, 300);
+  await fadeTo(1, 300, 'black');
   G.viewRoom = 'fgarten'; G.caption = 'Unterdessen, zweihundert Jahre später ...'; G.treeGrowT = G.t + 500;
   await fadeTo(0, 300);
   Sound.sfx('grow');
   await wait(2300);
   if (ACT.laverne.room === 'fgarten') await say('laverne', 'Huch! Wo kommt DER Baum denn her?');
   else await wait(800);
-  await fadeTo(1, 300); G.viewRoom = null; G.caption = null; await fadeTo(0, 300);
+  await fadeTo(1, 300, 'black'); G.viewRoom = null; G.caption = null; await fadeTo(0, 300);
 }
 RULES['use i:wasser o:beet'] = async () => {
   const b = fl().beet || 0;
@@ -354,10 +376,10 @@ async function COFFEE_GUARD() {
   await wait(500);
   await say('wache', 'Oh. Oh nein. "Wirkung garantiert in 3 Sekunden"? Das wirkt aber... DRINGEND!');
   await say('wache', 'DIENSTPAUSE!!!');
-  Sound.sfx('run'); ACT.wache.speed = 460;
+  Sound.sfx('run'); shake(700, 3); ACT.wache.speed = 460;
   await walkTo('wache', -90, 400, true);
   ACT.wache.visible = false; ACT.wache.room = 'nirgendwo'; ACT.wache.speed = ACT.wache.baseSpeed;
-  fl().guardGone = true;
+  fl().guardGone = true; unlock('kaffee');
   await say('laverne', 'Erst Klo, dann Kaffee, dann wieder Klo. Der Kreislauf des Lebens.');
 }
 RULES['give i:kaffee a:wache'] = COFFEE_GUARD;
@@ -372,13 +394,13 @@ async function ENDING() {
   await say('lila', 'Toast? TOAST?! ...Na gut. Aber nur, weil ich gnädig bin.');
   Sound.sfx('chomp'); await wait(1000);
   await say('lila', 'Mmmh. Knusprig. Mit einer Note von... Moment. Was ist das für ein Gefühl?');
-  ACT.lila.nice = G.t; Sound.sfx('hearts'); await wait(1400);
+  ACT.lila.nice = G.t; Sound.sfx('hearts'); shake(500, 3); await wait(1400);
   await say('lila', 'Ist das... NETTIGKEIT?!');
   await say('lila', 'Ich will niemanden mehr unterjochen! Ich will Blumen gießen! Und alten Damen über die Straße helfen!');
   await say('laverne', 'Funktioniert. Schade, ich hatte gehofft, er explodiert wenigstens ein bisschen.');
   await say('lila', 'Laverne! Darf ich dich umarmen? Mit beiden Armen? Ich habe extra welche!');
   await say('laverne', 'Nein.');
-  await fadeTo(1, 700);
+  await fadeTo(1, 700, 'black');
   G.state.cur = 'bernard';
   Object.assign(ACT.bernard, { room: 'labor', x: 290, y: 404, dir: 1, visible: true });
   Object.assign(ACT.drfred, { room: 'labor', x: 470, y: 388, dir: -1 });
@@ -394,8 +416,10 @@ async function ENDING() {
   await say('drfred', 'Wunderbar! Und jetzt: Wer hat Hunger? Ich mache uns allen Toast!');
   await say('bernard', 'NEIN!');
   await wait(400);
-  await fadeTo(1, 900);
+  await fadeTo(1, 900, 'black');
+  G.endStats = { ms: G.state.stats.ms, sent: G.state.stats.sent };
   clearSave(); G.saved = null; G.screen = 'end'; G.fade = 0; music();
+  unlock('ende');
 }
 RULES['give i:toast a:lila'] = ENDING;
 RULES['give i:brot a:lila'] = () => say('lila', 'Ungetoastetes Brot? Wofür hältst du mich, für eine Ente? Ich will TOAST!');

@@ -14,28 +14,44 @@ Jetzt müssen **Bernard** (Gegenwart), **Hoagie** (Jahr 1776) und **Laverne** (Z
 |---|---|---|
 | ![Labor](screenshots/labor.png) | ![Gasthaus](screenshots/gasthaus-1776.png) | ![Zukunftsgarten](screenshots/zukunft.png) |
 
+## Zwei Grafikstile: Remastered und Klassisch
+
+Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller schaltest du jederzeit um – wie in der Remastered-Fassung des Originals. Im klassischen Modus zeichnet ein eigener Software-Renderer jeden Raum, jede Figur und jedes Objekt neu als echte Pixel-Art auf 320×200: harte Kanten, 1-Pixel-Konturen, Farbverläufe in Stufen. Die Musik klingt dann wie eine alte Soundkarte.
+
+| Remastered | Klassisch |
+|---|---|
+| ![Hotspot-Anzeige im HD-Modus](screenshots/hotspots.png) | ![Gasthaus als Pixel-Art](screenshots/klassisch-gasthaus.png) |
+
 ## Features
 
 - Klassische Verb-Steuerung im Stil der SCUMM-Adventures (Gib, Nimm, Benutze, Öffne, Schau an, Drücke, Schließe, Rede mit, Ziehe)
-- 3 spielbare Figuren in 3 Zeitebenen und 7 Räumen, Wechsel per Klick auf die Gesichter
+- 3 spielbare Figuren in 3 Zeitebenen und 7 Räumen, Wechsel mit Zeitstrudel-Effekt
 - Zeitreise-Rätsel: Was du 1776 tust, verändert die Zukunft
 - Dialogbäume mit Dr. Fred, Grünem Tentakel, Oma Gertrude, John Hancock, der Tentakel-Wache und Lila Tentakel
-- Komplett prozedurale Grafik (Canvas 2D) und Musik (WebAudio-Synthesizer), keine externen Assets
+- **Steuerung mit Maus, Touch, Tastatur oder Xbox-Controller** (auch in Edge auf der Xbox), mit Vibration
+- **Vollbild** startet automatisch, auf dem Handy mit Querformat-Sperre
+- 10 Erfolge, Fortschrittsanzeige, Statistik am Ende, Hotspot-Anzeige, Tipp-System
+- Prozedurale Grafik (Canvas 2D) und Musik (WebAudio-Synthesizer) mit eigenen Themen pro Zeitalter, Umgebungsgeräuschen, Schritten je nach Boden und Plapperstimmen pro Figur
 - Optionale Sprachausgabe über die Browser-Stimmen (Web Speech API)
-- Automatisches Speichern im Browser, Tipp-System, funktioniert auch auf Tablet und Handy
+- Automatisches Speichern im Browser
 
 ## Steuerung
 
-| Aktion | So geht's |
-|---|---|
-| Hinlaufen | Ohne Verb irgendwo hinklicken |
-| Aktion | Verb anklicken, dann Gegenstand oder Person |
-| Standard-Aktion | Rechtsklick (das hervorgehobene Verb) |
-| Kombinieren | „Benutze X mit Y“, „Gib X an Y“ |
-| Durch die Zeit schicken | Am Chrono-Klo: „Gib“ → Gegenstand → Gesicht unten rechts |
-| Figur wechseln | Gesichter unten rechts oder Tasten 1–3 |
-| Text überspringen | Klick oder `.` · Szene überspringen: `Esc` |
-| Tipp | Button „Tipp“ oder Grünen Tentakel fragen |
+| Aktion | Maus / Tastatur | Touch | Xbox-Controller |
+|---|---|---|---|
+| Zeiger bewegen | Maus · Pfeiltasten springen | – | Linker Stick · Steuerkreuz springt |
+| Aktion | Klick · Enter | Tippen | A |
+| Standard-Aktion | Rechtsklick | Lange drücken | X |
+| Zurück / Text überspringen | Esc · Punkt | Tippen | B |
+| Verb wählen | Klick · G N B O S D C R Z | Tippen | LT / RT |
+| Figur wechseln | Gesichter · 1–3 | Gesichter | LB / RB |
+| Hotspots zeigen | Tab · Leertaste | „Zeigen“ | Ansicht |
+| Tipp | H · „Tipp“ | „Tipp“ | Y |
+| Pixel-Grafik | F1 · P | „Pixel“ | Rechter Stick |
+| Vollbild | F | Symbol oben rechts | – |
+| Menü | Esc | „Menü“ | Menü |
+
+Gegenstände schickst du am Chrono-Klo durch die Zeit: **Gib** → Gegenstand → Gesicht unten rechts.
 
 <details>
 <summary><strong>Komplettlösung (Spoiler!)</strong></summary>
@@ -49,7 +65,7 @@ Jetzt müssen **Bernard** (Gegenwart), **Hoagie** (Jahr 1776) und **Laverne** (Z
 7. **Bernard:** Energiezelle und Brot in den Gut-O-Mat, Regler auf GUT drehen, Hebel ziehen, Toast an Laverne schicken.
 8. **Laverne:** Im Thronsaal Lila den Toast geben.
 
-Bonus: Hoagie kann seine Drumsticks 1776 in die Standuhr legen. Bernard findet sie in der Gegenwart wieder.
+Bonus: Hoagie kann seine Drumsticks 1776 in die Standuhr legen. Bernard findet sie in der Gegenwart – und der Grüne Tentakel weiß, was man damit macht.
 </details>
 
 ## Technik
@@ -59,9 +75,10 @@ Reines HTML5 + JavaScript ohne Build-Schritt und ohne Abhängigkeiten (nur Googl
 ```
 index.html      Einstieg
 js/draw.js      Zeichenhelfer, Figuren, Inventar-Icons
-js/audio.js     WebAudio-Musik & Effekte, Sprachausgabe
-js/rooms.js     Räume, Hintergründe, Hotspots
-js/engine.js    Verben, Laufen, Dialoge, Zeitreise-Post, Speichern, Rendering
+js/pixel.js     Pixel-Renderer für den Klassik-Modus (Software-Rasterizer mit Canvas-API)
+js/audio.js     WebAudio-Musik, Effekte, Umgebung, Schritte, Plapperstimmen, Sprachausgabe
+js/rooms.js     Räume, Hintergründe, Hotspots, Effekte
+js/engine.js    Verben, Laufen, Dialoge, Zeitreise-Post, Eingabe (Maus/Touch/Controller), Vollbild, Erfolge, Speichern, Rendering
 js/story.js     Figuren, Gegenstände, Rätsel, Dialoge, Zwischensequenzen
 ```
 

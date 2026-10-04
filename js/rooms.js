@@ -159,9 +159,18 @@ function drawSugarBowl(c) {
 }
 
 room({
-  id: 'lobby', era: 'present', name: 'Lobby',
+  id: 'lobby', era: 'present', name: 'Lobby', floor: 'wood', amb: ['clock'],
   walk: [[20, 326], [940, 318], [955, 432], [5, 432]], yTop: 318,
   draw: bgLobby,
+  dyn: (c, t) => {
+    // Mondlicht fällt durchs Fenster auf den Teppich
+    c.save(); c.globalAlpha = 0.07 + Math.sin(t * 0.0008) * 0.02;
+    P(c, [566, 164, 654, 164, 700, 420, 470, 420], '#bfd8ff', 0);
+    c.restore();
+    // eine Motte umkreist die Klingel
+    const mx = 128 + Math.cos(t * 0.004) * 26, my = 196 + Math.sin(t * 0.007) * 12, f = Math.sin(t * 0.06) * 3;
+    E(c, mx, my, 3, 2, '#d9cdb8', 1.2); L(c, [mx - 4, my - f, mx, my, mx + 4, my - f], 1.2);
+  },
   objs: [
     { id: 'fenster_heute', name: 'Fenster', rect: [542, 58, 140, 124], look: 'Draußen ist tiefe Nacht. Dr. Fred schläft nie. Wir anderen leider auch nicht.', txt: { open: 'Lieber nicht. Draußen jaulen die Waschbären.' } },
     { id: 'gemaelde', name: 'Gemälde', rect: [393, 62, 114, 134], look: 'Ur-Ur-Ur-Ur-Oma Gertrude Edison, 1776. Auf der Plakette steht: "Ihr Brot machte Feinde zu Freunden."', txt: { pick: 'Das hängt da seit 250 Jahren. Ich will nicht der sein, der es runterholt.' } },
@@ -283,10 +292,16 @@ function drawHebel(c) {
 }
 
 room({
-  id: 'labor', era: 'present', name: 'Labor', klo: 'klo_heute',
+  id: 'labor', era: 'present', name: 'Labor', klo: 'klo_heute', floor: 'tile', amb: ['lab'],
   walk: [[20, 334], [940, 326], [955, 432], [5, 432]], yTop: 326,
   draw: bgLabor,
   dyn: (c, t) => {
+    // gelegentliche Funken am Kabel
+    const sp = (t % 5200) / 5200;
+    if (sp < 0.06) for (let i = 0; i < 6; i++) {
+      const a = i * 1.05 + t * 0.01, r = 4 + sp * 260;
+      L(c, [300 + Math.cos(a) * r * 0.4, 318 + Math.sin(a) * r * 0.25, 300 + Math.cos(a) * r * 0.5, 318 + Math.sin(a) * r * 0.32], 2.5, '#ffe36b');
+    }
     for (let i = 0; i < 6; i++) {
       const x = [152, 186, 246, 196, 236, 284][i], y0 = [214, 214, 214, 274, 274, 214][i];
       const k = ((t * 0.0007) + i * 0.37) % 1;
@@ -365,11 +380,20 @@ function drawFruitBowl(c) {
 }
 
 room({
-  id: 'gasthaus', era: 'past', name: 'Gasthaus',
+  id: 'gasthaus', era: 'past', name: 'Gasthaus', floor: 'wood', amb: ['fire', 'clock'],
   walk: [[20, 334], [940, 326], [955, 432], [5, 432]], yTop: 326,
   draw: bgGasthaus,
   dyn: (c, t) => {
     const f = Math.sin(t * 0.02) * 4, g = Math.cos(t * 0.017) * 5;
+    // Feuerschein auf dem Boden
+    const glow = c.createRadialGradient(140, 330, 10, 140, 340, 230);
+    glow.addColorStop(0, `rgba(255,150,40,${0.28 + Math.sin(t * 0.013) * 0.06})`); glow.addColorStop(1, 'rgba(255,150,40,0)');
+    c.fillStyle = glow; c.fillRect(0, 150, 420, 290);
+    // Staub tanzt im Sonnenstrahl
+    for (let i = 0; i < 14; i++) {
+      const k = ((t * 0.00004 * (1 + i % 3)) + i * 0.071) % 1, x = 500 + i * 13 + k * 150 + Math.sin(t * 0.001 + i) * 8, y = 190 + k * 140;
+      c.save(); c.globalAlpha = 0.5 * Math.sin(k * Math.PI); E(c, x, y, 1.6, 1.6, '#fff6d0', 0); c.restore();
+    }
     R(c, 100, 322, 86, 10, '#5a3418', 2.5, 4);
     S(c, '#ff8a1f', 2, () => { c.moveTo(96, 326); c.quadraticCurveTo(104 + f, 282, 122, 300 + g * 0.4); c.quadraticCurveTo(132, 264 + f, 146, 296); c.quadraticCurveTo(160 + g, 272, 170, 300); c.quadraticCurveTo(178, 286 - f, 186, 326); c.closePath(); });
     S(c, '#ffd23a', 0, () => { c.moveTo(112, 326); c.quadraticCurveTo(122, 300 + g, 134, 310); c.quadraticCurveTo(144, 290 - f, 154, 312); c.quadraticCurveTo(166, 300 + f, 172, 326); c.closePath(); });
@@ -454,10 +478,16 @@ function drawBeet(c, t) {
 }
 
 room({
-  id: 'garten1776', era: 'past', name: 'Garten 1776', klo: 'plumpsklo',
+  id: 'garten1776', era: 'past', name: 'Garten 1776', klo: 'plumpsklo', floor: 'grass', amb: ['birds'],
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
   draw: bgGarten1776,
   dyn: (c, t) => {
+    // zwei Schmetterlinge
+    for (let i = 0; i < 2; i++) {
+      const x = 480 + Math.sin(t * 0.0006 + i * 2) * 160 + Math.sin(t * 0.0023 + i) * 30, y = 300 + Math.cos(t * 0.0009 + i * 3) * 40 + Math.sin(t * 0.004 + i) * 10;
+      const w = Math.abs(Math.sin(t * 0.025 + i)) * 7 + 1, col = i ? '#ff8ac0' : '#ffd23a';
+      E(c, x - 4, y, w, 5, col, 1.5); E(c, x + 4, y, w, 5, col, 1.5); L(c, [x, y - 4, x, y + 4], 2);
+    }
     for (let i = 0; i < 2; i++) {
       const x = (t * 0.03 + i * 420) % (W + 200) - 100, y = 110 + i * 30 + Math.sin(t * 0.003 + i) * 8, f = Math.sin(t * 0.02 + i) * 5;
       L(c, [x - 8, y - f, x, y, x + 8, y - f], 2);
@@ -553,10 +583,15 @@ function drawBigTree(c, t) {
 }
 
 room({
-  id: 'fgarten', era: 'future', name: 'Zukunftsgarten', klo: 'klo_zukunft',
+  id: 'fgarten', era: 'future', name: 'Zukunftsgarten', klo: 'klo_zukunft', floor: 'grass', amb: ['future'],
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
   draw: bgFGarten,
   dyn: (c, t) => {
+    // Tentakel-Ufo patrouilliert am Himmel
+    const uk = (t % 14000) / 14000, ux = -80 + uk * (W + 160), uy = 120 + Math.sin(uk * Math.PI * 4) * 14;
+    c.save(); c.globalAlpha = 0.18; P(c, [ux - 8, uy + 6, ux + 8, uy + 6, ux + 40, uy + 150, ux - 40, uy + 150], '#a6ff8f', 0); c.restore();
+    E(c, ux, uy, 26, 8, '#9aa3ad', 2.5); E(c, ux, uy - 5, 11, 7, '#c9a6ff', 2.5);
+    for (let i = -1; i <= 1; i++) E(c, ux + i * 12, uy + 1, 2, 2, Math.floor(t / 200 + i) % 2 ? '#ffe36b' : '#ff5fa8', 0);
     const k = 0.5 + Math.sin(t * 0.004) * 0.5;
     E(c, 140, 340, 66, 12, null, 3, 0, `rgba(60,240,255,${0.4 + k * 0.6})`);
     for (let i = 0; i < 8; i++) {
@@ -613,9 +648,16 @@ function bgVorraum(c) {
 }
 
 room({
-  id: 'vorraum', era: 'future', name: 'Palast-Vorraum',
+  id: 'vorraum', era: 'future', name: 'Palast-Vorraum', floor: 'marble', amb: ['palace'], theme: 'palace',
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
   draw: bgVorraum,
+  dyn: (c, t) => {
+    // Überwachungsdrohne Seiner Lilaheit
+    const dx = 560 + Math.sin(t * 0.0005) * 300, dy = 64 + Math.sin(t * 0.002) * 8;
+    L(c, [dx - 22, dy - 8, dx + 22, dy - 8], 2.5); E(c, dx - 22, dy - 9, 9, 2, '#c9d3dc', 1.5); E(c, dx + 22, dy - 9, 9, 2, '#c9d3dc', 1.5);
+    E(c, dx, dy, 13, 10, '#5b2589', 2.5); E(c, dx + 4, dy + 1, 4, 4, Math.floor(t / 400) % 2 ? '#ff4050' : '#7a1020', 0);
+    c.save(); c.globalAlpha = 0.12; P(c, [dx, dy + 8, dx + 50, 330, dx - 30, 330], '#ff4050', 0); c.restore();
+  },
   objs: [
     { id: 'zum_garten', name: 'Garten', rect: [0, 110, 96, 232], walk: [52, 362], exit: ['fgarten', 830, 388, -1], look: 'Zurück in den Garten.' },
     { id: 'plakat', name: 'Plakat', rect: [150, 92, 130, 146], look: '"LILA IST DEIN FREUND". Darunter, ganz klein: "Widerspruch ist zwecklos und außerdem unhöflich."', txt: { pick: 'Es ist festgeklebt. Mit Tentakelschleim. Igitt.', pull: 'Es ist festgeklebt. Mit Tentakelschleim. Igitt.' } },
@@ -648,10 +690,15 @@ function bgThron(c) {
 }
 
 room({
-  id: 'thron', era: 'future', name: 'Thronsaal',
+  id: 'thron', era: 'future', name: 'Thronsaal', floor: 'carpet', amb: ['palace'], theme: 'palace',
   walk: [[20, 356], [945, 356], [955, 432], [5, 432]], yTop: 356,
   draw: bgThron,
   dyn: (c, t) => {
+    for (let i = 0; i < 6; i++) {
+      const k = ((t * 0.0004) + i / 6) % 1, x = 600 + Math.cos(i * 2.1) * 110, y = 300 - k * 220;
+      c.save(); c.globalAlpha = Math.sin(k * Math.PI) * 0.8;
+      L(c, [x - 4, y, x + 4, y], 2, '#ffe9a0'); L(c, [x, y - 4, x, y + 4], 2, '#ffe9a0'); c.restore();
+    }
     const s = Math.sin(t * 0.0015) * 0.04;
     c.save(); c.translate(300, 0); c.rotate(s);
     L(c, [0, 0, 0, 80], 3); E(c, 0, 96, 50, 12, '#d8b040', 3);
