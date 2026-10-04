@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tentakel-Toast</title>
+<meta name="description" content="Tentakel-Toast: ein inoffizielles Day-of-the-Tentacle-Fanspiel. Point & Click durch drei Zeitalter, mit Chrono-Klo, Gut-O-Mat und Lila Tentakel.">
+<meta property="og:title" content="Tentakel-Toast">
+<meta property="og:description" content="Ein inoffizielles Day-of-the-Tentacle-Fanspiel im Browser. Drei Helden, drei Zeiten, ein Toast.">
+<meta property="og:image" content="https://madd1in.github.io/tentakel-toast/preview.png">
+<meta property="og:url" content="https://madd1in.github.io/tentakel-toast/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#120a1c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M16 60 C12 40 16 16 30 7 C42 1 50 10 47 24 C45 38 46 50 56 58 Z' fill='%238e44c9' stroke='%231b1020' stroke-width='4'/%3E%3Cellipse cx='47' cy='20' rx='8' ry='6' fill='%235b2589' stroke='%231b1020' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Titan+One&display=swap">
+<style>
+  :root { --bg: #120a1c; --ink: #f3eaff; color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    font-family: "Baloo 2", system-ui, sans-serif;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    box-sizing: border-box;
+  }
+  canvas { display: block; touch-action: none; cursor: none; outline: none; }
+  @media (hover: none) { canvas { cursor: default; } }
+  noscript { padding: 16px; max-width: 40rem; line-height: 1.5; }
+</style>
+</head>
+<body>
+<canvas id="game" width="960" height="600" aria-label="Spielfläche: Tentakel-Toast, ein Point-and-Click-Abenteuer"></canvas>
+<noscript>Tentakel-Toast braucht JavaScript. Bitte aktiviere es, um zu spielen.</noscript>
+<script src="js/draw.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/rooms.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/story.js"></script>
+</body>
+</html>
