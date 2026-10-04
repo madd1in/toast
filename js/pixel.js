@@ -27,6 +27,31 @@ function parseColor(s) {
   colCache.set(s, c); return c;
 }
 
+// ---------- VGA-Farbrampen: Schatten kühler, Lichter wärmer (wie in klassischen 256-Farben-Paletten) ----------
+const rampCache = new Map();
+function rampColor(u, s) {
+  if (!s) return u;
+  s = Math.max(-3, Math.min(2, s));
+  const key = u * 8 + (s + 3);
+  let v = rampCache.get(key); if (v !== undefined) return v;
+  let r = u & 255, g = (u >>> 8) & 255, b = (u >>> 16) & 255;
+  if (s > 0) { const k = 0.17 * s; r += (255 - r) * k + 9 * s; g += (255 - g) * k + 5 * s; b += (255 - b) * k * 0.55 - 5 * s; }
+  else { const n = -s, f = 1 - 0.18 * n; r = r * f - 5 * n; g = g * f - 3 * n; b = b * f + 9 * n; }
+  const cl = x => Math.max(0, Math.min(255, Math.round(x)));
+  v = ((255 << 24) | (cl(b) << 16) | (cl(g) << 8) | cl(r)) >>> 0;
+  rampCache.set(key, v); return v;
+}
+// Konturfarbe aus der Füllfarbe ("Sel-out"): ein sehr dunkler, leicht violetter Ton statt reinem Schwarz
+const seloutCache = new Map();
+function selout(u) {
+  let v = seloutCache.get(u); if (v !== undefined) return v;
+  const r = u & 255, g = (u >>> 8) & 255, b = (u >>> 16) & 255;
+  const R = Math.round(r * 0.26 * 0.55 + 27 * 0.45), Gc = Math.round(g * 0.2 * 0.55 + 16 * 0.45), B = Math.round(Math.min(255, b * 0.3 + 10) * 0.55 + 32 * 0.45);
+  v = ((255 << 24) | (B << 16) | (Gc << 8) | R) >>> 0; seloutCache.set(u, v); return v;
+}
+function isDark(u) { return (u & 255) * 0.3 + ((u >>> 8) & 255) * 0.59 + ((u >>> 16) & 255) * 0.11 < 48; }
+function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+
 class PixGrad {
   constructor(type, args) { this.type = type; this.args = args; this.stops = []; this.isPixGrad = true; }
   addColorStop(o, col) { this.stops.push([o, col, parseColor(col)]); this.stops.sort((p, q) => p[0] - q[0]); }
@@ -58,7 +83,7 @@ class PixCtx {
     this.font = '10px sans-serif'; this.textAlign = 'start'; this.textBaseline = 'alphabetic';
     this.lineJoin = 'miter'; this.lineCap = 'butt'; this.miterLimit = 10; this.dash = null;
     this.imageSmoothingEnabled = false; this.imageSmoothingQuality = 'low';
-    this.path = []; this.sub = null;
+    this.path = []; this.sub = null; this.lastFill = null; this.vga = true;
   }
   begin() { for (const b of this.bufs) b.fill(0); this.texts = []; this.reset(); }
   layer(n) { this.layerIdx = n; this.buf = this.bufs[n]; }
@@ -86,7 +111,7 @@ class PixCtx {
   setLineDash(a) { this.dash = a && a.length ? a.slice() : null; }
 
   // ---------- Pfade ----------
-  beginPath() { this.path = []; this.sub = null; }
+  beginPath() { this.path = []; this.sub = null; this.lastFill = null; }
   newSub(p) { this.sub = { pts: [p], closed: false }; this.path.push(this.sub); }
   moveTo(x, y) { this.newSub(this.tx(x, y)); }
   lineTo(x, y) { const p = this.tx(x, y); if (!this.sub || this.sub.closed) this.newSub(p); else this.sub.pts.push(p); }
@@ -156,7 +181,7 @@ class PixCtx {
     if (p.grad) {
       // Verläufe in klaren Farbstufen (Banding) wie bei klassischer Pixel-Art; nur ein Hauch Raster an den Stufenkanten
       const ux = p.inv[0] * (x + 0.5) + p.inv[2] * (y + 0.5) + p.inv[4], uy = p.inv[1] * (x + 0.5) + p.inv[3] * (y + 0.5) + p.inv[5];
-      const c = p.grad.colorAt(ux, uy), d = (BAYER4[((y & 3) << 2) | (x & 3)] - 0.5) * 0.5, q = 12;
+      const c = p.grad.colorAt(ux, uy), d = BAYER4[((y & 3) << 2) | (x & 3)] - 0.5, q = 16;
       const qr = Math.max(0, Math.min(q, Math.round(c.r / 255 * q + d))) * 255 / q | 0;
       const qg = Math.max(0, Math.min(q, Math.round(c.g / 255 * q + d))) * 255 / q | 0;
       const qb = Math.max(0, Math.min(q, Math.round(c.b / 255 * q + d))) * 255 / q | 0;
@@ -207,7 +232,50 @@ class PixCtx {
     // winzige Formen (z. B. Pupillen) bekommen mindestens einen Pixel
     if (!count && isFinite(minX) && maxX - minX < 3 && maxY - minY < 3) fn(Math.floor((minX + maxX) / 2), Math.floor((minY + maxY) / 2));
   }
-  fill(rule) { const p = this.paint(this.fillStyle); this.raster(rule, (x, y) => this.plot(x, y, p)); }
+  fill(rule) {
+    const p = this.paint(this.fillStyle);
+    if (this.vga && !p.grad && p.a >= 0.985) { this.lastFill = p.u32; this.shadedFill(rule, p.u32); return; }
+    this.lastFill = null;
+    this.raster(rule, (x, y) => this.plot(x, y, p));
+  }
+  // VGA-Füllung: Licht von links oben, Schattenkante unten rechts, Verlauf auf großen Flächen,
+  // leichte Pinsel-Textur auf Hintergründen – Übergänge per Bayer-Raster zwischen den Farbstufen
+  shadedFill(rule, base) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const sp of this.path) for (const q of sp.pts) { if (q[0] < minX) minX = q[0]; if (q[0] > maxX) maxX = q[0]; if (q[1] < minY) minY = q[1]; if (q[1] > maxY) maxY = q[1]; }
+    if (!isFinite(minX)) return;
+    const bx = Math.max(0, Math.floor(minX) - 1), by = Math.max(0, Math.floor(minY) - 1);
+    const ex = Math.min(this.w, Math.ceil(maxX) + 2), ey = Math.min(this.h, Math.ceil(maxY) + 2);
+    const bw = ex - bx, bh = ey - by; if (bw <= 0 || bh <= 0) return;
+    // große Flächen, die jedes Bild neu gezeichnet werden (Bedienleiste, Menü, Blenden): schnell und sauber flach füllen
+    if (!this.isStatic && bw * bh > 7000) { const p = { u32: base, a: 1 }; this.raster(rule, (x, y) => this.plot(x, y, p)); return; }
+    const dark = isDark(base);
+    const mask = new Uint8Array(bw * bh); let area = 0, sy0 = Infinity, sy1 = -Infinity, sx0 = Infinity, sx1 = -Infinity;
+    this.raster(rule, (x, y) => {
+      if (x < bx || y < by || x >= ex || y >= ey) return false;
+      const i = (y - by) * bw + (x - bx);
+      if (!mask[i]) { mask[i] = 1; area++; if (y < sy0) sy0 = y; if (y > sy1) sy1 = y; if (x < sx0) sx0 = x; if (x > sx1) sx1 = x; }
+      return true;
+    });
+    if (!area) return;
+    const at = (x, y) => x >= bx && y >= by && x < ex && y < ey && mask[(y - by) * bw + (x - bx)] === 1;
+    const wid = sx1 - sx0 + 1, hei = sy1 - sy0 + 1;
+    const edge = area >= 14 && area < 6000 && wid >= 4 && hei >= 4;
+    const tall = !dark && area >= 500 && hei >= 14, textured = !dark && area >= 900;
+    for (let y = sy0; y <= sy1; y++) for (let x = sx0; x <= sx1; x++) {
+      if (!mask[(y - by) * bw + (x - bx)]) continue;
+      let lvl = 0;
+      if (edge) {
+        if (!at(x - 1, y) || !at(x, y - 1)) lvl += 1;
+        else if (!at(x + 1, y) || !at(x, y + 1)) lvl -= 1;
+        else if (area > 110 && (!at(x + 2, y + 1) || !at(x + 1, y + 2))) lvl -= 0.5;
+      }
+      if (tall) lvl += 0.45 - (y - sy0) / Math.max(1, hei - 1) * 1.3;
+      if (textured) { const n = hash2(x, y); if (n < 0.045) lvl -= 0.7; else if (n > 0.965) lvl += 0.55; }
+      const step = Math.floor(lvl + BAYER4[((y & 3) << 2) | (x & 3)]);
+      this.plot(x, y, { u32: step ? rampColor(base, step) : base, a: 1 });
+    }
+  }
   clip() {
     const old = this.clipMask, mask = new Uint8Array(this.w * this.h), w = this.w;
     this.raster('nonzero', (x, y) => { const i = y * w + x; if (!old || old[i]) { mask[i] = 1; return true; } return false; });
@@ -225,7 +293,10 @@ class PixCtx {
   stroke() {
     const wpx = this.lineWidth * this.sc;
     if (wpx < 0.34) return;
-    const t = wpx < 1.7 ? 1 : Math.round(wpx), p = this.paint(this.strokeStyle);
+    const t = wpx < 1.7 ? 1 : Math.round(wpx);
+    let p = this.paint(this.strokeStyle);
+    // Kontur einer gerade gefüllten Form: dunkler Ton der Füllfarbe statt Schwarz
+    if (this.vga && this.lastFill != null && !p.grad && isDark(p.u32)) p = { u32: selout(this.lastFill), a: p.a };
     const dash = this.dash ? this.dash.map(v => v * this.sc) : null;
     let dd = 0;
     for (const sp of this.path) {
@@ -271,6 +342,7 @@ class PixCtx {
   blitRoom(room) {
     if (!room._pix) {
       const pc = new PixCtx(PW, Math.ceil(SH * PSCALE));
+      pc.isStatic = true;   // Hintergründe werden einmal "gemalt": volle VGA-Schattierung und Textur
       room.draw(pc);
       room._pix = { buf: pc.bufs[0], texts: pc.texts, h: pc.h };
     }

@@ -16,11 +16,12 @@ Jetzt müssen **Bernard** (Gegenwart), **Hoagie** (Jahr 1776) und **Laverne** (Z
 
 ## Zwei Grafikstile: Remastered und Klassisch
 
-Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller schaltest du jederzeit um – wie in der Remastered-Fassung des Originals. Im klassischen Modus zeichnet ein eigener Software-Renderer jeden Raum, jede Figur und jedes Objekt neu als echte Pixel-Art auf 320×200: harte Kanten, 1-Pixel-Konturen, Farbverläufe in Stufen. Die Musik klingt dann wie eine alte Soundkarte.
+Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller schaltest du jederzeit um – wie in der Remastered-Fassung des Originals. Im klassischen Modus zeichnet ein eigener Software-Renderer jeden Raum, jede Figur und jedes Objekt neu als VGA-Pixel-Art auf 320×200 – im Stil von Simon the Sorcerer und dem Original-DOTT: harte Kanten, Licht von links oben mit Farbrampen (kühle Schatten, warme Lichter), gerasterte Übergänge, gemalte Hintergründe und farbige Konturen. Die Musik klingt dann wie eine alte Soundkarte.
 
 | Remastered | Klassisch |
 |---|---|
-| ![Hotspot-Anzeige im HD-Modus](screenshots/hotspots.png) | ![Gasthaus als Pixel-Art](screenshots/klassisch-gasthaus.png) |
+| ![Hotspot-Anzeige im HD-Modus](screenshots/hotspots.png) | ![Labor als VGA-Pixel-Art](screenshots/klassisch-labor.png) |
+| ![Labor in HD](screenshots/labor.png) | ![Palast als VGA-Pixel-Art](screenshots/klassisch-palast.png) |
 
 ## Features
 
