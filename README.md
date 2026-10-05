@@ -34,7 +34,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Steuerung mit Maus, Touch, Tastatur oder Xbox-Controller** (auch in Edge auf der Xbox), mit Vibration
 - **Vollbild** startet automatisch, auf dem Handy mit Querformat-Sperre; beim Drehen misst das Spiel mehrfach nach, berücksichtigt Notch-Ränder (Safe Area) und holt ein durchs Drehen beendetes Vollbild beim nächsten Tippen zurück
 - **Flüssiger Klang auf dem Handy:** Musik wird kurz vor dem Erklingen geplant statt als ganzer Loop, im Hintergrund pausiert der Ton, und ein sparsamer Klangmodus (automatisch auf Handy und Tablet, umschaltbar unter Einstellungen → Klang) spart Oszillatoren, Vibrato und Hall
-- 17 Erfolge, Fortschrittsanzeige, Statistik am Ende, Hotspot-Anzeige, Tipp-System
+- 18 Erfolge (einer davon geheim), Fortschrittsanzeige, Statistik am Ende, Hotspot-Anzeige, Tipp-System
 - Prozedurale Grafik (Canvas 2D) und Musik (WebAudio-Synthesizer) mit eigenen Themen pro Zeitalter, Umgebungsgeräuschen, Schritten je nach Boden und Plapperstimmen pro Figur
 - Lebendige Szene: Laufstaub je nach Untergrund, weiche Schatten unter Möbeln, Lichtstimmung pro Raum und sanftes Klick-Feedback
 - **Gemalter HD-Look:** Jede Fläche bekommt automatisch einen Licht-Verlauf, Konturen sind fein und farbig statt schwarz, Raumhintergründe bekommen weiches Leuchten, Licht-Verlauf und Maltextur
@@ -54,6 +54,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Einstellung **Hotspot-Hilfe**: dezente, pulsierende Markierungen an allem Benutzbaren; das gewählte Verb leuchtet in der Satzzeile
 - **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, drei Schwierigkeitsgrade mit Bestenliste, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
 - **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
+- **Easter Eggs – Verbeugungen vor den Klassikern:** Cousin Ted, die Familienmumie, Chuck die Topfpflanze, Onkel Ed, der aus der Labortür späht, und sein Hamster („NICHT in die Mikrowelle!“), ein lila Meteor über dem Zukunftsgarten, ein zweiköpfiges Eichhörnchen, ein schlichter Holzbecher und ein goldenes Götzenbild auf Druckplatten, ein Spinnrocken, dessen vier Töne einen Schwan rufen, Grog und ein Gummihuhn mit Umlenkrolle in der Taverne, ein dreiköpfiger Affe hinter dir – und ein Lichtschwert-Prototyp in Dr. Freds Labor. Wer alle findet, bekommt einen geheimen Erfolg
 - **Pixel-Look mit minimaler Bedienung:** Auch im VGA-Pixel-Stil füllt die Szene den ganzen Bildschirm, die Kamera fährt pixelgenau mit, Tasche, Symbolleiste und Gesichter bleiben an ihrem Platz – die klassische Verbleiste gibt es weiter unter Einstellungen → Bedienung
 - **Umgebungslicht:** Die Ränder neben dem Spielbild (Handy quer, breite Monitore) leuchten weich in den Farben der aktuellen Szene
 - **Nebenfiguren mit Geräuschen:** Gertrude summt und wischt hörbar, John Hancocks Feder kratzt, der Grüne Tentakel singt „la la la“, Lila kichert fies, Dr. Freds Geistesblitz macht „Ding!“

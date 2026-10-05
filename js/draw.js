@@ -330,6 +330,7 @@ function pose(a, t) {
     case 'airguitar': return { front: -1.95, fb: 0.3, back: -0.7 + Math.sin((t - p.t0) * 0.034) * 0.28, bb: 0.9, knee: 0.35, lean: -0.09, bang: Math.abs(Math.sin((t - p.t0) * 0.017)), mix: Math.min(1, s * 3) };
     case 'yawn': return { front: -3.35, fb: 0.35, back: -3.45, bb: 0.3, lean: -0.07, mix: s };
     case 'belly': return { front: -0.5 + Math.sin((t - p.t0) * 0.03) * 0.28, fb: 1.6, back: -0.45 - Math.sin((t - p.t0) * 0.03) * 0.28, bb: 1.5, mix: Math.min(1, s * 3) };
+    case 'saber': { const sw = k > 0.25 && k < 0.85 ? Math.sin((k - 0.25) / 0.6 * Math.PI * 3) * 0.55 : 0; return { front: -1.6 + sw, fb: 0.2, mix: Math.min(1, s * 5) }; }
     case 'fly': return k < 0.8 ? null : { front: -2.6 + (k - 0.8) / 0.2 * 2.0, fb: 0.4, mix: 1 };   // am Ende: zuschlagen
   }
   return null;
@@ -435,6 +436,150 @@ function brows(c, a, t, x1, x2, y, w, col, lw) {
   L(c, [x2 - k, y - lift - worry * 1.5 - 0.6 - q * 3, x2 + k, y - lift + worry * 1.5 - q * 1.5], lw, col);
 }
 
+// ---------- Easter Eggs: Verbeugungen vor anderen Klassikern (Fußpunkt bei 0,0, Raumkoordinaten) ----------
+// Onkel Ed lugt alle 26 Sekunden für ein paar Sekunden aus der Labortür
+function edPeek(t) { const p = (t + 7000) % 26000; return p < 400 ? p / 400 : p < 4400 ? 1 : p < 4800 ? 1 - (p - 4400) / 400 : 0; }
+function eggFx(name, t, len) { const s = typeof G !== 'undefined' && G.eggFx && G.eggFx[name]; return s != null && t - s < len ? (t - s) / len : -1; }
+const EGG_DRAW = {
+  mummy(c, e, t) {   // Cousin Ted im offenen Sarkophag
+    shape(c, '#c8a040', [-30, -176, 30, 0], () => { c.moveTo(-26, 0); c.lineTo(-30, -120); c.quadraticCurveTo(-30, -176, 0, -176); c.quadraticCurveTo(30, -176, 30, -120); c.lineTo(26, 0); c.closePath(); });
+    shape(c, '#2a1a24', [-22, -166, 22, -4], () => { c.moveTo(-20, -4); c.lineTo(-23, -118); c.quadraticCurveTo(-23, -166, 0, -166); c.quadraticCurveTo(23, -166, 23, -118); c.lineTo(20, -4); c.closePath(); }, 2);
+    for (const y of [-150, -110, -70, -30]) { L(c, [-29, y, -22, y], 3, '#2a8a8a'); L(c, [22, y, 29, y], 3, '#2a8a8a'); }
+    shape(c, '#e6dcc0', [-16, -132, 16, -4], () => { c.moveTo(-12, -4); c.quadraticCurveTo(-16, -60, -15, -112); c.quadraticCurveTo(-15, -126, -9, -130); c.lineTo(9, -130); c.quadraticCurveTo(15, -126, 15, -112); c.quadraticCurveTo(16, -60, 12, -4); c.closePath(); });
+    E(c, 0, -142, 11, 14, '#e6dcc0');
+    if (hd(c)) for (let y = -150; y < -10; y += 9) L(c, [-12, y + 3, 12, y - 2], 1.1, 'rgba(120,100,70,0.45)');
+    R(c, -8, -146, 16, 4, '#2a1a24', 0, 2);
+    if (((t + 4000) % 11000) < 900) E(c, 4, -144, 2.2, 1.6, '#ffe066', 0);   // ein Auge geht kurz auf
+    shape(c, '#ddd2b4', [-14, -110, 14, -88], () => { c.moveTo(-14, -96); c.quadraticCurveTo(0, -110, 14, -104); c.lineTo(14, -96); c.quadraticCurveTo(0, -102, -14, -88); c.closePath(); }, 2);
+    const sw = Math.sin(t * 0.0013) * 0.6;
+    S(c, null, 4.5, () => { c.moveTo(10, -96); c.quadraticCurveTo(22 + sw * 6, -86, 18 + sw * 10, -70); }, OUT);
+    S(c, null, 2.5, () => { c.moveTo(10, -96); c.quadraticCurveTo(22 + sw * 6, -86, 18 + sw * 10, -70); }, '#e6dcc0');   // loses Bindenende
+  },
+  hamster(c, e, t) {   // Onkel Eds Hamster im Laufrad
+    const sp = eggFx('hamster', t, 6000) >= 0 ? 0.03 : 0.012, ang = t * sp;
+    R(c, -32, -8, 64, 8, '#3a5a8a', 2.5, 2);
+    R(c, -30, -46, 60, 40, null, 2, 4, '#c8c8d8');
+    for (let x = -24; x <= 24; x += 6) L(c, [x, -46, x, -8], 1, '#b8b8c8');
+    E(c, 8, -24, 14, 14, null, 2.5, 0, '#e0a040');
+    for (let i = 0; i < 6; i++) { const a = ang + i * 1.047; L(c, [8, -24, 8 + Math.cos(a) * 13, -24 + Math.sin(a) * 13], 1, '#c08030'); }
+    const hop = Math.abs(Math.sin(t * sp * 3)) * 1.5;
+    E(c, 8, -16 - hop, 7, 5, '#e8a050', 1.6); E(c, 13, -18 - hop, 3.6, 3.4, '#e8a050', 1.4); E(c, 14.5, -19 - hop, 0.9, 0.9, OUT, 0); E(c, 11, -21 - hop, 1.6, 1.6, '#f4c090', 1);
+    E(c, -18, -12, 7, 3, '#d04a4a', 1.5);
+    L(c, [-15, -58, -15, -46], 1, '#888898');
+    R(c, -26, -60, 22, 12, '#fff8e0', 1.5, 2); txt(c, 'ED', -15, -51, '800 9px "Baloo 2", sans-serif', '#c02020');
+  },
+  saber(c, e, t) {   // Lichtschwert-Prototyp, an die Wand gelehnt
+    if (typeof G !== 'undefined' && G.saber) return;
+    c.save(); c.rotate(-0.28);
+    R(c, -3.5, -38, 7, 36, '#c8ccd8', 2, 2); R(c, -4.5, -24, 9, 6, '#2a2a34', 1.5, 1); R(c, -4, -42, 8, 5, '#9aa0b0', 1.5, 1);
+    for (const y of [-34, -31, -28]) L(c, [-3, y, 3, y], 1, '#2a2a34');
+    E(c, 2, -16, 1.4, 1.4, '#d02020', 0);
+    c.restore();
+  },
+  chuck(c, e, t) {   // Chuck, die Topfpflanze
+    const sw = Math.sin(t * 0.0016) * 0.06;
+    c.save(); c.translate(0, -18); c.rotate(sw);
+    for (const [a, l, col] of [[-0.9, 26, '#3f9a4a'], [-0.35, 32, '#4fb258'], [0.2, 30, '#3f9a4a'], [0.7, 24, '#4fb258'], [-0.05, 22, '#5fc868']]) {
+      c.save(); c.rotate(a); shape(c, col, [-6, -l, 6, 0], () => { c.moveTo(0, 0); c.quadraticCurveTo(-7, -l * 0.5, 0, -l); c.quadraticCurveTo(7, -l * 0.5, 0, 0); c.closePath(); }, 1.8); c.restore();
+    }
+    c.restore();
+    P(c, [-11, -18, 11, -18, 8, 0, -8, 0], '#c8643a', 2);
+    R(c, -12, -21, 24, 5, '#a84e2a', 2, 1.5);
+    R(c, -2, -13, 22, 8, '#fff8e0', 1.2, 1); txt(c, 'Chuck', 9, -7, '700 6px "Baloo 2", sans-serif', '#2a1a10');
+  },
+  ed(c, e, t) {   // Onkel Ed lugt hinter dem rechten Türpfosten hervor (Gesicht nach links)
+    const k = edPeek(t); if (k <= 0) return;
+    const hx = 16 - 24 * k;
+    c.save(); c.beginPath(); c.rect(-80, -230, 80, 240); c.clip();
+    shape(c, '#5a6a3a', [hx - 18, -146, hx + 18, -100], () => { c.moveTo(hx - 16, -100); c.quadraticCurveTo(hx - 18, -140, hx, -142); c.quadraticCurveTo(hx + 18, -140, hx + 16, -100); c.closePath(); });
+    E(c, hx - 2, -162, 13, 15, '#f0c8a0');
+    R(c, hx - 15, -182, 26, 9, '#e8d060', 2, 2);
+    for (let i = 0; i < 6; i++) L(c, [hx - 13 + i * 4.4, -182, hx - 13 + i * 4.4, -177], 1, '#c8a830');
+    R(c, hx - 20, -168, 9, 7, '#d8f0ff', 1.8, 1.5); R(c, hx - 9, -168, 9, 7, '#d8f0ff', 1.8, 1.5);
+    E(c, hx - 16.5, -164.5, 1.4, 1.6, OUT, 0); E(c, hx - 5.5, -164.5, 1.4, 1.6, OUT, 0);
+    L(c, [hx - 14, -152, hx - 6, -153], 1.8);
+    c.restore();
+    if (k > 0.3) { E(c, -3, -150, 4, 6, '#f0c8a0', 1.6); for (const y of [-154, -150, -146]) L(c, [-6, y, -2, y], 1); }   // Hand am Türrahmen
+  },
+  grail(c, e, t) {   // schlichter Holzbecher auf dem Kaminsims
+    P(c, [-6, -14, 6, -14, 4, -6, -4, -6], '#9a6a3a', 1.6);
+    R(c, -1.5, -6, 3, 4, '#8a5a2a', 1.2); R(c, -5, -2.5, 10, 2.5, '#8a5a2a', 1.4, 1);
+    if (hd(c)) L(c, [-4, -12, -3, -8], 1, 'rgba(255,230,180,0.5)');
+    const k = eggFx('grail', t, 2500);
+    if (k >= 0) floaters(c, e, t, 0, -16, 3, (x, y, s) => E(c, x, y, 1.6 * s, 1.6 * s, '#ffe066', 0), 1 - k);
+  },
+  grog(c, e, t) {   // Krug Grog – frisst sich durch den Boden
+    R(c, -9, -26, 18, 26, '#8a8a98', 2, 3);
+    S(c, null, 2.2, () => { c.moveTo(9, -20); c.quadraticCurveTo(16, -18, 15, -10); c.quadraticCurveTo(14, -5, 9, -6); }, OUT);
+    E(c, 0, -26, 9, 3, '#6aff4a', 1.6);
+    for (let i = 0; i < 3; i++) { const q = (t * 0.0012 + i / 3) % 1; E(c, -4 + i * 4, -27 - q * 10, 1.4 + q, 1.4 + q, `rgba(150,255,120,${(1 - q).toFixed(2)})`, 0); }
+    E(c, 4, -3, 1.6, 1.2, '#2a2a30', 0);
+    const d = (t * 0.001) % 1; E(c, 4, -1 + d * 6, 1.2, 1.6, '#6aff4a', 0);
+  },
+  chicken(c, e, t) {   // Gummihuhn mit Umlenkrolle, am Balken aufgehängt
+    const k = eggFx('chicken', t, 3000);
+    const sw = Math.sin(t * 0.0018) * 0.06 + (k >= 0 ? Math.sin(k * 36) * 0.35 * (1 - k) : 0);
+    c.save(); c.translate(0, -104); c.rotate(sw);
+    L(c, [0, 0, 0, 52], 1.6, '#8a6a40');
+    c.translate(0, 52);
+    shape(c, '#ffe066', [-18, 0, 14, 46], () => { c.moveTo(-3, 0); c.quadraticCurveTo(-6, 10, -14, 22); c.quadraticCurveTo(-18, 40, -2, 46); c.quadraticCurveTo(14, 44, 12, 26); c.quadraticCurveTo(4, 14, 3, 0); c.closePath(); });
+    E(c, 0, 0, 6, 5, '#ffe066', 2);
+    P(c, [-3, -5, -1, -9, 1, -5, 3, -9, 5, -4], '#e83030', 1.4);
+    P(c, [5, 1, 10, 2, 5, 3], '#ff9a30', 1.2);
+    E(c, -1, 26, 6, 6, '#9aa0b0', 1.8); E(c, -1, 26, 2, 2, '#4a4a58', 0);
+    L(c, [-6, 44, -8, 50], 1.4, '#ff9a30'); L(c, [3, 45, 4, 51], 1.4, '#ff9a30');
+    c.restore();
+  },
+  distaff(c, e, t) {   // Spinnrocken – vier Töne darauf, und die Welt wird neu verwoben
+    c.save(); c.rotate(0.1);
+    R(c, -2.5, -128, 5, 124, '#8a5a2a', 1.8, 2);
+    R(c, -9, -6, 18, 6, '#6a4220', 1.8, 2);
+    for (const [x, y, r] of [[0, -128, 10], [-6, -120, 8], [6, -118, 8], [0, -110, 9]]) E(c, x, y, r, r * 0.9, '#f4f0e6', 1.6);
+    if (hd(c)) L(c, [-4, -126, 4, -112], 1, 'rgba(160,150,140,0.6)');
+    S(c, null, 1, () => { c.moveTo(4, -104); c.quadraticCurveTo(14, -80, 8, -60); }, '#e8e0d0');
+    c.restore();
+    const k = eggFx('draft', t, 3200);
+    if (k >= 0) for (let i = 0; i < 4; i++) {
+      const q = Math.max(0, Math.min(1, (k * 3200 - i * 380) / 1400));
+      if (q > 0) { c.save(); c.globalAlpha *= Math.sin(q * Math.PI); txt(c, 'EGAC'[i], -24 + i * 16, -140 - q * 30, '800 13px "Baloo 2", sans-serif', ['#9ad8ff', '#c8a8ff', '#ffd8a0', '#a8ffc8'][i], 'center', 3, OUT); c.restore(); }
+    }
+  },
+  squirrel(c, e, t) {   // zweiköpfiges Eichhörnchen auf dem Zaun
+    const fight = eggFx('squirrel', t, 2500) >= 0, tail = Math.sin(t * 0.004) * 0.15;
+    c.save(); c.translate(-8, -6); c.rotate(-0.3 + tail);
+    shape(c, '#b8682a', [-16, -32, 4, 0], () => { c.moveTo(0, 0); c.quadraticCurveTo(-16, -6, -12, -22); c.quadraticCurveTo(-6, -32, 2, -22); c.quadraticCurveTo(-4, -12, 4, -2); c.closePath(); });
+    c.restore();
+    E(c, 0, -10, 9, 10, '#c8783a', 2);
+    E(c, 2, -7, 5, 6, '#f0c8a0', 0);
+    for (const [hx, dir, ph] of [[-5, -1, 0], [6, 1, 1.7]]) {
+      const x = hx + Math.sin(t * 0.003 + ph) * (fight ? 2 : 0.7), y = -22;
+      E(c, x, y, 5.5, 5, '#c8783a', 1.8);
+      P(c, [x - 3, y - 4, x - 2, y - 9, x, y - 5], '#c8783a', 1.2);
+      E(c, x + dir * 2.5, y - 1, 1.1, 1.2, OUT, 0);
+      E(c, x + dir * 5, y + 1, 1, 0.8, '#3a2010', 0);
+    }
+    E(c, 0, -13, 2.5, 3, '#8a5a2a', 1);
+    if (fight) floaters(c, e, t, 0, -32, 2, (x, y, s) => txt(c, '!', x, y, `800 ${Math.round(10 * s)}px "Baloo 2", sans-serif`, '#ffe066', 'center', 3, OUT));
+  },
+  idol(c, e, t) {   // goldenes Götzenbild auf einem Sockel mit Druckplatten
+    R(c, -18, -52, 36, 52, '#8a8278', 2.5, 2); R(c, -21, -56, 42, 7, '#9a9288', 2, 2);
+    if (hd(c)) { L(c, [-14, -40, 14, -40], 1, 'rgba(0,0,0,0.2)'); L(c, [-14, -24, 14, -24], 1, 'rgba(0,0,0,0.2)'); }
+    const y0 = -56 - (eggFx('idol', t, 900) >= 0 ? 4 : 0);
+    shape(c, '#e8b830', [-10, y0 - 28, 10, y0], () => { c.moveTo(-7, y0); c.lineTo(-8, y0 - 10); c.quadraticCurveTo(-10, y0 - 28, 0, y0 - 28); c.quadraticCurveTo(10, y0 - 28, 8, y0 - 10); c.lineTo(7, y0); c.closePath(); });
+    E(c, -3, y0 - 19, 1.6, 1.2, '#7a4a10', 0); E(c, 3, y0 - 19, 1.6, 1.2, '#7a4a10', 0); L(c, [-3, y0 - 13, 3, y0 - 13], 1.2, '#7a4a10');
+    if (hd(c)) E(c, -3, y0 - 23, 2.5, 1.5, 'rgba(255,255,220,0.6)', 0);
+  },
+};
+// fliegender Schwan (nach der Spinnrocken-Melodie) und lila Meteor über dem Zukunftsgarten
+function drawSwan(c, x, y, t) {
+  const fl = Math.sin(t * 0.016);
+  c.save(); c.translate(x, y);
+  S(c, null, 4, () => { c.moveTo(14, -2); c.quadraticCurveTo(26, -10, 30, -4); }, OUT); S(c, null, 2.4, () => { c.moveTo(14, -2); c.quadraticCurveTo(26, -10, 30, -4); }, '#ffffff');
+  E(c, 0, 0, 16, 7, '#ffffff', 2);
+  P(c, [30, -5, 37, -3, 30, -2], '#ff9a30', 1.2); E(c, 29, -6, 0.9, 0.9, OUT, 0);
+  shape(c, '#f4f4ff', [-14, -26, 10, 0], () => { c.moveTo(-8, -2); c.quadraticCurveTo(-14, -14 - fl * 12, -2, -24 * fl - 2); c.quadraticCurveTo(4, -8, 8, -2); c.closePath(); }, 2);
+  c.restore();
+}
 // ---------- Tiere (Katze in der Lobby, Huhn 1776, Saugroboter im Palast) ----------
 // gezeichnet in Fußpunkt-Koordinaten, Blickrichtung +x
 const CRITTER_DRAW = {

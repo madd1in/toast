@@ -77,6 +77,7 @@ function nameOf(key) {
   if (k === 'o') { const n = OBJ[id].name; return typeof n === 'function' ? n() : n; }
   if (k === 'a' || k === 'p') return ACT[id].name;
   if (k === 'c') return CRITTERS[id].name;
+  if (k === 'e') return EGGS[id].name;
   return '';
 }
 function isVisible(o) { return !o.visible || o.visible(); }
@@ -217,8 +218,10 @@ function roomAmb() {
   return rainFx.on ? list : list.filter(n => n !== 'rain');
 }
 function updateRain(dt) {
-  const want = G.screen === 'game' && !G.menu && (ROOM_FX[viewRoomId()] || {}).rain;
-  if (!want) {
+  // Die Schauer-Phasen laufen in allen Zukunfts-Räumen weiter (auch im Palast),
+  // sichtbare Tropfen gibt es nur draußen – so bleibt das Wetter beim Reingehen bestehen
+  const room = G.screen === 'game' && G.state ? ROOMS[viewRoomId()] : null;
+  if (!room || room.era !== 'future' || G.menu) {
     if (rainFx.drops.length || rainFx.on || rainFx.next) { rainFx.drops = []; rainFx.splashes = []; rainFx.on = false; rainFx.next = 0; }
     return;
   }
@@ -232,7 +235,10 @@ function updateRain(dt) {
     Sound.ambience(roomAmb());
     if (!rainFx.on) { rainFx.drops = []; rainFx.splashes = []; }
   }
-  if (!rainFx.on) return;
+  if (!rainFx.on || !(ROOM_FX[room.id] || {}).rain) {
+    if (rainFx.drops.length) { rainFx.drops = []; rainFx.splashes = []; }
+    return;
+  }
   const want2 = G.quality < 1 ? 20 : 34;
   if (rainFx.drops.length > want2) rainFx.drops.length = want2;
   while (rainFx.drops.length < want2) rainFx.drops.push({ x: Math.random() * (W + 140), y: Math.random() * SH, land: 312 + Math.random() * 122, v: 660 + Math.random() * 260 });
@@ -732,6 +738,7 @@ function updateActors(dt) {
         const st = STEP_STYLE[a.id] || [null, (a.bw || 50) / 55];
         Sound.step(room.floor, panX(a.x), st[1], rainFx.on, st[0]);
         puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
+        if (room.id === 'garten1776' && Math.random() < 0.5) puff(a.x, a.y - 2, pick(['#e0782e', '#e8b040', '#c8501e']), 1, { vy: 30, vx: 70, r: 2.6, max: 700, spread: 12 });   // Laub wirbelt auf
       }
     }
   }
@@ -753,6 +760,7 @@ function walkPoint(key) {
   const [k, id] = key.split(':');
   if (k === 'o') { const o = OBJ[id]; const w = typeof o.walk === 'function' ? o.walk() : o.walk; return w || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10]; }
   if (k === 'c') { const c = CRIT[id], p = me(), side = p.x < c.x ? -1 : 1; return [c.x + side * 56, c.y + 4]; }
+  if (k === 'e') { const e = EGGS[id], p = me(), side = p.x < e.x ? -1 : 1; return e.walk || [e.x + side * (e.w / 2 + 40), e.y + 6]; }
   const a = ACT[id], p = me(), side = p.x < a.x ? -1 : 1;
   return [a.x + side * (a.talkDist || 82), a.y + 6];
 }
@@ -762,6 +770,7 @@ function faceTarget(key) {
   if (k === 'o') { const o = OBJ[id]; if (o.face) { p.dir = o.face; return; } fx = o.rect[0] + o.rect[2] / 2; }
   else if (k === 'a') { fx = ACT[id].x; const a = ACT[id]; if (!a.fixedDir && a.id !== curId()) a.dir = p.x > a.x ? 1 : -1; }
   else if (k === 'c') { const c = CRIT[id]; fx = c.x; c.dir = p.x > c.x ? 1 : -1; }
+  else if (k === 'e') fx = EGGS[id].x;
   if (fx !== undefined && Math.abs(fx - p.x) > 6) p.dir = fx > p.x ? 1 : -1;
 }
 
@@ -920,6 +929,7 @@ function defaultVerb(key) {
   if (k === 'o') { const o = OBJ[id]; return o.exit ? 'walk' : (o.dv || 'look'); }
   if (k === 'i') return 'look';
   if (k === 'c') return 'use';
+  if (k === 'e') return EGGS[id].dv || 'look';
   return null;
 }
 function sentence() {
@@ -934,7 +944,7 @@ function sentence() {
 async function runSentence(v, a, b) {
   if (G.busy || G.screen !== 'game') return;
   const tok = ++actToken;
-  const tgt = [b, a].find(k => k && (k[0] === 'o' || k[0] === 'a' || k[0] === 'c'));
+  const tgt = [b, a].find(k => k && (k[0] === 'o' || k[0] === 'a' || k[0] === 'c' || k[0] === 'e'));
   for (const k of [a, b]) if (k && k[0] === 'c') { const c = CRIT[k.slice(2)]; c.calm = G.t + 9000; c.mode = 'sit'; c.until = G.t + 9000; }
   if (tgt && v !== 'look') {
     const [x, y] = walkPoint(tgt);
@@ -958,6 +968,7 @@ async function resolve(v, a, b) {
     if (st.looked[a] >= 4 && st.looked[a] % 3 === 1 && LOOK_AGAIN[p]) return say(p, pick(LOOK_AGAIN[p]));
   }
   if (a[0] === 'c' || (b && b[0] === 'c')) return critterResolve(v, a, b);
+  if (a[0] === 'e' || (b && b[0] === 'e')) return eggResolve(v, a, b);
   if (b && b[0] === 'p') {
     if (a[0] !== 'i') return say(p, 'Das kann ich nicht verschicken.');
     return sendItem(a.slice(2), b.slice(2));
@@ -1028,6 +1039,7 @@ function hitScene(x, y) {
     const sc = roomScale(room, c.y), w = c.w * sc, h = c.h * sc;
     if (x >= c.x - w / 2 - pad - 4 && x <= c.x + w / 2 + pad + 4 && y >= c.y - h - pad - 4 && y <= c.y + 6 + pad) return 'c:' + c.id;
   }
+  for (const e of eggList(room.id)) if (x >= e.x - e.w / 2 - pad && x <= e.x + e.w / 2 + pad && y >= e.y - e.h - pad && y <= e.y + 4 + pad) return 'e:' + e.id;
   for (let i = room.objs.length - 1; i >= 0; i--) {
     const o = room.objs[i]; if (!isVisible(o)) continue;
     const [rx, ry, rw, rh] = o.rect; if (x >= rx - pad && x <= rx + rw + pad && y >= ry - pad && y <= ry + rh + pad) return 'o:' + o.id;
@@ -1375,6 +1387,7 @@ function toggleMusic() { G.settings.music = !G.settings.music; Sound.setMusic(G.
 function toggleVoice() { if (!Voice.available) return; G.settings.voice = !G.settings.voice; Voice.on = G.settings.voice; saveSettings(); }
 function toggleRetro() {
   G.settings.retro = !G.settings.retro; saveSettings(); Sound.setRetro(G.settings.retro); Sound.sfx('warp');
+  if (!Sound.current && G.screen !== 'loading') music();   // Sicherheitsnetz: nach dem Wechsel läuft immer Musik
   if (G.screen === 'game') note(G.settings.retro ? 'Grafik: Klassisch (Pixel) · F1 oder P schaltet zurück' : 'Grafik: Remastered · F1 oder P für Pixel-Stil');
 }
 
@@ -1699,6 +1712,7 @@ function drawScene() {
   camApply();
   drawBg(room);
   drawSky();
+  drawMeteor(room);
   HDS.deco = true;   // Raum-Grafik: handgezeichnete Kanten, Fasen, Holzmaserung
   try {
     if (room.dyn) room.dyn(cx, G.t);
@@ -1706,10 +1720,12 @@ function drawScene() {
   } finally { HDS.deco = false; }
   drawCrystal(room);
   if (cx.isPix) cx.layer(1);   // Pixel-Modus: Figuren auf eigene Ebene, damit Schilder-Texte dahinter bleiben
-  const acts = [...Object.values(ACT).filter(a => a.room === room.id && a.visible), ...critterList(room.id)].sort((p, q) => p.y - q.y);
-  for (const a of acts) if (a.crit) drawCritter(a, room); else drawActor(a, room);
+  const acts = [...Object.values(ACT).filter(a => a.room === room.id && a.visible), ...critterList(room.id), ...eggList(room.id, true)].sort((p, q) => p.y - q.y);
+  for (const a of acts) if (a.egg) drawEgg(a); else if (a.crit) drawCritter(a, room); else drawActor(a, room);
+  drawSaber();
   HDS.deco = true;
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
+  drawSwanFlight();
   if (!cx.isPix) { drawRays(room); drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass) drawForeground(fg); }
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
@@ -1978,7 +1994,7 @@ function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
   const jb = G.menu === 'jukebox';
-  const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 26 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 24 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
   const bw = jb ? 820 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, mst = items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
   const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe' }[G.menu] || 'Pause';
@@ -2020,12 +2036,12 @@ function drawMenu() {
   }
   if (G.menu === 'ach') {
     ACH.forEach((a, i) => {
-      const got = !!G.ach[a.id], yy = y + 10 + i * 26;
+      const got = !!G.ach[a.id], yy = y + 10 + i * 24;
       cx.globalAlpha = got ? 1 : 0.4; trophy(cx, bx + 34, yy, 0.8); cx.globalAlpha = 1;
       txt(cx, !got && a.secret ? 'Geheimer Erfolg' : a.name, bx + 56, yy + 2, '800 15px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
       txt(cx, got ? a.desc : '???', bx + 230, yy + 2, '600 13px "Baloo 2", sans-serif', got ? '#e6dcff' : '#6a5a88', 'left');
     });
-    y += ACH.length * 26 + 10;
+    y += ACH.length * 24 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
   G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: 38 }));
@@ -3018,6 +3034,7 @@ function verbsFor(key) {
   const [k, id] = key.split(':');
   if (k === 'i') return ['look', 'use'];
   if (k === 'c') return ['look', 'use', 'talk', 'pick', 'push'];
+  if (k === 'e') { const e = EGGS[id]; return ['look', ...['use', 'talk', 'pick', 'push'].filter(v => e[v])]; }
   const out = [];
   if (k === 'o' && OBJ[id].exit) out.push('walk');
   out.push('look');
@@ -3166,6 +3183,68 @@ function drawCritter(c, room) {
   CRITTER_DRAW[c.kind](cx, c, G.t);
   cx.restore();
   if (G.settings.party) hatAt(c.x + (c.kind === 'cat' ? 17 : c.kind === 'hen' ? 11 : 0) * sc * (c.dir < 0 ? -1 : 1), c.y - (c.kind === 'cat' ? 31 : c.kind === 'hen' ? 39 : 13) * sc, sc * 0.55, c.dir < 0 ? -1 : 1, 3);
+}
+// ---------- Easter Eggs ----------
+const EGG = {};   // Laufzeitobjekte (story.js lädt nach engine.js, darum erst beim ersten Gebrauch anlegen)
+function eggOf(id) { if (!EGG[id]) EGG[id] = Object.assign({ id, egg: true, seed: (id.length * 0.37) % 1 }, EGGS[id]); return EGG[id]; }
+function eggList(room, draw) {
+  if (typeof EGGS === 'undefined') return [];
+  if (!G.eggFx) G.eggFx = {};
+  return Object.keys(EGGS).map(eggOf).filter(e => e.room === room && (draw || !e.when || e.when()));
+}
+function drawEgg(e) { cx.save(); cx.translate(e.x, e.y); try { EGG_DRAW[e.kind](cx, e, G.t); } finally { cx.restore(); } }
+async function eggResolve(v, a, b) {
+  const key = a[0] === 'e' ? a : b, id = key.slice(2), e = eggOf(id), p = curId();
+  if (!G.eggFx) G.eggFx = {};
+  const item = a[0] === 'i' ? a.slice(2) : b && b[0] === 'i' ? b.slice(2) : null;
+  if (v === 'look') { const seen = G.state.eggs || (G.state.eggs = {}); seen[id] = 1; if (Object.keys(EGGS).every(k => seen[k])) unlock('eier'); }
+  if (item || v === 'give') return say(p, e.give || 'Das braucht hier keiner.');
+  const r = e[v];
+  if (typeof r === 'function') return r(p);
+  return say(p, pick(r || e.look));
+}
+// Hand-Position für das Lichtschwert: Schulter und Armlänge je Held (wie in draw.js)
+const SABER_ARM = { bernard: [7, -144, 50], hoagie: [24, -126, 44], laverne: [6, -138, 48] };
+function drawSaber() {
+  const s = G.saber; if (!s) return;
+  const a = ACT[s.id], arm = SABER_ARM[s.id]; if (!a || !arm || a.room !== viewRoomId()) return;
+  const room = ROOMS[a.room], sc = roomScale(room, a.y) * (a.scaleMul || 1), d = a.dir || 1, po = pose(a, G.t);
+  const ang = po && po.front != null ? -0.12 * (1 - po.mix) + po.front * po.mix : -1.5;
+  const hx = arm[0] - arm[2] * Math.sin(ang), hy = arm[1] + arm[2] * Math.cos(ang), ph = ang - 1.1;
+  const grow = Math.min(1, (G.t - s.t0) / 220) * (s.off ? Math.max(0, 1 - (G.t - s.off) / 220) : 1), len = 92 * grow;
+  const x0 = a.x + d * hx * sc, y0 = a.y + hy * sc, x1 = x0 + d * -Math.sin(ph) * len * sc, y1 = y0 + Math.cos(ph) * len * sc;
+  if (len < 1) return;
+  const col = '#7fc8ff';
+  if (!cx.isPix) {
+    glow((x0 + x1) / 2, (y0 + y1) / 2, 60 * sc, col, 0.35);
+    cx.save(); cx.globalCompositeOperation = 'lighter'; cx.lineCap = 'round';
+    for (const [w, al] of [[12, 0.22], [6, 0.55]]) { cx.strokeStyle = hexA(col, al); cx.lineWidth = w * sc; cx.beginPath(); cx.moveTo(x0, y0); cx.lineTo(x1, y1); cx.stroke(); }
+    cx.restore();
+  } else L(cx, [x0, y0, x1, y1], 4, col);
+  L(cx, [x0, y0, x1, y1], 2.2 * sc, '#ffffff');
+  cx.save(); cx.translate(x0, y0); cx.rotate(Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2); R(cx, -3 * sc, 0, 6 * sc, 18 * sc, '#c8ccd8', 1.5, 1.5); cx.restore();
+}
+function drawSwanFlight() {
+  const k = eggFx('swan', G.t, 3200); if (k < 0 || viewRoomId() !== 'gasthaus') return;
+  const x = -60 + k * 1100, y = 120 - Math.sin(k * Math.PI) * 60 + Math.sin(G.t * 0.004) * 6;
+  if (!cx.isPix) for (let i = 1; i <= 5; i++) glow(x - i * 26, y + Math.sin(G.t * 0.004 + i) * 6, 10, '#c8e0ff', 0.25 / i);
+  drawSwan(cx, x, y, G.t);
+}
+// lila Meteor über dem Zukunftsgarten, etwa alle 32 Sekunden
+function meteorK() { const m = (G.t + 15000) % 32000; return m < 1400 ? m / 1400 : -1; }
+function drawMeteor(room) {
+  if (room.id !== 'fgarten') return;
+  const k = meteorK(); if (k < 0) return;
+  const x = 920 - k * 640, y = 20 + k * 150;
+  if (!cx.isPix) { for (let i = 0; i < 8; i++) glow(x + i * 14, y - i * 3.3, 14 - i, '#c070ff', 0.4 - i * 0.04); glow(x, y, 26, '#ffd0ff', 0.6); }
+  else L(cx, [x, y, x + 50, y - 12], 3, '#c070ff');
+  E(cx, x, y, 4, 4, '#ffe8ff', 0);
+}
+function updateEggs() {
+  if (G.screen !== 'game' || !G.state || G.fast) return;
+  const view = viewRoomId(), st = G.eggSt || (G.eggSt = {});
+  const peek = view === 'lobby' && edPeek(G.t) > 0; if (peek && !st.ed && !G.menu) Sound.sfx('psst', panX(EGGS.ed.x)); st.ed = peek;
+  const met = view === 'fgarten' && meteorK() >= 0; if (met && !st.meteor && !G.menu) Sound.sfx('meteor', 0.3); st.meteor = met;
 }
 async function critterResolve(v, a, b) {
   const key = a[0] === 'c' ? a : b, id = key.slice(2), c = CRIT[id], L = CRITTER_LINES[id], p = curId();
@@ -3412,7 +3491,7 @@ function update(dt) {
   updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt); updateCritters(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
-  updateParts(dt); updateMotes(dt); updateFidget(); updateNpcFoley(); updateSnuggle(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
+  updateParts(dt); updateMotes(dt); updateEggs(); updateFidget(); updateNpcFoley(); updateSnuggle(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
   Sound.muffle(!!G.menu && G.menu !== 'jukebox' && G.screen === 'game');
   if (G.jbOn && G.menu !== 'jukebox') { G.jbOn = false; music(); }
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();

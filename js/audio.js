@@ -428,7 +428,7 @@ const Sound = (() => {
     if (!ac) return;
     const now = ac.currentTime;
     for (let i = pending.length - 1; i >= 0; i--) if (pending[i].at <= now) { const f = pending[i].fn; pending.splice(i, 1); f(); }
-    if (cur && now > loopEnd - 0.8) scheduleLoop(Math.max(loopEnd, now + 0.05));
+    if (cur && now > loopEnd - 4) scheduleLoop(Math.max(loopEnd, now + 0.05));   // 4 s Vorlauf: auch gedrosselte Hintergrund-Tabs bekommen rechtzeitig Nachschub
     flushNotes();
     for (const a of ambList) {
       if (a.next < now) a.next = now + 0.05;
@@ -575,6 +575,20 @@ const Sound = (() => {
     scheme: t => { for (let i = 0; i < 4; i++) vowel(t + 0.1 + i * 0.19, 0.13, 175 - i * 14, 160 - i * 14, [[480, 1850], [430, 1750]], 0.09); },
     bulb: t => { osc('sawtooth', 120, t, 0.22, 0.012, sfxBus, { lp: 900 }); osc('sine', 1568, t + 0.12, 0.7, 0.04, sfxBus, { decay: true }); osc('sine', 3136, t + 0.12, 0.35, 0.014, sfxBus, { decay: true }); },
     bellydrum: t => { [0, 0.22, 0.44, 0.55, 0.77, 0.99, 1.21, 1.32, 1.6].forEach((d, i) => { osc('sine', i % 3 === 2 ? 105 : 145, t + 0.2 + d, 0.2, 0.09, sfxBus, { f2: i % 3 === 2 ? 70 : 95, decay: true }); nz(t + 0.2 + d, 0.05, 0.05, sfxBus, { type: 'lowpass', f: 600 }); }); },
+    // Easter Eggs: Hamsterrad, Lichtschwert, Spinnrocken-Melodie, Schwan, Steinkugel, Gummihuhn, Kelch, Grog, Eichhörnchen, Meteor, Onkel Eds „Psst“
+    wheel: t => { for (let i = 0; i < 10; i++) osc('triangle', 1400 + (i % 2) * 300, t + i * 0.11, 0.05, 0.012, sfxBus, { f2: 1800, decay: true }); },
+    saberon: t => { osc('sawtooth', 70, t, 0.45, 0.06, sfxBus, { f2: 150, lp: 900, attack: 0.02 }); nz(t, 0.35, 0.05, sfxBus, { type: 'bandpass', f: 600, f2: 2400, q: 2 }); osc('sawtooth', 110, t + 0.35, 2.2, 0.04, sfxBus, { lp: 700, q: 3, vib: 2, attack: 0.1, release: 0.3 }); osc('sawtooth', 111.5, t + 0.35, 2.2, 0.03, sfxBus, { lp: 650, attack: 0.1, release: 0.3 }); },
+    saberswing: t => { osc('sawtooth', 120, t, 0.35, 0.07, sfxBus, { f2: 190, lp: 1200, q: 4, attack: 0.03 }); nz(t, 0.3, 0.04, sfxBus, { type: 'bandpass', f: 800, f2: 1800, q: 1.5, attack: 0.05 }); },
+    saberoff: t => { osc('sawtooth', 150, t, 0.4, 0.06, sfxBus, { f2: 50, lp: 900, attack: 0.01 }); nz(t, 0.3, 0.04, sfxBus, { type: 'bandpass', f: 2000, f2: 400, q: 2 }); },
+    draft: t => { ['E5', 'G5', 'A5', 'C6'].forEach((n, i) => { osc('sine', freq(n), t + i * 0.38, 1.2, 0.06, sfxBus, { decay: true }); osc('sine', freq(n) * 2.01, t + i * 0.38, 0.8, 0.02, sfxBus, { decay: true }); osc('triangle', freq(n), t + i * 0.38, 0.9, 0.025, sfxBus, { decay: true, vib: 4 }); }); for (let i = 0; i < 8; i++) osc('sine', 2093 * Math.pow(1.122, i), t + 1.6 + i * 0.06, 0.4, 0.012, sfxBus, { decay: true }); },
+    swan: t => { for (let i = 0; i < 6; i++) nz(t + i * 0.42, 0.25, 0.035, sfxBus, { type: 'lowpass', f: 700, f2: 300, attack: 0.08 }); vowel(t + 1.1, 0.35, 520, 470, [[600, 1000], [560, 950]], 0.05); },
+    boulder: t => { nz(t, 2.8, 0.12, sfxBus, { type: 'lowpass', f: 160, f2: 90, attack: 0.4 }); for (let i = 0; i < 8; i++) osc('sine', 48 + Math.random() * 10, t + i * 0.32, 0.3, 0.08, sfxBus, { decay: true }); },
+    rubber: t => { osc('square', 900, t, 0.22, 0.035, sfxBus, { f2: 1500, lp: 2200, q: 6, attack: 0.01 }); osc('square', 1450, t + 0.24, 0.35, 0.03, sfxBus, { f2: 700, lp: 2000, q: 6, attack: 0.01 }); },
+    grail: t => { ['C5', 'E5', 'G5', 'C6', 'E6'].forEach((n, i) => osc('sine', freq(n), t + i * 0.12, 1.6, 0.03, sfxBus, { attack: 0.2, release: 0.6 })); },
+    grog: t => { for (let i = 0; i < 9; i++) osc('sine', 220 + Math.random() * 300, t + i * 0.09 + Math.random() * 0.04, 0.06, 0.025, sfxBus, { f2: 500 + Math.random() * 400, decay: true }); },
+    chatter: t => { for (let i = 0; i < 10; i++) osc('square', 2200 + Math.random() * 900, t + i * 0.07, 0.04, 0.012, sfxBus, { decay: true }); },
+    meteor: t => { nz(t, 1.4, 0.05, sfxBus, { type: 'bandpass', f: 3000, f2: 300, q: 1.2, attack: 0.2 }); osc('sine', 900, t, 1.3, 0.015, sfxBus, { f2: 120, decay: true }); },
+    psst: t => { nz(t, 0.35, 0.05, sfxBus, { type: 'highpass', f: 3500, attack: 0.05 }); },
     specs: t => { osc('sine', 2500, t + 0.45, 0.08, 0.014, sfxBus, { f2: 3300, decay: true }); nz(t + 0.42, 0.05, 0.02, sfxBus, { type: 'bandpass', f: 3000, q: 2 }); },
     hmm: t => { osc('sawtooth', 205, t + 0.35, 1.0, 0.05, sfxBus, { f2: 180, lp: 430, q: 2, attack: 0.1, vib: 3 }); osc('sawtooth', 236, t + 1.45, 0.4, 0.04, sfxBus, { f2: 262, lp: 520, q: 2, attack: 0.05 }); },
   };
@@ -680,7 +694,7 @@ const Sound = (() => {
       loops = [];
       cur = c; fadeNext = true;
       scheduleLoop(ac.currentTime + 0.06);
-    }
+    } else if (ac && !cur && wanted) { const w = wanted; wanted = null; play(w); }   // Sicherheitsnetz: nie ohne Musik dastehen
   }
 
   // Für Trailer-Aufnahmen: Klang in einen OfflineAudioContext rendern, getaktet über tick()

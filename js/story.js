@@ -107,7 +107,7 @@ const LOOK_AGAIN = {
 // Spielfigur meldet sich, wenn 40 Sekunden lang nichts passiert
 const IDLE = {
   bernard: ['Wenn ich nur wüsste, was als Nächstes kommt...', 'Ich könnte ja mal auf den Tipp-Knopf drücken.', 'Mein Taschenrechner und ich langweilen uns.', '*räusper* Ich warte.'],
-  hoagie: ['Ich mach mal kurz Pause, Mann.', 'Hey, ist hier irgendwo was zu essen?', 'Tsss tsss tsss... Schlagzeug-Solo im Kopf.', 'Joa. Chillen kann ich.'],
+  hoagie: ['Ich mach mal kurz Pause, Mann.', 'Hey, ist hier irgendwo was zu essen?', 'Tsss tsss tsss... Schlagzeug-Solo im Kopf.', 'Joa. Chillen kann ich.', 'Hinter dir! Ein dreiköpfiger Affe! ...Mist, schon weg.'],
   laverne: ['Ich zähle Staubkörner. Bin bei 4711.', 'Ob Pflanzen träumen? Ich frage für eine Freundin.', 'Langweilig. Ich könnte jemanden untersuchen.', 'Hallo? Ist da draußen jemand?'],
 };
 // Sprachausgabe: Stimmlage pro Figur [Geschlecht der Stimme, Tonhöhe, Tempo]
@@ -134,6 +134,7 @@ const ACH = [
   { id: 'reise', name: 'Weltenbummler', desc: 'Alle sieben Orte in drei Zeiten besucht.' },
   { id: 'party', name: 'Partytier', desc: 'Den geheimen Code gefunden. Hütchen auf!', secret: true },
   { id: 'tierfreund', name: 'Tierfreund', desc: 'Katze, Huhn und Saugroboter gestreichelt.' },
+  { id: 'eier', name: 'Easter-Egg-Jäger', desc: 'Alle Verbeugungen vor den Klassikern entdeckt.', secret: true },
   { id: 'geduld', name: 'Geduldsprobe', desc: 'Alle Leerlauf-Ticks der Helden gesehen.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
@@ -154,6 +155,66 @@ const CRITTERS = {
   katze: { name: 'Katze Mozzarella', room: 'lobby', kind: 'cat', speed: 60, h: 34, w: 46, sound: 'meow', idles: ['sleep', 'groom', 'sit'] },
   huhn: { name: 'Huhn Henriette', room: 'garten1776', kind: 'hen', speed: 48, h: 40, w: 36, sound: 'cluck', idles: ['peck', 'peck', 'sit'] },
   saugbot: { name: 'Saugroboter Staubi 3000', room: 'vorraum', kind: 'bot', speed: 75, h: 18, w: 42, sound: 'botbeep', idles: ['sit', 'sit'] },
+};
+// ---------- Easter Eggs: Verbeugungen vor Maniac Mansion, Zak McKracken, Indiana Jones, Loom, Monkey Island und Star Wars ----------
+const EGGS = {
+  mumie: { name: 'Cousin Ted', kind: 'mummy', room: 'labor', x: 682, y: 340, w: 56, h: 176, walk: [612, 396], dv: 'look',
+    look: ['Cousin Ted, die Familienmumie. Dr. Fred sagt, er „hängt hier nur so rum“.', 'Eine Mumie im Sarkophag. An den Ellbogen sind die Binden schon ziemlich durchgescheuert.'],
+    talk: ['Hallo, Ted. ... Er ist der beste Zuhörer im ganzen Haus.', 'Ted, blinzel einmal für Ja. ... Hat er gerade geblinzelt?!'],
+    use: ['Ich wickle ihn nicht aus. Unter so vielen Binden ist garantiert nichts Gutes.'],
+    pick: ['Ich schleppe doch keinen toten Cousin durchs Haus. Nicht schon wieder.'],
+    push: ['Ich schubs Ted nicht. Der ist älter als ich. Viel, viel älter.'] },
+  hamster: { name: 'Onkel Eds Hamster', kind: 'hamster', room: 'labor', x: 186, y: 362, w: 66, h: 62, walk: [186, 404], dv: 'look',
+    look: ['Onkel Eds Hamster. Am Käfig klebt ein Zettel: „NICHT in die Mikrowelle! – Ed“.', 'Er rennt in seinem Laufrad. Er hat ein Ziel. Nur weiß keiner, welches.'],
+    use: async p => { G.eggFx.hamster = G.t; Sound.sfx('wheel', panX(EGGS.hamster.x)); await say(p, 'Ich geb ihm einen Krümel. Jetzt rennt er doppelt so schnell. Zucker ist eine Droge.'); },
+    talk: ['Hallo, Kleiner. ... Er rennt einfach weiter. Respekt.'],
+    pick: ['Nein. Ich weiß genau, wie Geschichten mit Hamstern in diesem Haus enden.'],
+    give: 'Er nimmt nur Krümel. Und Rache, falls man ihm zu nahe kommt.' },
+  saber: { name: 'Lichtschwert-Prototyp', kind: 'saber', room: 'labor', x: 344, y: 334, w: 24, h: 48, walk: [330, 392], dv: 'use',
+    look: ['Ein Griff mit der Aufschrift „Lichtschwert, Prototyp 3 – nicht in Richtung Gesicht halten“. Dr. Fred bastelt wohl an Lampen.'],
+    use: async p => {
+      const a = me(); a.pose = { kind: 'saber', t0: G.t, dur: 2600, puff: 0 }; G.saber = { id: p, t0: G.t, dur: 2600 };
+      Sound.sfx('saberon', panX(a.x)); await wait(900); Sound.sfx('saberswing', panX(a.x)); await wait(500); Sound.sfx('saberswing', panX(a.x)); await wait(800);
+      Sound.sfx('saberoff', panX(a.x)); G.saber.off = G.t; await wait(400); G.saber = null; a.pose = null;
+      await say(p, 'Ich hab da ein ganz mieses Gefühl bei der Sache.');
+    },
+    pick: ['Lieber nicht einstecken. Sonst schneid ich mir noch ein Loch in die Hosentasche.'],
+    push: ['Ich stups es an. Es summt kurz beleidigt.'] },
+  chuck: { name: 'Chuck, die Topfpflanze', kind: 'chuck', room: 'lobby', x: 246, y: 242, w: 32, h: 54, walk: [246, 398], dv: 'look',
+    look: ['Eine Topfpflanze. Auf dem Schild steht „Chuck“. Ich hab das Gefühl, wir sind uns schon mal begegnet.', 'Chuck sieht gesünder aus als in seinen alten Tagen.'],
+    talk: ['Hallo, Chuck. ... Chuck sagt nichts. Chuck sagt nie was.'],
+    use: ['Ich gieße Chuck mit dem Rest aus meiner Tasse. Er wirkt jetzt irgendwie koffeiniert.'],
+    pick: ['Chuck bleibt hier. Er hat Wurzeln geschlagen. Wortwörtlich.'] },
+  ed: { name: 'Onkel Ed', kind: 'ed', room: 'lobby', x: 928, y: 300, w: 44, h: 190, walk: [870, 392], dv: 'talk', when: () => edPeek(G.t) > 0.6,
+    look: ['Onkel Ed lugt aus der Labortür. Er bewacht sein Päckchen. Und seinen Hamster.', 'Onkel Ed. Er grüßt nie. Er späht nur.'],
+    talk: async p => { Sound.sfx('psst', panX(EGGS.ed.x)); await say(p, pick(['Onkel Ed flüstert: „Hast du mein Päckchen gesehen? Ich warte seit Jahren auf dieses Päckchen!“', 'Onkel Ed zischt: „Finger weg von meinem Hamster!“ – und schon ist er wieder weg.'])); },
+    use: ['Ich winke Onkel Ed. Er zieht sich hinter den Türrahmen zurück. Sehr langsam.'] },
+  grail: { name: 'Holzbecher', kind: 'grail', room: 'gasthaus', x: 226, y: 192, w: 20, h: 22, walk: [226, 400], dv: 'look',
+    look: ['Ein schlichter Holzbecher. Sieht aus wie der Becher eines Zimmermanns. Ich würde weise wählen – den hier.', 'Zwischen all dem Zinn ist der unscheinbare Holzbecher irgendwie der spannendste.'],
+    use: async p => { act(p, 'eat', 1400); Sound.sfx('slurp'); G.eggFx.grail = G.t; await wait(900); Sound.sfx('grail'); const a = me(); puff(a.x, a.y - 120, '#ffe066', 8, { vy: -30, r: 2.4, spread: 30 }); await say(p, 'Ein Schluck Wasser – und ich fühl mich zehn Jahre jünger! Okay. Zehn Minuten.'); },
+    pick: ['Den lass ich hier. Ich hab das Gefühl, der darf über eine bestimmte Linie nicht hinaus.'] },
+  grog: { name: 'Krug Grog', kind: 'grog', room: 'gasthaus', x: 404, y: 290, w: 28, h: 34, walk: [404, 400], dv: 'look',
+    look: ['Ein Krug Grog. Laut Etikett: Rum, Batteriesäure und Dinge, über die man besser nicht redet.', 'Der Grog frisst sich schon langsam durch den Krugboden. Starkes Zeug.'],
+    use: async p => { Sound.sfx('grog', panX(EGGS.grog.x)); await say(p, 'Ich riech nur kurz dran ... Meine Augenbrauen sind weg. Mann.'); },
+    pick: ['Den nehm ich nicht mit. Der Krug hält höchstens noch fünf Minuten.'] },
+  chicken: { name: 'Gummihuhn mit Rolle', kind: 'chicken', room: 'gasthaus', x: 812, y: 128, w: 36, h: 108, walk: [800, 400], dv: 'use',
+    look: ['Ein Gummihuhn mit einer Umlenkrolle in der Mitte. Wofür braucht man so was bloß?', 'Das Gummihuhn baumelt am Balken. Es sieht aus, als wäre es für eine Seilbahn gebaut.'],
+    use: async p => { G.eggFx.chicken = G.t; Sound.sfx('rubber', panX(EGGS.chicken.x)); await wait(500); await say(p, 'Quiiietsch! Okay. Das war das beste Geräusch des ganzen Tages.'); },
+    talk: ['Hey, Huhn. ... Es quietscht nicht mal zurück.'],
+    pick: ['Ich lass es hängen. Ich hab das Gefühl, es gehört in eine ganz andere Geschichte. Eine mit Piraten.'] },
+  distaff: { name: 'Spinnrocken', kind: 'distaff', room: 'gasthaus', x: 370, y: 340, w: 28, h: 142, walk: [370, 400], dv: 'use',
+    look: ['Ein Spinnrocken. Wer darauf vier Töne spielt, kann angeblich die Welt neu verweben. Oder wenigstens Socken.'],
+    use: async p => { G.eggFx.draft = G.t; Sound.sfx('draft', panX(EGGS.distaff.x)); await wait(1700); G.eggFx.swan = G.t; Sound.sfx('swan'); await wait(1200); await say(p, 'Vier Töne – und quer durchs Gasthaus fliegt ein Schwan. Mann. Das war echt magisch.'); },
+    pick: ['Der bleibt hier. Ich kann nicht mal stricken.'] },
+  squirrel: { name: 'Zweiköpfiges Eichhörnchen', kind: 'squirrel', room: 'garten1776', x: 655, y: 232, w: 34, h: 38, walk: [655, 404], dv: 'look',
+    look: ['Ein Eichhörnchen mit zwei Köpfen. Beide gucken mich an, als hätte ich ihre Nüsse geklaut.', 'Die zwei Köpfe streiten sich gerade, wer die Eichel halten darf.'],
+    talk: ['Hallo? – „Hallo!“ – „Nein, ICH zuerst!“ – Die beiden Köpfe streiten sich.'],
+    use: async p => { G.eggFx.squirrel = G.t; Sound.sfx('chatter', panX(EGGS.squirrel.x)); await say(p, 'Ich biete ihm eine Nuss an. Beide Köpfe greifen zu. Jetzt gibt’s Streit.'); },
+    pick: ['Mit zwei Köpfen beißt es auch doppelt. Lieber nicht.'] },
+  idol: { name: 'Goldenes Götzenbild', kind: 'idol', room: 'vorraum', x: 895, y: 352, w: 46, h: 90, walk: [835, 396], dv: 'look',
+    look: ['Ein goldenes Götzenbild auf einem Steinsockel. Es lächelt mich an. Das gefällt mir nicht.', 'Unter dem Sockel sind Druckplatten. Wer das Ding anhebt, sollte schnell rennen können.'],
+    pick: async p => { G.eggFx.idol = G.t; Sound.sfx('boulder'); shake(1600, 4); rumble(800, 0.8, 0.4); await wait(700); await say(p, 'Ich heb es nur ein winziges bisschen an ... Es grollt! Ich stell es sofort wieder hin.'); },
+    use: ['Ich könnte es gegen einen Sack Sand tauschen. Hab nur gerade keinen dabei.'] },
 };
 const CRITTER_LINES = {
   katze: {
