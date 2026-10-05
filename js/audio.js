@@ -708,11 +708,13 @@ const Sound = (() => {
 // ---------- Sprachausgabe über die Web Speech API ----------
 const Voice = (() => {
   const syn = window.speechSynthesis || null;
-  let on = false, voice = null, fem = [], mal = [];
+  let on = false, voice = null, fem = [], mal = [], lang = 'de';
+  const LOCALE = { de: 'de-DE', en: 'en-US', fr: 'fr-FR', es: 'es-ES', ja: 'ja-JP', zh: 'zh-CN', ko: 'ko-KR' };
   // Stimmnamen der gängigen Systeme (Edge/Windows, Chrome, macOS/iOS, Android) nach Geschlecht
-  const FEMALE = /katja|amala|seraphina|hedda|anna|petra|helena|ingrid|leni|elke|louisa|tanja|maja|gisela|klarissa|vicki|marlene|sabine|google deutsch|\bfemale\b|weiblich/i;
-  const MALE = /conrad|killian|florian|stefan|markus|yannick|martin|jonas|\bjan\b|ralf|bernd|kasper|christoph|hans|\bmale\b|männlich/i;
-  const quality = v => (/natural|neural|premium|enhanced|online/i.test(v.name) ? 4 : 0) + (/google/i.test(v.name) ? 2 : 0) + (/de-DE/i.test(v.lang) ? 1 : 0) + (v.localService ? 0 : 0.5);
+  // dazu die üblichen Stimmen für Englisch, Französisch, Spanisch, Japanisch, Chinesisch und Koreanisch
+  const FEMALE = /katja|amala|seraphina|hedda|anna|petra|helena|ingrid|leni|elke|louisa|tanja|maja|gisela|klarissa|vicki|marlene|sabine|google deutsch|zira|aria|jenny|michelle|ana\b|sonia|libby|hazel|susan|samantha|karen|moira|tessa|denise|julie|hortense|amelie|am[ée]lie|brigitte|coralie|eloise|vivienne|elvira|laura|lucia|helena|paloma|monica|m[oó]nica|paulina|nanami|haruka|ayumi|sayaka|kyoko|aoi|xiaoxiao|xiaoyi|huihui|yaoyao|ting-?ting|mei-?jia|sin-?ji|sunhi|sun-?hi|heami|yuna|google us english|google uk english female|google fran[cç]ais|google 日本語|google 普通话|google 한국|\bfemale\b|weiblich/i;
+  const MALE = /conrad|killian|florian|stefan|markus|yannick|martin|jonas|\bjan\b|ralf|bernd|kasper|christoph|hans|david|mark\b|guy\b|ryan|george|eric|daniel|alex\b|tom\b|fred\b|henri|paul\b|claude|thomas|remy|r[ée]my|alvaro|[áa]lvaro|pablo|jorge|diego|keita|ichiro|daichi|kangkang|yunxi|yunyang|yunjian|injoon|hyunsu|google uk english male|google español|\bmale\b|männlich/i;
+  const quality = v => (/natural|neural|premium|enhanced|online/i.test(v.name) ? 4 : 0) + (/google/i.test(v.name) ? 2 : 0) + (v.lang.replace('_', '-').toLowerCase() === (LOCALE[lang] || '').toLowerCase() ? 1 : 0) + (v.localService ? 0 : 0.5);
   function best(list) {
     // natürliche Stimmen bevorzugen und nicht mit roboterhaften mischen
     const top = Math.max(...list.map(quality));
@@ -720,7 +722,7 @@ const Voice = (() => {
   }
   function pick() {
     if (!syn) return;
-    const vs = syn.getVoices().filter(v => /^de/i.test(v.lang)).sort((a, b) => quality(b) - quality(a));
+    const vs = syn.getVoices().filter(v => v.lang.toLowerCase().startsWith(lang) && (lang !== 'zh' || /cn|hans|zh$/i.test(v.lang) || !/tw|hk/i.test(v.lang))).sort((a, b) => quality(b) - quality(a));
     voice = vs[0] || null;
     fem = vs.length ? best(vs.filter(v => FEMALE.test(v.name) && !MALE.test(v.name))) : [];
     mal = vs.length ? best(vs.filter(v => MALE.test(v.name))) : [];
@@ -728,6 +730,7 @@ const Voice = (() => {
   if (syn) { pick(); if ('onvoiceschanged' in syn) syn.onvoiceschanged = pick; }
   // Bühnenanweisungen, Großbuchstaben-Schilder und Auslassungen so umbauen, dass sie natürlich klingen
   function clean(t) {
+    if (lang !== 'de') return t.replace(/\*([^*]+)\*/g, '$1,').replace(/\.\.\.|…/g, ', ').replace(/\s{2,}/g, ' ').trim();
     return t.replace(/\*([^*]+)\*/g, '$1,').replace(/\.\.\.|…/g, ', ')
       .replace(/\bDr\./g, 'Doktor').replace(/\b([A-ZÄÖÜ])([A-ZÄÖÜ]{2,})\b/g, (m, a, b) => a + b.toLowerCase())
       .replace(/\s*,\s*([,.!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
@@ -746,7 +749,7 @@ const Voice = (() => {
       try {
         syn.cancel();
         const c = cast(prof), u = new SpeechSynthesisUtterance(clean(text));
-        u.lang = c.v ? c.v.lang : 'de-DE'; if (c.v) u.voice = c.v;
+        u.lang = c.v ? c.v.lang : LOCALE[lang] || 'de-DE'; if (c.v) u.voice = c.v;
         u.pitch = c.pitch; u.rate = c.rate; u.volume = 1;
         u.onend = () => res(); u.onerror = () => res();
         syn.speak(u);
@@ -757,5 +760,7 @@ const Voice = (() => {
   return {
     get on() { return on; }, set on(v) { on = !!v && !!syn; if (!on) stop(); },
     get available() { return !!syn; }, speak, stop,
+    setLang(id) { lang = LOCALE[id] ? id : 'de'; pick(); }, get lang() { return lang; },
+    get hasVoice() { return !!voice; },
   };
 })();

@@ -346,7 +346,8 @@ class PixCtx {
       const sw = Math.ceil(W * PSCALE * k), sh = Math.ceil(SH * PSCALE * k), pc = new PixCtx(sw, sh);
       pc.isStatic = true;   // Hintergründe werden einmal "gemalt": volle VGA-Schattierung und Textur
       pc.scale(k, k);
-      room.draw(pc);
+      if (typeof Lang !== 'undefined') Lang.bgTag(true);
+      try { room.draw(pc); } finally { if (typeof Lang !== 'undefined') Lang.bgTag(false); }
       cache[k] = { buf: pc.bufs[0], texts: pc.texts, w: sw, h: sh };
     }
     const src = cache[k], dx = Math.round(this.m[4]), dy = Math.round(this.m[5]);

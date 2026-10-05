@@ -25,6 +25,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 
 ## Features
 
+- **7 Sprachen mit Sprachausgabe:** Deutsch (Original), Englisch, Französisch, Spanisch, Japanisch, Chinesisch und Koreanisch – umschaltbar im Titelbild oder unter Einstellungen („Sprache · Language“). Texte, Gesprächsoptionen, Menüs und sogar Schilder im Bild übersetzt der eingebaute Übersetzer von Chrome (ab Version 138 am PC) direkt auf dem Gerät; die Sprachausgabe liest mit einer Stimme der gewählten Sprache vor, Japanisch und Chinesisch brechen zeichenweise um. Übersetzungen werden im Browser gespeichert. In Browsern ohne Übersetzer bleibt das Spiel deutsch
 - **Minimale, moderne Bedienung (HD):** Die Szene füllt den ganzen Bildschirm, eine Kamera fährt mit und nimmt im Gespräch beide Figuren ins Bild. Linksklick = hingehen oder die passende Aktion, Rechtsklick = Aktionsmenü mit genau den Aktionen, die beim Ding etwas bewirken. Das Inventar blendet sich am unteren Rand ein (oder Taste I), der gewählte Gegenstand hängt am Zeiger, Gesprächsoptionen erscheinen als Overlay
 - Klassische Verb-Steuerung im Stil der SCUMM-Adventures (Gib, Nimm, Benutze, Öffne, Schau an, Drücke, Schließe, Rede mit, Ziehe) – im Pixel-Modus oder per Einstellung „Bedienung: Klassisch“
 - **Gezeichnete Figuren:** eine durchgehende Tusche-Außenkontur statt einzeln umrandeter Teile, feine farbige Innenlinien, Cartoon-Schattierung mit harter Schattenkante, organisch geschwungene Formen, sich verjüngende Gliedmaßen, Fäustlinge mit Daumen und Schuhe mit Sohle und Absatz

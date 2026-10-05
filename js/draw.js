@@ -201,6 +201,7 @@ function S(c, fill, lw, fn, stroke) { c.beginPath(); fn(); fs(c, fill, lw, strok
 function shape(c, fill, box, fn, lw = 3) { c.beginPath(); fn(); fs(c, fill, lw, null, box); }
 function grad(c, x0, y0, x1, y1, stops) { const g = c.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; }
 function txt(c, s, x, y, font, col, align = 'center', stroke = 0, strokeCol = OUT) {
+  if (typeof Lang !== 'undefined' && Lang.cur !== 'de') s = Lang.t(s);
   c.font = font; c.textAlign = align; c.textBaseline = 'alphabetic';
   if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; c.strokeText(s, x, y); }
   c.fillStyle = col; c.fillText(s, x, y);

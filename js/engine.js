@@ -29,7 +29,7 @@ const G = {
   busy: 0, speech: null, dialog: null, menu: null, note: null, caption: null, viewRoom: null,
   fade: 0, fadeFrom: 0, fadeTarget: 0, fadeStart: 0, fadeDur: 1, fadeRes: null, fadeMode: 'iris', irisX: W / 2, irisY: SH / 2, warpLabel: '', warpCol: '#ffd23a',
   mouse: { x: W / 2, y: SH / 2 }, pointer: 'mouse', flash: {}, fast: false, skipAll: false,
-  settings: { music: true, voice: false, babble: true, fullscreen: true, retro: false }, titleBtns: [], menuBtns: [], saved: null,
+  settings: { music: true, voice: false, babble: true, fullscreen: true, retro: false, lang: 'de' }, titleBtns: [], menuBtns: [], saved: null,
   reveal: 0, fly: [], shake: { until: 0, mag: 0 }, ach: {}, achToast: null, nextBlip: 0, fsTried: false,
   parts: [], ripples: [], quality: 1, fpsAvg: 16.7, fpsGate: 0,
   motes: [], moteKind: null, storm: null, neon: null, bark: null, barkNext: 0, idleSince: 0, lastClick: null,
@@ -595,6 +595,8 @@ function takePhoto() {
 
 // ---------- Nebenbei-Sprüche: NPCs murmeln vor sich hin, gelangweilte Spielfiguren melden sich ----------
 function startBark(id, text) {
+  if (Lang.active && !Lang.has(text)) { const tok = G.barkTok = (G.barkTok || 0) + 1; Lang.tAsync(text, 2000).then(tt => { if (G.barkTok === tok && !G.bark && !G.speech && !G.busy && !G.dialog) startBark(id, tt); }); return; }
+  text = T(text);
   const a = ACT[id];
   G.bark = { a, text, start: G.t, until: G.t + Math.max(2200, 1000 + text.length * 55), babbleEnd: G.t + Math.min(1800, text.length * 40) };
   a.talking = true;
@@ -664,6 +666,7 @@ function exitFullscreen() { const ex = document.exitFullscreen || document.webki
 function toggleFullscreen() { if (isFullscreen()) exitFullscreen(); else enterFullscreen(); }
 function firstInteraction() {
   Sound.init();
+  if (G.settings.lang && G.settings.lang !== 'de' && !Lang.active && Lang.state !== 'loading' && Lang.supported()) setLang(G.settings.lang, false);
   if (G.settings.fullscreen && !G.fsTried) { G.fsTried = true; enterFullscreen(); }
 }
 
@@ -777,12 +780,17 @@ function faceTarget(key) {
 // ---------- Sprechen ----------
 function say(id, text) {
   if (G.fast || G.skipAll) return Promise.resolve();
+  if (Lang.active && !Lang.has(text)) return Lang.tAsync(text, 2200).then(tt => G.skipAll ? undefined : sayNow(id, tt));
+  return sayNow(id, T(text));
+}
+function textLen(s) { return Lang.charWrap || Lang.cur === 'ko' ? s.length * 2.2 : s.length; }
+function sayNow(id, text) {
   return new Promise(res => {
     const a = id ? ACT[id] : null;
-    const base = Math.max(1500, 800 + text.length * 58) * ({ langsam: 1.45, schnell: 0.7 }[G.settings.textSpeed] || 1);
+    const base = Math.max(1500, 800 + textLen(text) * 58) * ({ langsam: 1.45, schnell: 0.7 }[G.settings.textSpeed] || 1);
     const sp = { a, text, start: G.t, end: G.t + base, res };
     sp.babble = !!(a && a.voice && G.settings.babble && !Voice.on);
-    sp.babbleEnd = G.t + Math.min(base - 300, text.length * 46);
+    sp.babbleEnd = G.t + Math.min(base - 300, textLen(text) * 46);
     G.speech = sp; if (a) a.talking = true;
     Sound.duck(true);
     if (Voice.on) {
@@ -798,8 +806,8 @@ function choose(opts) {
   const list = opts.filter(Boolean);
   if (G.fast && G.autoChoose) return Promise.resolve(G.autoChoose(list));
   return new Promise(res => {
-    G.dialog = { opts: list, res };
-    if (G.pointer === 'pad') { G.mouse.x = 60; G.mouse.y = 484; }
+    const show = () => { G.dialog = { opts: list, res }; if (G.pointer === 'pad') { G.mouse.x = 60; G.mouse.y = 484; } };
+    if (Lang.active) Promise.all(list.map(o => Lang.tAsync(o.text, 1800))).then(show); else show();
   });
 }
 function fadeTo(v, ms = 220, mode) {
@@ -1327,6 +1335,7 @@ function menuItems() {
   }
   if (G.menu === 'settings') return [
     { id: 'music', label: 'Musik: ' + (G.settings.music ? 'an' : 'aus') },
+    { id: 'lang', label: langLabel() },
     { id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') },
     { id: 'babble', label: 'Plapperstimmen: ' + (G.settings.babble ? 'an' : 'aus') },
     { id: 'tspeed', label: 'Textgeschwindigkeit: ' + (G.settings.textSpeed || 'normal') },
@@ -1356,6 +1365,7 @@ function menuClick(x, y) {
   if (b.id === 'close' || b.id === 'back') G.menu = null;
   else if (b.id === 'music') toggleMusic();
   else if (b.id === 'voice') toggleVoice();
+  else if (b.id === 'lang') cycleLang();
   else if (b.id === 'babble') { G.settings.babble = !G.settings.babble; saveSettings(); }
   else if (b.id === 'alite') { const v = G.settings.audioLite; G.settings.audioLite = v == null ? !Sound.lite : v === Sound.mobile ? null : !v; Sound.setLite(G.settings.audioLite); saveSettings(); }
   else if (b.id === 'hotspots') { G.settings.hotspots = !G.settings.hotspots; saveSettings(); }
@@ -1384,6 +1394,43 @@ function menuClick(x, y) {
   else if (b.id === 'yes') { G.menu = null; startNew(); }
 }
 function toggleMusic() { G.settings.music = !G.settings.music; Sound.setMusic(G.settings.music); saveSettings(); }
+// ---------- Sprachen ----------
+function langLabel() {
+  const l = LANGS.find(q => q.id === (G.settings.lang || 'de')) || LANGS[0];
+  const st = Lang.cur === 'de' ? (Lang.supported() ? '' : ' (weitere nur in Chrome am PC)') : Lang.state === 'loading' ? ` (lädt ${Math.round(Lang.progress * 100)} %)` : Lang.state === 'tap' ? ' (tippen zum Laden)' : Lang.state === 'ready' ? '' : ' (nicht verfügbar)';
+  return `​Sprache · Language: ${l.label}${st}`;
+}
+function cycleLang() {
+  if (!Lang.supported()) { note('Weitere Sprachen brauchen den eingebauten Übersetzer von Chrome (ab Version 138, am PC).'); return; }
+  const i = LANGS.findIndex(q => q.id === (G.settings.lang || 'de'));
+  setLang(LANGS[(i + 1) % LANGS.length].id, true);
+}
+// Texte, die oft vorkommen, gleich im Hintergrund übersetzen lassen
+function langStrings() {
+  const out = [];
+  const add = s => { if (typeof s === 'string') out.push(s); };
+  try {
+    Object.values(ITEMS).forEach(i => add(i.name)); Object.values(ACT).forEach(a => add(a.name)); Object.values(ROOMS).forEach(r => add(r.name));
+    Object.values(OBJ).forEach(o => add(typeof o.name === 'function' ? o.name() : o.name));
+    Object.values(CRITTERS).forEach(c => add(c.name)); Object.values(EGGS).forEach(e => add(e.name)); Object.values(VERB_LABEL).forEach(add);
+    Object.values(ERA).forEach(e => add(e.label)); HUD_BTNS.forEach(b => add(b[1])); HELP.forEach(add); JUKEBOX.forEach(j => add(j[1]));
+    ACH.forEach(a => { add(a.name); add(a.desc); }); NOTES.forEach(n => add(n[1]));
+    for (const m of ['main', 'settings', 'extras']) { const keep = G.menu; G.menu = m; try { menuItems().forEach(it => add(it.label)); } finally { G.menu = keep; } }
+  } catch (e) { /* Liste ist nur ein Vorgriff */ }
+  return out;
+}
+function refreshBgs() { for (const k in bgCache) delete bgCache[k]; for (const r of Object.values(ROOMS)) delete r._pix; }
+Lang.onBg(refreshBgs);
+function setLang(id, user) {
+  G.settings.lang = id; saveSettings(); Voice.setLang(id); refreshBgs();
+  if (user && id !== 'de' && Voice.available && !G.settings.voice) { G.settings.voice = true; Voice.on = true; }   // Sprachausgabe in der gewählten Sprache
+  Lang.set(id).then(ok => {
+    if (G.settings.lang !== id) return;
+    if (ok && id !== 'de') { Lang.prewarm(langStrings()); if (user) note(`Sprache: ${LANGS.find(q => q.id === id).label}${Voice.hasVoice ? '' : ' – keine passende Stimme installiert'}`); }
+    else if (!ok && Lang.state === 'tap') { if (user) note('Tippe noch einmal, um das Sprachpaket zu laden.'); }
+    else if (!ok && id !== 'de') { note('Diese Sprache ist im Übersetzer des Browsers nicht verfügbar.'); }
+  });
+}
 function toggleVoice() { if (!Voice.available) return; G.settings.voice = !G.settings.voice; Voice.on = G.settings.voice; saveSettings(); }
 function toggleRetro() {
   G.settings.retro = !G.settings.retro; saveSettings(); Sound.setRetro(G.settings.retro); Sound.sfx('warp');
@@ -1458,6 +1505,7 @@ function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /*
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(G.settings)); } catch (e) { /* ok */ } }
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(SET_KEY) || 'null'); if (s) Object.assign(G.settings, s); } catch (e) { /* ok */ }
+  if (G.settings.lang && G.settings.lang !== 'de') setLang(G.settings.lang, false);
   Sound.setMusic(G.settings.music); Sound.setRetro(!!G.settings.retro); Sound.setParty(!!G.settings.party); Sound.setLite(G.settings.audioLite); Voice.on = G.settings.voice;
 }
 function applyActors(map) {
@@ -1511,7 +1559,8 @@ function drawBg(room) {
     c = document.createElement('canvas'); c.width = Math.ceil(W * s); c.height = Math.ceil(SH * s); c._s = s;
     const g = c._g = c.getContext('2d'); g.setTransform(s, 0, 0, s, 0, 0);
     HDS.deco = HDS.shadow = true; HDS.scale = s;
-    try { room.draw(g); } finally { HDS.deco = HDS.shadow = false; }
+    Lang.bgTag(true);
+    try { room.draw(g); } finally { HDS.deco = HDS.shadow = false; Lang.bgTag(false); }
     finishBg(g, c, room); bgCache[key] = c;
   }
   cx.drawImage(c, 0, 0, W, SH);
@@ -1588,9 +1637,9 @@ function drawActor(a, room) {
 }
 function stageText(t) { return t.replace(/\*([^*]+)\*/g, '($1)'); }
 function wrap(text, maxW) {
-  text = stageText(text);
-  const words = text.split(' '), lines = []; let line = '';
-  for (const w of words) { const t = line ? line + ' ' + w : w; if (cx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; }
+  text = stageText(T(text));
+  const cw = Lang.charWrap, sep = cw ? '' : ' ', words = cw ? Array.from(text) : text.split(' '), lines = []; let line = '';
+  for (const w of words) { const t = line ? line + sep + w : w; if (cx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; }
   if (line) lines.push(line);
   return lines;
 }
@@ -1755,7 +1804,7 @@ function drawScene() {
 function drawToasts() {
   if (G.note && G.t < G.note.until) {
     const nz = uf(15), nf = `700 ${nz}px "Baloo 2", sans-serif`; cx.font = nf;
-    const w = Math.min(W - 20, cx.measureText(G.note.text).width + 30), nh = nz * 2;
+    const w = Math.min(W - 20, cx.measureText(T(G.note.text)).width + 30), nh = nz * 2;
     R(cx, W / 2 - w / 2, 10, w, nh, 'rgba(20,10,32,0.88)', 2, nh / 2, '#7dff7a');
     txt(cx, G.note.text, W / 2, 10 + nh * 0.68, nf, '#d8ffd2');
   }
@@ -1791,7 +1840,7 @@ function drawUI() {
   const mx = G.mouse.x, my = G.mouse.y;
   if (!G.busy && !G.dialog) {
     const full = sentence(), verb = VERB_LABEL[G.verb || 'walk'], rest = full.slice(verb.length), f = '600 19px "Baloo 2", sans-serif';
-    cx.font = f; const w1 = cx.measureText(verb).width, w2 = cx.measureText(rest).width, x0 = 366 - (w1 + w2) / 2;
+    cx.font = f; const w1 = cx.measureText(T(verb)).width, w2 = cx.measureText(T(rest)).width, x0 = 366 - (w1 + w2) / 2;
     txt(cx, verb, x0, 462, '800 19px "Baloo 2", sans-serif', G.verb ? '#ffe066' : '#b8a4e8', 'left');
     txt(cx, rest, x0 + w1, 462, f, G.hover || G.first ? '#ffffff' : '#d7c6ff', 'left');
   }
@@ -1968,7 +2017,7 @@ function drawJukebox(bx, by, bw) {
   const hero = G.state && G.screen === 'game' ? curId() : null;
   if (on && hero && inf.lead && !G.settings.retro) {   // die aktive Figur spielt die Melodie mit
     const lbl = `Melodie mit ${{ bernard: 'E-Piano', hoagie: 'E-Gitarre', laverne: 'Glocken' }[hero]} – gefärbt von ${ACT[hero].name}`;
-    cx.font = '700 13px "Baloo 2", sans-serif'; const tw = cx.measureText(lbl).width;
+    cx.font = '700 13px "Baloo 2", sans-serif'; const tw = cx.measureText(T(lbl)).width;
     drawPortrait(cx, hero, px - tw / 2 - 6, base + 120, 13, '#3d2c5e', now, pulse > 0.5);
     txt(cx, lbl, px - tw / 2 + 14, base + 125, '700 13px "Baloo 2", sans-serif', '#ffe066', 'left');
   }
@@ -2240,7 +2289,7 @@ function drawTitle() {
   // Untertitel auf einem Banner
   const sub = 'Ein inoffizielles Day-of-the-Tentacle-Fanspiel';
   cx.font = '700 19px "Baloo 2", sans-serif';
-  const sw2 = cx.measureText(sub).width + 50, x0 = W / 2 - sw2 / 2, x1 = W / 2 + sw2 / 2;
+  const sw2 = cx.measureText(T(sub)).width + 50, x0 = W / 2 - sw2 / 2, x1 = W / 2 + sw2 / 2;
   P(cx, [x0 - 28, 140, x0 + 6, 138, x0 + 6, 168, x0 - 28, 170, x0 - 16, 154], '#5a1446', 2.5);
   P(cx, [x1 + 28, 140, x1 - 6, 138, x1 - 6, 168, x1 + 28, 170, x1 + 16, 154], '#5a1446', 2.5);
   P(cx, [x0, 132, x1, 132, x1, 162, x0, 162], '#8a2a6a', 3);
@@ -2249,6 +2298,7 @@ function drawTitle() {
   if (G.saved) btns.push({ id: 'cont', label: 'Weiterspielen', big: true });
   btns.push({ id: 'new', label: G.saved ? 'Neues Spiel' : 'Spiel starten', big: !G.saved });
   if (G.hasSaves) btns.push({ id: 'load', label: 'Spielstand laden' });
+  btns.push({ id: 'lang', label: langLabel() });
   btns.push({ id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') });
   btns.push({ id: 'music', label: 'Musik: ' + (G.settings.music ? 'an' : 'aus') });
   btns.push({ id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') });
@@ -2303,6 +2353,7 @@ function titleClick(x, y) {
   else if (b.id === 'cont') continueGame(G.saved);
   else if (b.id === 'new') startNew();
   else if (b.id === 'voice') toggleVoice();
+  else if (b.id === 'lang') cycleLang();
   else if (b.id === 'music') toggleMusic();
   else if (b.id === 'retro') toggleRetro();
   else if (b.id === 'fs') { G.settings.fullscreen = !G.settings.fullscreen; saveSettings(); if (G.settings.fullscreen) enterFullscreen(); else exitFullscreen(); }
@@ -2649,8 +2700,8 @@ function drawSign() {
   if (G.chapterCard || G.menu) { s.t0 = G.t; return; }   // wartet, bis die Kapitelkarte weg ist
   const k = (G.t - s.t0) / 3300; if (k < 0) return; if (k > 1) { G.sign = null; return; }
   const room = ROOMS[s.room], era = ERA[room.era], a = Math.min(1, k * 7, (1 - k) * 6), e = 1 - Math.pow(1 - Math.min(1, k * 4.5), 3);
-  cx.font = '400 30px "Titan One", sans-serif'; const tw = cx.measureText(room.name).width;
-  cx.font = '800 12px "Baloo 2", sans-serif'; const sw = cx.measureText(era.label.toUpperCase()).width;
+  cx.font = '400 30px "Titan One", sans-serif'; const tw = cx.measureText(T(room.name)).width;
+  cx.font = '800 12px "Baloo 2", sans-serif'; const sw = cx.measureText(T(era.label.toUpperCase())).width;
   const x = 18 - (1 - e) * 70, y = 18, w = Math.max(tw, sw) + 92, h = 68;
   cx.save(); cx.globalAlpha = a;
   glow(x + 36, y + 34, 80, era.col, 0.3);
@@ -2901,7 +2952,7 @@ function drawSceneModern() {
 function drawCaption(y) {
   if (!G.caption) return;
   cx.font = '400 26px "Titan One", sans-serif';
-  const w = cx.measureText(G.caption).width + 40;
+  const w = cx.measureText(T(G.caption)).width + 40;
   R(cx, W / 2 - w / 2, y, w, 46, 'rgba(20,10,32,0.85)', 0, 12);
   txt(cx, G.caption, W / 2, y + 32, '400 26px "Titan One", sans-serif', '#ffd23a');
 }
@@ -3022,7 +3073,7 @@ function drawHUD() {
     G.dialog.opts.forEach((o, i) => {
       const yy = y0 + i * lh, on = i === hi;
       if (on) R(cx, 24, yy - lh * 0.72, W - 48, lh - 2, 'rgba(255,224,102,0.1)', 0, 10);
-      txt(cx, (on ? '›  ' : '·  ') + o.text, 44, yy, `700 ${uf(20)}px "Baloo 2", sans-serif`, on ? '#ffe066' : '#d7c6ff', 'left', 4, '#0b0610');
+      txt(cx, '​' + (on ? '›  ' : '·  ') + T(o.text), 44, yy, `700 ${uf(20)}px "Baloo 2", sans-serif`, on ? '#ffe066' : '#d7c6ff', 'left', 4, '#0b0610');
     });
   }
   if (G.coin) drawCoin();
@@ -3124,7 +3175,7 @@ function drawTip(x, y, inSc) {
   if (G.hover && inSc && !G.verb && !G.first) { const v = defaultVerb(G.hover); if (v) verbBadge(x, y, v); }
   if (!label) return;
   const tz = uf(15); cx.font = `800 ${tz}px "Baloo 2", sans-serif`;
-  const w = cx.measureText(label).width, tx = Math.max(w / 2 + 8, Math.min(W - w / 2 - 8, x)), ty = Math.max(24, y - 22);
+  const w = cx.measureText(T(label)).width, tx = Math.max(w / 2 + 8, Math.min(W - w / 2 - 8, x)), ty = Math.max(24, y - 22);
   txt(cx, label, tx, ty, `800 ${tz}px "Baloo 2", sans-serif`, G.first ? '#ffffff' : '#ffe066', 'center', 4, '#0b0610');
 }
 function navTargetsModern() {
