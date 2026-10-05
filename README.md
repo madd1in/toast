@@ -43,7 +43,11 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - NPCs murmeln nebenbei vor sich hin, und wer zu lange herumsteht, bekommt einen Spruch von der eigenen Figur
 - Spiegelungen auf Fliesen und Marmor, leichtes Atmen im Stand, Dialog-Kamera, die bei Gesprächen sanft heranzoomt, Funkenregen beim Aufheben, Gräser im Vordergrund der Gärten, neues Titelbild mit Hügel-Ebenen, Nebel, leuchtender Villa, Fledermäusen und den drei Helden im Mondlicht
 - **Neue Musik:** Tavernen-Gigue im Gasthaus 1776, Bossa-Lounge in der Lobby, neue Instrumente (Streicher, Blech, E-Piano, Laute, Fiedel), Schlagzeug mit Hi-Hats, Klatschen und Bodhrán, Instrumente im Stereo-Bild verteilt, Kompressor auf der Summe
-- **Musikbox** im Menü (Extras): alle Stücke anhören
+- **Musikbox als Plattenspieler** (Menü → Extras): die Platte dreht sich mit farbigem Etikett je Stück, der Tonarm setzt auf, ein gespiegeltes Spektrum tanzt zur Musik, dazu Tempo, Besetzung und ein Takt-Puls
+- **Jede Figur färbt die Musik:** Bernard spielt die Melodie auf dem E-Piano mit, Hoagie auf der E-Gitarre, Laverne auf Glocken – beim Figurenwechsel wechselt die Klangfarbe sofort
+- **Leerlauf-Ticks:** Wer eine Weile stillsteht, schiebt als Bernard die Brille hoch oder grübelt mit Fragezeichen und „Hmm“, spielt als Hoagie Luftgitarre samt Riff und Kopfnicken, gähnt als Laverne mit gestreckten Armen oder verfolgt mit den Augen eine summende Fliege – bis es klatscht
+- **Lichtstrahlen:** Mondlicht fällt durchs Lobbyfenster, Sonnenstrahlen durchs Gasthausfenster (Wolken ziehen vorbei), die Laborlampe wirft einen Lichtkegel, Kronleuchter und Spot im Thronsaal, Sonnenstrahlen mit Linsenreflexen im Garten 1776 – mit glitzerndem Staub im Licht
+- **Neu gezeichnete Nebenfiguren:** Dr. Fred mit zerzaustem Haarkranz, Glatze mit Stirnfalten, Hakennase und schiefem Grinsen; Gertrude mit Spitzenhaube, blauem Band, Löckchen und Knubbelnase; John Hancock mit Dreispitz samt Kokarde, Lockenrollen und Adlernase
 - **Minispiel „Gut-O-Mat“** (Menü → Extras): Toast-Timing in fünf Runden – die Nadel im goldbraunen Bereich stoppen, Dr. Fred kommentiert, Rekord und Erfolg „Toast-Meister“
 - **Kapitel-Titelkarten** mit Kinobalken und Fanfare nach jedem gelösten Rätsel; im Titelbild saust ab und zu das Chrono-Klo über den Himmel
 - Einstellung **Hotspot-Hilfe**: dezente, pulsierende Markierungen an allem Benutzbaren; das gewählte Verb leuchtet in der Satzzeile

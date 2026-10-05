@@ -324,6 +324,12 @@ function pose(a, t) {
     case 'rope': return { front: -2.6 + cyc * 0.7, fb: 0.4, back: -2.6 - cyc * 0.7, bb: 0.4, knee: 0.4, mix: Math.min(1, s * 3) };
     case 'pour': return { front: -1.25, fb: 0.7, back: -1.05, bb: 0.6, lean: 0.06, mix: Math.min(1, s * 3) };
     case 'pull': return k < 0.4 ? { front: -1.5 * (k / 0.4), fb: 0.1, mix: 1 } : { front: -1.1, fb: 0.5, lean: -0.1 * s, knee: 0.5 * s, mix: 1 };
+    // Leerlauf-Ticks (engine.js startet sie, wenn die Spielfigur eine Weile still steht)
+    case 'glasses': return { front: -2.4, fb: 0.8, mix: Math.min(1, s * 2.2) };
+    case 'think': return { front: -1.95, fb: 2.6, mix: Math.min(1, s * 2.5) };
+    case 'airguitar': return { front: -1.95, fb: 0.3, back: -0.7 + Math.sin((t - p.t0) * 0.034) * 0.28, bb: 0.9, knee: 0.35, lean: -0.09, bang: Math.abs(Math.sin((t - p.t0) * 0.017)), mix: Math.min(1, s * 3) };
+    case 'yawn': return { front: -3.35, fb: 0.35, back: -3.45, bb: 0.3, lean: -0.07, mix: s };
+    case 'fly': return k < 0.8 ? null : { front: -2.6 + (k - 0.8) / 0.2 * 2.0, fb: 0.4, mix: 1 };   // am Ende: zuschlagen
   }
   return null;
 }
@@ -345,12 +351,36 @@ function pupil(c, a, t, x, y, r) {
   // die Pupillen folgen leicht dem Zeiger – die Figuren wirken aufmerksam
   let dx = 0, dy = 0;
   const m = G && (G.ms || G.mouse);
-  if (a.x != null && a.h != null && m && m.x >= 0) {
+  const fa = a.pose && a.pose.kind === 'fly' ? gnatAt(a, t) : null;
+  if (fa) { dx = Math.max(-r * 0.85, Math.min(r * 0.85, (fa[0] - x) / 6)); dy = Math.max(-r * 0.6, Math.min(r * 0.6, (fa[1] - y) / 6)); }
+  else if (a.x != null && a.h != null && m && m.x >= 0) {
     dx = Math.max(-r * 0.85, Math.min(r * 0.85, (m.x - a.x) / 45 * (a.dir || 1)));
     dy = Math.max(-r * 0.45, Math.min(r * 0.45, (m.y - (a.y - a.h * 0.85)) / 150));
   }
   E(c, x + dx, y + dy, r, r * 1.15, OUT, 0);
   if (!c.isPix && r > 1.2) { E(c, x - r * 0.38, y - r * 0.45, r * 0.42, r * 0.42, 'rgba(255,255,255,0.92)', 0); E(c, x + r * 0.4, y + r * 0.45, r * 0.18, r * 0.18, 'rgba(255,255,255,0.6)', 0); }
+}
+// Laverne und die Fliege: kreist um den Kopf, am Ende ein Klatsch – und weg ist sie
+function gnatAt(a, t) {
+  const p = a.pose, k = (t - p.t0) / p.dur; if (k < 0 || k > 0.86) return null;
+  const w = (t - p.t0) * 0.0042;
+  return [16 + Math.cos(w * 1.7) * 36 + Math.sin(w * 3.1) * 6, -186 + Math.sin(w * 2.3) * 20 - Math.cos(w) * 6];
+}
+function drawGnat(c, a, t) {
+  const p = a.pose; if (!p || p.kind !== 'fly') return;
+  const k = (t - p.t0) / p.dur, f = gnatAt(a, t);
+  if (f) {
+    const fl = Math.sin(t * 0.09) * 0.5 + 0.5;
+    c.save(); c.translate(f[0], f[1]); c.scale(1.7, 1.7);
+    E(c, -1.5, -3.5, 3, 1.4 + fl * 1.4, 'rgba(225,240,255,0.85)', 0.8, -0.5); E(c, 1.5, -3.5, 3, 1.4 + fl * 1.4, 'rgba(225,240,255,0.85)', 0.8, 0.5);
+    E(c, 0, 0, 2.8, 2.2, '#2a2430', 0.8); E(c, 2, -0.5, 1, 1, '#d03030', 0);
+    c.restore();
+  } else if (k < 1) {
+    const q = (k - 0.86) / 0.14;
+    c.save(); c.globalAlpha *= 1 - q;
+    for (let i = 0; i < 7; i++) { const an = i * 0.9; L(c, [40 + Math.cos(an) * (4 + q * 8), -168 + Math.sin(an) * (4 + q * 8), 40 + Math.cos(an) * (9 + q * 12), -168 + Math.sin(an) * (9 + q * 12)], 2.2, '#ffd23a'); }
+    c.restore();
+  }
 }
 // Feine Details (Haarsträhnen, Falten, Glanzlichter) nur im HD-Modus – in 320×200 wären sie nur Rauschen
 const hd = c => HDS.on && !c.isPix;
@@ -384,7 +414,8 @@ function mood(a, t) {
   let m = 0, q = 0;
   const sp = typeof G !== 'undefined' && G.speech;
   if (sp && sp.a === a) { const s = sp.text; if (/!/.test(s)) m = 1; if (/\?/.test(s)) q = 1; if (/\.\.\.|…/.test(s) && !m) m = -0.7; }
-  else if (a.pose) m = -0.35;
+  else if (a.pose && !a.pose.fidget) m = -0.35;
+  if (a.pose && a.pose.kind === 'think') q = 1;
   if (typeof G !== 'undefined' && G.flash && G.flash[a.id] && G.t - G.flash[a.id] < 1600) m = 1.3;
   const wob = m > 0 && a.talking ? Math.sin(t * 0.02) * 0.8 : 0;
   return { lift: m * 3.4 + wob, worry: m < 0 ? -m : 0, q };
@@ -490,6 +521,7 @@ CHAR.bernard = (c, a, t) => {
   brows(c, a, t, 12, 27, -198.5, 10, '#3a2010', 2.8);
   pupil(c, a, t, 14, -188, 2); pupil(c, a, t, 29, -188, 2);
   if (hd(c)) { lensGlint(c, 8, -192); lensGlint(c, 23, -192); }   // Brillenglas-Reflex
+  if (po && a.pose.kind === 'think') floaters(c, a, t, 30, -214, 2, (x, y, s) => txt(c, '?', x, y, `800 ${Math.round(18 * s)}px "Baloo 2", sans-serif`, '#ffe066', 'center', 4, OUT), po.mix);
   // Knollennase
   shape(c, '#efb48c', [21, -184, 38, -166], () => { c.moveTo(22, -180); c.quadraticCurveTo(31, -184, 35, -176); c.quadraticCurveTo(38, -168, 30, -167); c.quadraticCurveTo(24, -167, 22, -172); c.closePath(); });
   if (hd(c)) E(c, 30, -170.5, 1.7, 1.1, 'rgba(90,40,30,0.55)', 0);
@@ -505,9 +537,10 @@ CHAR.hoagie = (c, a, t) => {
   const skin = '#e9b088', shirt = '#26232c', jeans = '#3d5fa6', jeansB = '#34518e', boot = '#3a2416', hair = '#1d1a1e';
   const po = pose(a, t), sq = squat(a, t), cr = crouch(a, t, 64);
   limb(c, -10, -70 + cr, 20, 64, -sw * 0.35 - sq * 0.45, jeansB, { l: 16, h: 8, dx: 6, fill: boot }, poseKnee(a, t, -1));
-  c.save(); c.translate(0, b + cr); lean(c, a, -70); arm(c, -22, -126, poseAng(0.1 - sw * 0.4 - gH * 0.9 + drum, po, 'back'), shirt, 16, skin, 44, 15, 8, poseAng(elbow(a, -1) + gH * 0.8, po, 'bb')); c.restore();
+  const ag = po && a.pose.kind === 'airguitar';
+  if (!ag) { c.save(); c.translate(0, b + cr); lean(c, a, -70); arm(c, -22, -126, poseAng(0.1 - sw * 0.4 - gH * 0.9 + drum, po, 'back'), shirt, 16, skin, 44, 15, 8, poseAng(elbow(a, -1) + gH * 0.8, po, 'bb')); c.restore(); }
   limb(c, 10, -70 + cr, 20, 64, sw * 0.35 - sq * 0.55, jeans, { l: 16, h: 8, dx: 6, fill: boot }, poseKnee(a, t, 1));
-  c.save(); c.translate(0, b + cr + nod(a, t)); lean(c, a, -70);
+  c.save(); c.translate(0, b + cr + nod(a, t) + (ag ? po.bang * 4 * po.mix : 0)); lean(c, a, -70);
   R(c, -24, -82, 50, 18, jeans, 3, 7);
   if (hd(c)) { L(c, [-16, -80, -16, -66], 1.3, 'rgba(255,230,160,0.35)'); L(c, [18, -80, 18, -66], 1.3, 'rgba(255,230,160,0.35)'); R(c, -6, -80, 6, 5, '#6a6a7a', 1, 1); }
   // lange Haare hinten, unten in Strähnen auslaufend
@@ -540,11 +573,13 @@ CHAR.hoagie = (c, a, t) => {
   if (!blinking(a, t)) for (const [x, r] of [[18, 4.2], [27, 4]]) S(c, skin, 1.5, () => { c.moveTo(x - r - 0.6, -154); c.quadraticCurveTo(x, -161.5, x + r + 0.6, -154); c.quadraticCurveTo(x, -156.2, x - r - 0.6, -154); c.closePath(); }, '#7a4a3a');   // schwere, entspannte Lider
   brows(c, a, t, 17, 27.5, -161, 8, OUT, 3);
   shape(c, '#df9a72', [24, -155, 38, -140], () => { c.moveTo(25, -152); c.quadraticCurveTo(34, -155, 37, -148); c.quadraticCurveTo(38, -141, 31, -141); c.quadraticCurveTo(26, -141, 25, -145); c.closePath(); });   // breite Nase
-  if (mo || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 20, -136, 7, 5, '#6e1f1f', 2.5);
+  if (mo || ag || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 20, -136, 7, ag ? 6 : 5, '#6e1f1f', 2.5);
   else S(c, null, 2.5, () => { c.moveTo(12, -139); c.quadraticCurveTo(20, -132, 28, -139); });
   P(c, [17, -131.5, 24, -131.5, 20.5, -124], hair, 1.5);   // Kinnbart
   if (po && po.chew) E(c, 22, -136, 5, 4.5, '#d8343a', 1.5);   // der Apfel in der Hand vorm Mund
+  if (ag) arm(c, -22, -126, poseAng(0.1, po, 'back'), shirt, 16, skin, 44, 15, 8, poseAng(0.12, po, 'bb'));   // Luftgitarre: Greifhand vor dem Bauch
   arm(c, 24, -126, poseAng(-0.1 + sw * 0.4 - gH * 0.9 - drum + talkArm(a, t), po, 'front'), shirt, 16, skin, 44, 15, 8, poseAng(elbow(a, 1) + gH * 0.8, po, 'fb'));
+  if (ag) floaters(c, a, t, 44, -168, 3, (x, y, s, i) => noteGlyph(c, x, y, s, ['#ffd23a', '#ff7ab8', '#7fe8ff'][i]), po.mix);
   c.restore();
 };
 
@@ -593,7 +628,8 @@ CHAR.laverne = (c, a, t) => {
   shape(c, skin, [-11, -189, 24, -146], () => { c.moveTo(-10, -170); c.quadraticCurveTo(-10, -188, 6, -189); c.quadraticCurveTo(23, -189, 23, -171); c.quadraticCurveTo(22, -157, 13, -150); c.quadraticCurveTo(7, -146, 2, -150); c.quadraticCurveTo(-9, -157, -10, -170); c.closePath(); });
   if (hd(c)) E(c, 7, -184.5, 15, 4, 'rgba(40,20,60,0.24)', 0);   // Haarschatten auf der Stirn
   P(c, [-12, -176, -14, -196, -2, -188, 2, -208, 10, -190, 20, -204, 22, -186, 32, -190, 24, -176, 14, -182, 4, -178], hair);
-  if (blinking(a, t)) { E(c, 13, -170, 5.5, 6.5, skin, 2.5); E(c, 25, -170, 5, 6.5, skin, 2.5); L(c, [8, -170, 18, -170], 2.2); L(c, [21, -170, 30, -170], 2.2); }
+  const yw = po && a.pose.kind === 'yawn' && po.mix > 0.45;
+  if (blinking(a, t) || yw) { E(c, 13, -170, 5.5, 6.5, skin, 2.5); E(c, 25, -170, 5, 6.5, skin, 2.5); L(c, [8, -170, 18, -170], 2.2); L(c, [21, -170, 30, -170], 2.2); }
   else {
     E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5);
     if (hd(c)) { E(c, 13, -174, 4.6, 2.2, 'rgba(120,100,150,0.22)', 0); E(c, 25, -174, 4.2, 2.2, 'rgba(120,100,150,0.22)', 0); }   // gewölbte Augäpfel
@@ -611,10 +647,11 @@ CHAR.laverne = (c, a, t) => {
   }
   if (hd(c)) for (const [x, y] of [[16, -162], [19, -160.5], [22, -162], [28, -161.5]]) E(c, x, y, 0.8, 0.8, 'rgba(170,110,80,0.6)', 0);   // Sommersprossen
   shape(c, '#efc4ac', [22, -165, 29, -155], () => { c.moveTo(23, -164); c.quadraticCurveTo(28.5, -160, 28, -157); c.quadraticCurveTo(25, -155, 23, -158); c.closePath(); }, 2);   // Stupsnase
-  if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else S(c, null, 2.4, () => { c.moveTo(13, -152); c.quadraticCurveTo(17, -150, 22, -154.5); }, OUT);   // schiefes Grinsen
+  if (yw) E(c, 18, -151, 4.4, 6, '#7a2222', 2); else if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else S(c, null, 2.4, () => { c.moveTo(13, -151); c.quadraticCurveTo(17, -148.5, 21.5, -153); }, OUT);   // schiefes Grinsen
   const gL = gesture(a, t);
   if (a.climb) arm(c, 6, -138, -2.55 - cl * 0.45, dress, 36, skin, 48, 8, 5.5, 0.35);
   else arm(c, 6, -138, poseAng((-0.15 + sw * 0.45 + talkArm(a, t)) * (1 - gL) + (-2.9 + Math.sin(t * 0.02) * 0.35) * gL, po, 'front'), dress, 36, skin, 48, 8, 5.5, poseAng(elbow(a, 1) * (1 - gL), po, 'fb'));
+  drawGnat(c, a, t);
   c.restore();
 };
 
@@ -634,16 +671,29 @@ CHAR.drfred = (c, a, t) => {
     for (const y of [-96, -78, -60]) E(c, 5 + (y + 96) * -0.05, y, 2, 2, '#d0d0d4', 1.2);
     L(c, [-14, -96, -19, -52], 1.5, 'rgba(0,0,0,0.12)'); L(c, [18, -100, 22, -54], 1.5, 'rgba(0,0,0,0.12)');
   }
-  E(c, -8, -150, 11, 9, hairW); E(c, -11, -136, 10, 8, hairW); E(c, -2, -162, 9, 7, hairW);
-  if (hd(c)) { E(c, -17, -146, 5, 4, hairW, 2); E(c, 6, -167, 5, 4, hairW, 2); for (const [x0, y0, x1, y1] of [[-14, -152, -6, -148], [-15, -138, -8, -134], [-6, -163, 1, -160]]) L(c, [x0, y0, x1, y1], 1.3, 'rgba(150,150,170,0.55)'); }
-  E(c, 10, -142, 20, 22, skin);
-  E(c, 4, -157, 9, 4.5, 'rgba(255,255,255,0.4)', 0);
+  // wilder weißer Haarkranz: zerzauste Büschel nach hinten, oben eine blanke Glatze
+  shape(c, hairW, [-36, -180, 0, -112], () => { c.moveTo(-2, -166); c.quadraticCurveTo(-10, -180, -16, -166); c.quadraticCurveTo(-30, -170, -24, -154); c.quadraticCurveTo(-36, -148, -25, -139); c.quadraticCurveTo(-33, -126, -19, -125); c.quadraticCurveTo(-15, -112, -6, -122); c.quadraticCurveTo(-1, -142, -2, -166); c.closePath(); });
+  if (hd(c)) for (const [x0, y0, x1, y1] of [[-12, -160, -20, -156], [-14, -148, -26, -146], [-12, -136, -22, -130], [-8, -126, -12, -120]]) L(c, [x0, y0, x1, y1], 1.3, 'rgba(150,150,175,0.6)');
+  // Kopf: hohe kahle Stirn, langes Kinn
+  shape(c, skin, [-9, -168, 32, -114], () => { c.moveTo(-7, -146); c.quadraticCurveTo(-9, -168, 11, -168); c.quadraticCurveTo(30, -168, 31, -147); c.quadraticCurveTo(32, -128, 24, -121); c.quadraticCurveTo(15, -114, 6, -119); c.quadraticCurveTo(-5, -126, -7, -146); c.closePath(); });
+  E(c, -5, -141, 4.5, 6.5, skin, 2.5);   // Ohr
+  if (hd(c)) {
+    S(c, null, 1.3, () => { c.moveTo(-6, -144); c.quadraticCurveTo(-3, -141, -6, -137); }, 'rgba(150,80,60,0.6)');
+    E(c, 6, -160, 10, 4.5, 'rgba(255,255,255,0.45)', 0);   // Glanz auf der Glatze
+    for (const y of [-161, -157]) S(c, null, 1.2, () => { c.moveTo(12, y); c.quadraticCurveTo(19, y - 2.5, 26, y); }, 'rgba(150,80,60,0.45)');   // Stirnfalten
+    E(c, 24, -125, 6, 3.5, 'rgba(220,110,100,0.28)', 0);
+  }
+  L(c, [9, -149, -3, -144], 2.2);   // Brillenbügel
   E(c, 16, -148, 8, 8, '#d7f0ff', 4); E(c, 31, -148, 8, 8, '#d7f0ff', 4);
+  if (hd(c)) { E(c, 16, -144.5, 6, 3.2, 'rgba(120,160,200,0.25)', 0); E(c, 31, -144.5, 6, 3.2, 'rgba(120,160,200,0.25)', 0); }
   pupil(c, a, t, 17, -147, 3); pupil(c, a, t, 32, -147, 3);
   brows(c, a, t, 16, 31, -159, 11, '#f4f4f8', 3.4);
-  if (hd(c)) { lensGlint(c, 11, -152, 4); lensGlint(c, 26, -152, 4); }
-  E(c, 35, -137, 9, 6.5, '#e9a888');
-  if (mo) E(c, 25, -126, 6, 4.5, '#6a1a1a', 2); else L(c, [19, -127, 29, -126], 2.5);
+  if (hd(c)) { lensGlint(c, 11, -152, 4); lensGlint(c, 26, -152, 4); S(c, null, 1.2, () => { c.moveTo(11, -136.5); c.quadraticCurveTo(16, -134.5, 21, -136.5); }, 'rgba(150,80,60,0.5)'); }   // Tränensäcke
+  // Hakennase
+  shape(c, '#e9a888', [28, -148, 45, -128], () => { c.moveTo(30, -146); c.quadraticCurveTo(40, -147, 43, -137); c.quadraticCurveTo(45, -129, 37, -130); c.quadraticCurveTo(31, -130, 30, -135); c.closePath(); });
+  if (hd(c)) E(c, 37, -132, 1.8, 1.2, 'rgba(90,40,30,0.55)', 0);
+  if (mo) { E(c, 25, -125, 6.5, 4.8, '#6a1a1a', 2); R(c, 20.5, -129, 9, 2.4, '#fffaf0', 0, 1); }
+  else { S(c, null, 2.5, () => { c.moveTo(18, -127); c.quadraticCurveTo(24, -122, 31, -128); }, OUT); if (hd(c)) L(c, [31, -129.5, 32.5, -126.5], 1.4); }   // schiefes Grinsen
   const gF = gesture(a, t);
   if (gF > 0.15) {   // Geistesblitz: Glühbirne über dem Kopf
     const by = -186 - gF * 10;
@@ -677,13 +727,24 @@ CHAR.gertrude = (c, a, t) => {
   P(c, [-16, -90, 18, -90, 16, -140, -14, -140], '#7a4a2a');
   P(c, [-14, -140, 16, -140, 2, -118], '#f6f2e6', 2);
   R(c, -2, -152, 9, 14, skin, 3, 3);
-  E(c, -2, -166, 21, 18, '#ffffff');
-  E(c, 5, -160, 17, 19, skin);
-  E(c, 2, -176, 21, 9, '#ffffff');
-  if (hd(c)) for (let i = 0; i < 7; i++) S(c, null, 1.3, () => { const x = -16 + i * 6; c.moveTo(x, -170); c.quadraticCurveTo(x + 3, -166, x + 6, -170); }, 'rgba(160,150,170,0.7)');   // Rüschen
-  E(c, 17, -153, 5, 3.5, 'rgba(240,120,130,0.6)', 0);
-  pupil(c, a, t, 12, -163, 2.1); pupil(c, a, t, 22, -163, 2.1);
-  E(c, 24, -156, 4, 3.5, '#eeb090', 2);
+  // Haube: bauschiger Stoff hinten, Haarknoten darunter
+  shape(c, '#ffffff', [-27, -190, 18, -146], () => { c.moveTo(-10, -148); c.quadraticCurveTo(-27, -152, -25, -170); c.quadraticCurveTo(-22, -190, -2, -189); c.quadraticCurveTo(14, -188, 18, -176); c.lineTo(-10, -148); c.closePath(); });
+  if (hd(c)) for (const [x0, y0, x1, y1] of [[-18, -178, -12, -168], [-10, -184, -6, -172], [-20, -164, -13, -160]]) L(c, [x0, y0, x1, y1], 1.2, 'rgba(160,150,180,0.55)');   // Stofffalten
+  E(c, -7, -153, 6, 5, '#8a5a3a', 2);
+  // rundes Gesicht mit Doppelkinn
+  shape(c, skin, [-12, -180, 24, -139], () => { c.moveTo(-11, -161); c.quadraticCurveTo(-12, -179, 6, -179); c.quadraticCurveTo(23, -179, 23, -161); c.quadraticCurveTo(24, -146, 12, -142); c.quadraticCurveTo(1, -139, -5, -146); c.quadraticCurveTo(-11, -152, -11, -161); c.closePath(); });
+  if (hd(c)) { S(c, null, 1.3, () => { c.moveTo(4, -143.5); c.quadraticCurveTo(10, -140.5, 16, -143.5); }, 'rgba(160,90,70,0.5)'); E(c, 6, -173, 13, 3.6, 'rgba(120,70,60,0.18)', 0); }
+  for (const [x, y] of [[-6, -169], [-2, -173]]) E(c, x, y, 3.2, 2.8, '#8a5a3a', 1.5);   // Löckchen an der Schläfe
+  // Spitzenrand der Haube mit blauem Band
+  shape(c, '#ffffff', [-16, -190, 27, -168], () => { c.moveTo(-15, -169); c.quadraticCurveTo(-14, -188, 5, -189); c.quadraticCurveTo(24, -189, 27, -172); c.quadraticCurveTo(14, -178, 5, -178); c.quadraticCurveTo(-6, -178, -15, -169); c.closePath(); });
+  L(c, [-12, -179, 3, -185, 21, -182], 2.6, '#5a86d0');
+  if (hd(c)) for (let i = 0; i < 7; i++) S(c, null, 1.3, () => { const x = -13 + i * 5.6, y0 = -172 - Math.sin(i / 7 * Math.PI) * 5.5, y1 = -172 - Math.sin((i + 1) / 7 * Math.PI) * 5.5; c.moveTo(x, y0); c.quadraticCurveTo(x + 2.8, (y0 + y1) / 2 + 3.5, x + 5.6, y1); }, 'rgba(160,150,170,0.7)');   // Rüschen
+  E(c, 17, -152, 5, 3.5, 'rgba(240,120,130,0.55)', 0); E(c, 2, -153, 4, 3, 'rgba(240,120,130,0.4)', 0);
+  E(c, 11.5, -163, 3.4, 4, '#fffaf2', 1.4); E(c, 21.5, -163, 3.2, 3.8, '#fffaf2', 1.4);
+  pupil(c, a, t, 12, -163, 1.9); pupil(c, a, t, 22, -163, 1.9);
+  brows(c, a, t, 11.5, 21.5, -170, 6, '#7a5a40', 1.8);
+  if (hd(c)) { L(c, [14.8, -165.5, 16.6, -167.5], 1.2); L(c, [24.6, -165.5, 26.4, -167.5], 1.2); }   // Wimpern
+  shape(c, '#eeb090', [21, -160, 30, -151], () => { c.moveTo(22, -159); c.quadraticCurveTo(29, -159, 29.5, -155); c.quadraticCurveTo(29, -151, 24, -151.5); c.quadraticCurveTo(21, -153, 22, -159); c.closePath(); }, 2);   // Knubbelnase
   if (mo) E(c, 17, -147, 5, 4, '#7a2222', 2);
   else if (hk >= 0) E(c, 17, -147, 2.6, 2.8, '#7a2222', 1.5);   // summt vor sich hin
   else S(c, null, 2.5, () => { c.moveTo(12, -149); c.quadraticCurveTo(17, -145, 22, -149); });
@@ -708,16 +769,25 @@ CHAR.hancock = (c, a, t) => {
   E(c, 6, -138, 6, 8, '#fff', 2);
   if (hd(c)) for (let i = 0; i < 3; i++) S(c, null, 1.2, () => { c.moveTo(1, -142 + i * 4); c.quadraticCurveTo(6, -139 + i * 4, 11, -142 + i * 4); }, 'rgba(150,150,170,0.6)');
   R(c, -2, -152, 9, 12, skin, 3, 3);
-  S(c, '#f4f4f4', 3, () => { c.moveTo(-10, -166); c.quadraticCurveTo(-30, -158, -26, -136); c.lineTo(-18, -138); c.quadraticCurveTo(-20, -154, -6, -160); c.closePath(); });
-  E(c, -23, -144, 5, 4, '#1d1d1d', 2);
-  E(c, 4, -160, 17, 20, skin);
-  E(c, -9, -158, 7, 6, '#f4f4f4', 2.5); E(c, -9, -147, 7, 6, '#f4f4f4', 2.5);
-  E(c, 2, -174, 16, 8, '#f4f4f4', 2.5);
-  P(c, [-24, -176, 30, -176, 22, -186, 4, -199, -14, -187], '#1d1d1d');
-  L(c, [-22, -177, 28, -177], 2, '#d8b040');
-  pupil(c, a, t, 12, -163, 2.1); pupil(c, a, t, 22, -163, 2.1);
-  E(c, 25, -155, 5, 4, '#e9aa88', 2);
-  if (mo) E(c, 17, -146, 5, 4, '#7a2222', 2); else L(c, [12, -147, 21, -147], 2.5);
+  // gepuderte Perücke mit Zopf und schwarzer Schleife
+  S(c, '#f4f4f4', 3, () => { c.moveTo(-10, -168); c.quadraticCurveTo(-31, -160, -27, -136); c.lineTo(-18, -138); c.quadraticCurveTo(-20, -154, -6, -160); c.closePath(); });
+  P(c, [-23, -144, -33, -151, -32, -137], '#1d1d1d', 2); P(c, [-23, -144, -15, -152, -14, -139], '#1d1d1d', 2); E(c, -23, -144, 3, 3, '#2a2a2a', 1.5);
+  // Gesicht: kräftiges Kinn, leichte Hängebacken
+  shape(c, skin, [-13, -181, 23, -138], () => { c.moveTo(-12, -163); c.quadraticCurveTo(-12, -181, 6, -181); c.quadraticCurveTo(22, -181, 22, -163); c.quadraticCurveTo(23, -147, 15, -142); c.quadraticCurveTo(5, -137, -3, -142); c.quadraticCurveTo(-12, -149, -12, -163); c.closePath(); });
+  if (hd(c)) { S(c, null, 1.3, () => { c.moveTo(8, -142); c.quadraticCurveTo(10, -140, 12, -142); }, 'rgba(150,80,60,0.55)'); E(c, 17, -152, 5, 3, 'rgba(230,110,100,0.3)', 0); E(c, 4, -176, 12, 3, 'rgba(120,70,60,0.2)', 0); }
+  for (const y of [-160, -149]) { E(c, -9, y, 7.5, 5.8, '#f4f4f4', 2.5); if (hd(c)) S(c, null, 1.2, () => { c.ellipse(-9, y, 3.6, 2.4, 0, 0.4, 5.6); }, 'rgba(150,150,170,0.7)'); }   // Lockenrollen
+  E(c, 2, -175, 16, 7.5, '#f4f4f4', 2.5);
+  // Dreispitz mit Goldborte und Kokarde
+  shape(c, '#1d1d1d', [-27, -202, 32, -170], () => { c.moveTo(-27, -175); c.quadraticCurveTo(-20, -192, 2, -201); c.quadraticCurveTo(22, -194, 32, -177); c.quadraticCurveTo(18, -183, 3, -181); c.quadraticCurveTo(-12, -181, -27, -175); c.closePath(); });
+  S(c, null, 2, () => { c.moveTo(-24, -176.5); c.quadraticCurveTo(-11, -182.5, 3, -182.5); c.quadraticCurveTo(18, -184.5, 30, -178); }, '#d8b040');
+  if (hd(c)) L(c, [-14, -186, -2, -196, 6, -197], 1.6, 'rgba(255,255,255,0.18)');
+  E(c, 21, -186, 4.2, 4.2, '#2a2a3a', 1.6); E(c, 21, -186, 1.6, 1.6, '#d8b040', 0);
+  E(c, 11.5, -163, 3.5, 4, '#fffaf2', 1.4); E(c, 21.5, -163, 3.3, 3.9, '#fffaf2', 1.4);
+  pupil(c, a, t, 12, -163, 2); pupil(c, a, t, 22, -163, 2);
+  brows(c, a, t, 11.5, 21.5, -170.5, 7, '#6a5040', 2.4);
+  // Adlernase
+  shape(c, '#e9aa88', [20, -166, 31, -150], () => { c.moveTo(21, -165); c.quadraticCurveTo(27, -162, 30, -153); c.quadraticCurveTo(28, -150, 23, -151.5); c.quadraticCurveTo(21, -153, 21, -165); c.closePath(); }, 2.2);
+  if (mo) E(c, 16.5, -146, 5, 4, '#7a2222', 2); else S(c, null, 2.5, () => { c.moveTo(11, -147.5); c.quadraticCurveTo(16, -145, 21, -148.5); }, OUT);   // selbstgefälliges Lächeln
   const sk = idleAct(a, t, 8000, 1700), se = actEnv(sk);
   c.save(); c.translate(12, -138);
   c.rotate(-0.5 + (a.talking ? Math.sin(t * 0.01) * 0.15 : Math.sin(t * 0.004) * 0.08) + se * (-0.35 + Math.sin(t * 0.045) * 0.14));

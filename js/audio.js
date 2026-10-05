@@ -103,7 +103,7 @@ const Sound = (() => {
   }
 
   // ---------- Instrumente ----------
-  function inst(name, n, t, d, bus) {
+  function inst(name, n, t, d, bus, tr = 0) {
     // Schlagzeug: K Kick, S Snare, H Hi-Hat, O offene Hi-Hat, C Klatschen, T Tom/Bodhrán, R Rimshot
     if (n === 'K') { nz(t, 0.012, 0.16, bus, { type: 'highpass', f: 3000 }); return osc('sine', 165, t, 0.24, 0.55, bus, { f2: 42, decay: true }); }
     if (n === 'S') { nz(t, 0.16, 0.2, bus, { type: 'bandpass', f: 1800, q: 0.8 }); nz(t, 0.08, 0.1, bus, { type: 'highpass', f: 5200 }); osc('triangle', 330, t, 0.06, 0.05, bus, { decay: true }); return osc('triangle', 185, t, 0.09, 0.12, bus, { decay: true }); }
@@ -113,7 +113,7 @@ const Sound = (() => {
     if (n === 'T') { nz(t, 0.05, 0.18, bus, { type: 'lowpass', f: 420 }); return osc('sine', 125, t, 0.28, 0.34, bus, { f2: 68, decay: true }); }
     if (n === 'R') { nz(t, 0.02, 0.1, bus, { type: 'bandpass', f: 2600, q: 2 }); return osc('square', 1700, t, 0.02, 0.05, bus, { decay: true }); }
     for (const part of n.split('+')) {
-      const f = freq(part);
+      const f = freq(part) * (tr ? Math.pow(2, tr / 12) : 1);
       if (retro) {
         // "Demastered": klingt wie eine alte FM-/PC-Soundkarte – nur Rechteck und Dreieck, keine Filter
         if (name === 'pad' || name === 'organ') osc('triangle', f, t, d * 0.92, 0.03, bus, { attack: 0.005, release: 0.02 });
@@ -261,6 +261,33 @@ const Sound = (() => {
   }
   const PAN = { harp: -0.35, organ: 0.3, clar: 0.22, bell: -0.25, arp: 0.32, pizz: -0.18, bassoon: 0.15, strings: -0.12, brass: 0.2, epiano: -0.22, pluck: -0.32, fiddle: 0.26 };
   let partyOn = false;
+  // Jede Spielfigur färbt die Leitmelodie: Bernard spielt sie auf dem E-Piano mit, Hoagie eine Oktave tiefer
+  // auf der E-Gitarre, Laverne eine Oktave höher auf Glocken – beim Figurenwechsel wechselt die Klangfarbe sofort
+  const LEAD = { title: 1, past: 0, present: 1, future: 2, palace: 1, tavern: 0, lounge: 2, ending: 0, march: 1 };
+  const HERO_INST = { bernard: ['epiano', 0, 0.85], hoagie: ['guitar', -12, 0.55], laverne: ['bell', 12, 0.65] };
+  let hero = null, heroLayers = [], loopT0 = 0;
+  function scheduleHero(t0, from) {
+    const th = THEMES[cur], hi = HERO_INST[hero], tr = th && LEAD[cur] != null ? th.tracks[LEAD[cur]] : null;
+    if (!hi || !tr || retro) return;
+    const spb = 60 / th.bpm, p = tr._p || (tr._p = parse(tr.seq)), g = ac.createGain();
+    if (from) { g.gain.setValueAtTime(0.0001, from); g.gain.exponentialRampToValueAtTime(hi[2], from + 0.5); } else g.gain.value = hi[2];
+    let out = g;
+    if (ac.createStereoPanner) { out = ac.createStereoPanner(); out.pan.value = -(PAN[tr.inst] || 0) || 0.18; out.connect(g); }
+    g.connect(musicBus);
+    for (const e of p.ev) { const t = t0 + e.b * spb; if (!from || t >= from) inst(hi[0], e.n, t, e.len * spb, out, hi[1]); }
+    heroLayers.push({ g, end: t0 + p.len * spb + 2 });
+    heroLayers = heroLayers.filter(h => { if (h.end < ac.currentTime) { try { h.g.disconnect(); } catch (e) { /* ok */ } return false; } return true; });
+  }
+  function dropHero() {
+    for (const h of heroLayers) { h.g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.12); const g = h.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 1.2); }
+    heroLayers = [];
+  }
+  function setHero(id) {
+    id = id || null; if (hero === id) return; hero = id;
+    if (!ac) return;
+    dropHero();
+    if (cur && hero) scheduleHero(loopT0, ac.currentTime + 0.05);
+  }
   function scheduleLoop(t0) {
     const th = THEMES[cur]; if (!th) return;
     const spb = 60 / th.bpm;
@@ -283,7 +310,8 @@ const Sound = (() => {
         if (b % 2 === 1) inst('drum', 'C', t0 + b * spb, 0.2, pg);
       }
     }
-    loopEnd = t0 + maxLen * spb;
+    loopEnd = t0 + maxLen * spb; loopT0 = t0;
+    if (hero) scheduleHero(t0, 0);
     loops.push({ g: lg, end: loopEnd + 1.5 });
     loops = loops.filter(l => { if (l.end < ac.currentTime) { try { l.g.disconnect(); } catch (e) { /* schon getrennt */ } return false; } return true; });
   }
@@ -350,6 +378,7 @@ const Sound = (() => {
     // alter Loop blendet kurz aus; der neue startet fast sofort darüber
     if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.22); const g = l.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 1.0); }
     loops = []; cur = null;
+    if (ac) dropHero();
   }
   function play(name) {
     if (!ac) { wanted = name; return; }
@@ -358,6 +387,14 @@ const Sound = (() => {
     stopMusic(); cur = name; fadeNext = had;
     if (name) { songT0 = ac.currentTime + (had ? 0.12 : 0.05); scheduleLoop(songT0); }
   }
+  // Musikbox: Spektrum des Musik-Busses und Besetzung eines Stücks
+  let an = null, anData = null;
+  function spectrum() {
+    if (!ac || !musicBus || !ac.createAnalyser) return null;
+    if (!an) { an = ac.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.75; an.minDecibels = -96; an.maxDecibels = -36; musicBus.connect(an); anData = new Uint8Array(an.frequencyBinCount); }
+    an.getByteFrequencyData(anData); return anData;
+  }
+  function info(id) { const th = THEMES[id]; return th ? { bpm: th.bpm, inst: [...new Set(th.tracks.map(t => t.inst))] } : null; }
   // einzelner Ton auf dem Musik-Bus (z. B. die selbst gespielte Lead-Gitarre)
   function note(instName, n, sec) { if (ac) inst(instName, n, ac.currentTime + 0.005, sec || 0.3, musicBus); }
   function musicLevel() { return musicOn ? (ducked ? 0.1 : 0.2) : 0; }
@@ -455,7 +492,31 @@ const Sound = (() => {
     knock: t => { [0, 0.09].forEach(d => { nz(t + d, 0.05, 0.18, sfxBus, { type: 'bandpass', f: 420, q: 3 }); osc('sine', 190, t + d, 0.08, 0.08, sfxBus, { f2: 140, decay: true }); }); },
     thunk: t => { osc('sine', 260, t, 0.12, 0.1, sfxBus, { f2: 150, decay: true }); nz(t, 0.04, 0.08, sfxBus, { type: 'lowpass', f: 900 }); },
     sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },
+    // Leerlauf der Helden: Luftgitarren-Riff (leise, nur in Hoagies Kopf), Gähnen, Fliegensummen mit Klatsch, Brille, Grübeln
+    airguitar: t => { [['E3', 0, 0.2], ['E3', 0.25, 0.2], ['G3', 0.5, 0.2], ['A3', 0.75, 0.4], ['E3', 1.3, 0.2], ['E3', 1.55, 0.2], ['B3', 1.8, 0.2], ['A3', 2.05, 0.2], ['G3', 2.3, 0.2], ['E3', 2.55, 0.55]].forEach(([n, d, l]) => { guitar(freq(n), t + 0.25 + d, l, 0.045, sfxBus); guitar(freq(n) * 1.498, t + 0.25 + d, l, 0.028, sfxBus); }); },
+    yawn: t => { nz(t, 0.55, 0.035, sfxBus, { type: 'bandpass', f: 1300, f2: 700, q: 0.8, attack: 0.25 }); vowel(t + 0.5, 1.35, 340, 215, [[900, 1350], [560, 950]], 0.17); },
+    buzz: t => {
+      const s = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter(), l = ac.createOscillator(), lg = ac.createGain();
+      s.type = 'sawtooth'; s.frequency.value = 215; l.frequency.value = 1.1; lg.gain.value = 45; l.connect(lg); lg.connect(s.frequency);
+      f.type = 'bandpass'; f.frequency.value = 950; f.Q.value = 1.3;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.03, t + 0.4);
+      for (let i = 1; i < 6; i++) g.gain.linearRampToValueAtTime(i % 2 ? 0.011 : 0.034, t + 0.4 + i * 0.5);
+      g.gain.linearRampToValueAtTime(0.03, t + 3.2); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.3);
+      s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); l.start(t); s.stop(t + 3.4); l.stop(t + 3.4);
+      nz(t + 3.27, 0.05, 0.16, sfxBus, { type: 'bandpass', f: 1500, q: 1 }); nz(t + 3.3, 0.12, 0.06, sfxBus, { type: 'bandpass', f: 1100, q: 0.9 });
+    },
+    squeak: t => { osc('sine', 2500, t + 0.45, 0.08, 0.014, sfxBus, { f2: 3300, decay: true }); nz(t + 0.42, 0.05, 0.02, sfxBus, { type: 'bandpass', f: 3000, q: 2 }); },
+    hmm: t => { osc('sawtooth', 205, t + 0.35, 1.0, 0.05, sfxBus, { f2: 180, lp: 430, q: 2, attack: 0.1, vib: 3 }); osc('sawtooth', 236, t + 1.45, 0.4, 0.04, sfxBus, { f2: 262, lp: 520, q: 2, attack: 0.05 }); },
   };
+  // gesungener Vokal: Sägezahn durch zwei wandernde Formant-Filter (Gähnen)
+  function vowel(t, dur, fa, fb, fmts, vol) {
+    const src = ac.createOscillator(), g = ac.createGain(), vb = ac.createOscillator(), vg = ac.createGain();
+    src.type = 'sawtooth'; src.frequency.setValueAtTime(fa, t); src.frequency.exponentialRampToValueAtTime(fb, t + dur);
+    vb.frequency.value = 5; vg.gain.value = fa * 0.012; vb.connect(vg); vg.connect(src.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.25); g.gain.setValueAtTime(vol, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    [[0, 6, 1], [1, 10, 0.6]].forEach(([i, q, lv]) => { const bp = ac.createBiquadFilter(), bg = ac.createGain(); bp.type = 'bandpass'; bp.Q.value = q; bp.frequency.setValueAtTime(fmts[0][i], t); bp.frequency.linearRampToValueAtTime(fmts[1][i], t + dur); bg.gain.value = lv; src.connect(bp); bp.connect(bg); bg.connect(g); });
+    g.connect(sfxBus); src.start(t); vb.start(t); src.stop(t + dur + 0.05); vb.stop(t + dur + 0.05);
+  }
   const listeners = [];
   // Stereo-Position: der Effekt wird kurz über einen Panner auf den Effekt-Bus geleitet
   function panned(pan, fn) {
@@ -554,7 +615,7 @@ const Sound = (() => {
   function initOffline(ctx) { init(ctx); }
 
   function setParty(on) { partyOn = !!on; }
-  return { init, initOffline, tick, play, sfx, setParty, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
+  return { init, initOffline, tick, play, sfx, setParty, setHero, spectrum, info, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------

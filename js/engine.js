@@ -777,6 +777,7 @@ function irisAt(a) { const room = ROOMS[a.room]; G.irisX = a.x; G.irisY = a.y - 
 
 // ---------- Räume, Figuren, Zeitreise-Post ----------
 function music() {
+  Sound.setHero(G.screen === 'game' && G.state ? curId() : null);
   if (G.screen === 'rock') return Sound.play('rock');
   if (G.screen === 'toaster') return Sound.play('lounge');
   if (G.screen === 'title' || G.screen === 'end') { Sound.ambience(G.screen === 'title' ? ['crickets', 'wind', 'owl'] : []); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
@@ -1681,7 +1682,7 @@ function drawScene() {
   for (const a of acts) if (a.crit) drawCritter(a, room); else drawActor(a, room);
   HDS.deco = true;
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
-  if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass) drawForeground(fg); }
+  if (!cx.isPix) { drawRays(room); drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass) drawForeground(fg); }
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
   cx.restore();
@@ -1865,6 +1866,62 @@ function drawFly() {
     cx.save(); cx.translate(x, y); cx.scale(1.6 - 0.6 * e, 1.6 - 0.6 * e); cx.rotate(Math.sin(k * Math.PI * 2) * 0.3); ICON[f.id](cx); cx.restore();
   }
 }
+// Musikbox: Plattenspieler mit Spektrum, Takt-Puls und Besetzung des laufenden Stücks
+const INST_DE = { harp: 'Harfe', bassoon: 'Fagott', pizz: 'Pizzicato', tuba: 'Tuba', arp: 'Arpeggio-Synth', synbass: 'Synth-Bass', bell: 'Glocken', clar: 'Klarinette', pad: 'Flächen', strings: 'Streicher', brass: 'Blechbläser', epiano: 'E-Piano', pluck: 'Zupfgitarre', fiddle: 'Fiedel', guitar: 'E-Gitarre', chug: 'Rhythmusgitarre', organ: 'Orgel' };
+const JB_COL = { title: '#ffd23a', present: '#7fd0ff', lounge: '#ff9a6a', past: '#ffb860', tavern: '#e88a3a', future: '#d58aff', march: '#ff6a8a', palace: '#b06aff', rock: '#ff4a4a', ending: '#7dff7a' };
+function drawJukebox(bx, by, bw) {
+  const id = Sound.current, entry = JUKEBOX.find(j => j[0] === id), on = !!entry && Sound.musicOn, inf = id ? Sound.info(id) : null;
+  const col = JB_COL[id] || '#a99ad0', px = bx + bw - 222, py = by + 210, r = 112;
+  const now = G.t; G.jbAng = (G.jbAng || 0) + (on ? Math.min(100, now - (G.jbLast || now)) * 0.0035 : 0); G.jbLast = now;
+  const ac = Sound.ctx, spb = inf ? 60 / inf.bpm : 0.5, beat = on && ac ? Math.max(0, (ac.currentTime - Sound.songT0) / spb) : 0, pulse = on ? Math.pow(1 - (beat % 1), 3) : 0;
+  // Gehäuse
+  R(cx, px - 160, py - 132, 320, 266, '#2c1d44', 3, 18, '#5a4290');
+  if (!cx.isPix) { cx.save(); cx.globalAlpha = 0.5; L(cx, [px - 148, py - 120, px + 148, py - 120], 2, 'rgba(255,255,255,0.12)'); cx.restore(); }
+  glow(px, py, r * 1.6, col, 0.12 + pulse * 0.18);
+  E(cx, px, py, r + 9, r + 9, '#17121f', 3);
+  E(cx, px, py, r, r, '#121016', 0);
+  if (!cx.isPix) {
+    for (let i = 0; i < 9; i++) E(cx, px, py, 50 + i * 7, 50 + i * 7, null, 1, 0, 'rgba(255,255,255,0.05)');
+    cx.save(); cx.globalCompositeOperation = 'screen';
+    for (const a0 of [-1.05, 2.1]) { cx.fillStyle = 'rgba(255,255,255,0.07)'; cx.beginPath(); cx.moveTo(px, py); cx.arc(px, py, r - 2, a0, a0 + 0.42); cx.closePath(); cx.fill(); }   // fester Glanz
+    cx.restore();
+  }
+  // Etikett dreht sich mit
+  cx.save(); cx.translate(px, py); cx.rotate(G.jbAng); cx.scale(1 + pulse * 0.05, 1 + pulse * 0.05);
+  E(cx, 0, 0, 42, 42, col, 2); E(cx, 0, 0, 32, 32, null, 1.2, 0, 'rgba(0,0,0,0.25)');
+  if (id && ERA) eraIcon(cx, id === 'past' || id === 'tavern' ? 'past' : id === 'future' || id === 'palace' || id === 'march' ? 'future' : 'present', 0, -16, 0.9);
+  E(cx, 0, 22, 9, 3, 'rgba(0,0,0,0.3)', 0);
+  E(cx, 0, 0, 4, 4, '#d8d8e4', 1.5);
+  cx.restore();
+  // Tonarm
+  const pvx = px + 132, pvy = py - 104, ang = on ? 2.18 + Math.sin(now * 0.002) * 0.012 : 1.72;
+  E(cx, pvx, pvy, 14, 14, '#4a3a66', 2.5); E(cx, pvx, pvy, 6, 6, '#c8c8d8', 1.5);
+  const hx = pvx + Math.cos(ang) * 150, hy = pvy + Math.sin(ang) * 150;
+  L(cx, [pvx - Math.cos(ang) * 22, pvy - Math.sin(ang) * 22, hx, hy], 7, OUT); L(cx, [pvx - Math.cos(ang) * 22, pvy - Math.sin(ang) * 22, hx, hy], 3.5, '#d8d8e4');
+  E(cx, pvx - Math.cos(ang) * 26, pvy - Math.sin(ang) * 26, 7, 7, '#8a8aa0', 2);
+  cx.save(); cx.translate(hx, hy); cx.rotate(ang + 0.5); R(cx, -6, -4, 18, 9, '#c8c8d8', 2, 2); cx.restore();
+  if (on) floaters(cx, { seed: 0.3 }, now, px + 70, py - 70, 3, (x, y, s, i) => noteGlyph(cx, x, y, s * 1.2, ['#ffd23a', '#ff7ab8', '#7fe8ff'][i]));
+  // Spektrum (gespiegelt); ohne echte Messwerte (Offline-Aufnahme) tanzen die Balken im Takt
+  const spec = on ? Sound.spectrum() : null, n = 30, x0 = px - 150, bwid = 300 / n, base = py + 210, sr = ac ? ac.sampleRate : 44100;
+  let real = false; if (spec) for (let i = 0; i < spec.length && !real; i++) if (spec[i] > 0) real = true;
+  for (let i = 0; i < n; i++) {
+    let v;
+    if (real) {
+      const f0 = 55 * Math.pow(8000 / 55, i / n), f1 = 55 * Math.pow(8000 / 55, (i + 1) / n), b0 = Math.floor(f0 / (sr / 1024)), b1 = Math.max(b0 + 1, Math.ceil(f1 / (sr / 1024)));
+      let s = 0; for (let b = b0; b < b1; b++) s = Math.max(s, spec[b] || 0); v = s / 255;
+    } else v = on ? 0.18 + 0.32 * Math.abs(Math.sin(now * 0.004 + i * 0.7) * Math.sin(now * 0.0023 + i * 1.3)) + pulse * 0.45 * Math.exp(-i / 9) : 0.04;
+    const h = Math.max(2, v * 78), x = x0 + i * bwid + 1;
+    cx.fillStyle = mix(col, '#ffffff', Math.min(1, v * 0.8)); cx.fillRect(x, base - h, bwid - 2.5, h);
+    cx.globalAlpha = 0.22; cx.fillRect(x, base + 3, bwid - 2.5, h * 0.4); cx.globalAlpha = 1;
+  }
+  L(cx, [x0, base + 1.5, x0 + 300, base + 1.5], 1, 'rgba(255,255,255,0.18)');
+  // Titel und Besetzung
+  txt(cx, entry ? entry[1] : 'Kein Stück ausgewählt', px, base + 48, '400 20px "Titan One", sans-serif', on ? col : '#a99ad0', 'center', 4, OUT);
+  const insts = inf ? inf.inst.filter(k => INST_DE[k]).map(k => INST_DE[k]) : [];
+  const sub = !Sound.musicOn ? 'Musik ist in den Einstellungen ausgeschaltet' : inf ? `${inf.bpm} BPM · ${insts.slice(0, 4).join(', ')}${inf.inst.includes('drum') ? ' · Schlagzeug' : ''}` : 'Wähle links ein Stück';
+  txt(cx, sub, px, base + 70, '600 13px "Baloo 2", sans-serif', '#c3b2ff');
+  if (on) for (let i = 0; i < 4; i++) E(cx, px - 27 + i * 18, base + 88, 4, 4, Math.floor(beat) % 4 === i ? col : '#3d2c5e', 0);
+}
 const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
 const HELP = [
   'Modern (HD): Linksklick = hingehen oder passende Aktion · Rechtsklick = Aktionsmenü',
@@ -1884,8 +1941,9 @@ function drawMenu() {
   if (G.menu === 'map') return drawMap();
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
+  const jb = G.menu === 'jukebox';
   const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 28 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
-  const bw = G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
+  const bw = jb ? 820 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = jb ? 566 : 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
   const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
@@ -1897,6 +1955,7 @@ function drawMenu() {
     y += HELP.length * 23 + 10;
   }
   if (G.menu === 'bios') { drawBios(bx, y); y += 3 * 140 + 8; }
+  if (jb) drawJukebox(bx, by, bw);
   let photoBtns = [];
   if (G.menu === 'album') {
     const list = albumList();
@@ -1933,7 +1992,7 @@ function drawMenu() {
     y += ACH.length * 28 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
-  G.menuBtns = photoBtns.concat(items.map((it, i) => ({ id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 })));
+  G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 }));
   G.menuBtns.filter(b => !b.id.startsWith('ph_')).forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
   if (G.menu === 'album' && G.albumView != null && !cx.isPix) {
     const ph = albumList()[G.albumView];
@@ -3082,6 +3141,102 @@ async function critterResolve(v, a, b) {
 // ---------- Kaminlicht ----------
 const fireSrc = {};
 function fireNoise(t) { return Math.sin(t * 0.013) * 0.5 + Math.sin(t * 0.031 + 1) * 0.3 + Math.sin(t * 0.071 + 2) * 0.2; }
+// ---------- Lichtstrahlen ----------
+// Mondlicht durchs Lobbyfenster, Sonne durchs Gasthausfenster, Lichtkegel der Laborlampe, Kronleuchter und Spot auf den Thron,
+// Sonnenstrahlen mit Linsenreflexen im Garten 1776. win = Fensterglas [x0, y0, x1, y1], dx = Neigung, cone = [x, y, Breite oben, unten, Boden]
+const RAYS = {
+  lobby: [{ win: [582, 70, 640, 180], dx: -0.62, len: 240, col: '196,214,255', a: 0.2, floor: 382 }],
+  gasthaus: [{ win: [486, 70, 598, 178], dx: 0.66, len: 220, col: '255,228,170', a: 0.25, floor: 330, cloud: true }],
+  labor: [{ cone: [789, 64, 14, 240, 420], col: '196,255,240', a: 0.12, neon: true }],
+  thron: [{ cone: [296, 96, 56, 200, 402], col: '255,214,150', a: 0.15, flick: true }, { cone: [655, -10, 70, 240, 398], col: '236,200,255', a: 0.14 }],
+  garten1776: [{ sun: [200, 68], col: '255,246,210', a: 0.11 }],
+};
+function rayCol(r, a) { return `rgba(${r.col},${Math.max(0, a).toFixed(3)})`; }
+function rayDust(r, a, pts) {
+  const n = G.quality < 1 ? 6 : 14;
+  for (let i = 0; i < n; i++) {
+    const u = (G.t * 0.000025 * (1 + (i % 3) * 0.5) + i * 0.137) % 1, v = (i * 0.618) % 1, w = (i * 0.37) % 1;
+    const [x, y] = pts(u, v, w), tw = Math.sin(Math.PI * u) * (0.5 + 0.5 * Math.sin(G.t * 0.004 + i * 2.1));
+    cx.fillStyle = rayCol(r, a * 4.5 * tw); cx.fillRect(x + Math.sin(G.t * 0.001 + i) * 3, y, 1.8, 1.8);
+  }
+}
+function drawRays(room) {
+  const list = RAYS[room.id]; if (!list || !HDS.on) return;
+  cx.save(); cx.globalCompositeOperation = 'screen';
+  for (const r of list) {
+    let a = r.a;
+    if (r.cloud) a *= 0.72 + 0.28 * Math.sin(G.t * 0.00035) * Math.sin(G.t * 0.00021 + 1);   // Wolken ziehen vor der Sonne vorbei
+    if (r.flick) a *= 0.86 + 0.09 * Math.sin(G.t * 0.013) + 0.05 * Math.sin(G.t * 0.041);
+    if (r.neon && G.neon) { const k = G.t - G.neon.start; if ((k > 0 && k < 60) || (k > 130 && k < 180) || (k > 280 && k < 330)) a *= 0.12; }
+    if (r.win) {
+      const [x0, y0, x1, y1] = r.win, D = r.len, Dx = r.dx * D, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      const g = cx.createLinearGradient(mx, my, mx + Dx, my + D);
+      g.addColorStop(0, rayCol(r, a)); g.addColorStop(0.55, rayCol(r, a * 0.45)); g.addColorStop(1, rayCol(r, 0));
+      cx.fillStyle = g;
+      for (let i = 0; i < 4; i++) {   // vier Streifen, die einzeln schimmern
+        const xa = x0 + (x1 - x0) * i / 4, xb = x0 + (x1 - x0) * (i + 1) / 4;
+        cx.globalAlpha = 0.62 + 0.38 * Math.sin(G.t * 0.0009 + i * 1.9);
+        cx.beginPath();
+        if (r.dx < 0) { cx.moveTo(xa, y0); cx.lineTo(xb, y0); cx.lineTo(xb, y1); cx.lineTo(xb + Dx, y1 + D); cx.lineTo(xa + Dx, y1 + D); cx.lineTo(xa + Dx, y0 + D); }
+        else { cx.moveTo(xa, y0); cx.lineTo(xb, y0); cx.lineTo(xb + Dx, y0 + D); cx.lineTo(xb + Dx, y1 + D); cx.lineTo(xa + Dx, y1 + D); cx.lineTo(xa, y1); }
+        cx.closePath(); cx.fill();
+      }
+      cx.globalAlpha = 1;
+      if (r.floor) {   // Lichtfleck, wo der Strahl auf den Boden trifft
+        const fx = mx + r.dx * (r.floor - my), rx = (x1 - x0) * 0.95;
+        cx.save(); cx.translate(fx, r.floor); cx.scale(1, 0.2);
+        const fg = cx.createRadialGradient(0, 0, 0, 0, 0, rx); fg.addColorStop(0, rayCol(r, a * 1.1)); fg.addColorStop(1, rayCol(r, 0));
+        cx.fillStyle = fg; cx.fillRect(-rx, -rx, rx * 2, rx * 2); cx.restore();
+      }
+      rayDust(r, a, (u, v, w) => [x0 + (x1 - x0) * v + Dx * u, y0 + (y1 - y0) * w + D * u]);
+    } else if (r.cone) {
+      const [x, y, w0, w1, fy] = r.cone;
+      for (const [k, al] of [[1, 1], [0.45, 0.9]]) {   // weicher Mantel und hellerer Kern
+        const g = cx.createLinearGradient(0, y, 0, fy);
+        g.addColorStop(0, rayCol(r, a * 1.5 * al)); g.addColorStop(0.65, rayCol(r, a * 0.5 * al)); g.addColorStop(1, rayCol(r, 0));
+        cx.fillStyle = g; cx.beginPath(); cx.moveTo(x - w0 * k / 2, y); cx.lineTo(x + w0 * k / 2, y); cx.lineTo(x + w1 * k / 2, fy); cx.lineTo(x - w1 * k / 2, fy); cx.closePath(); cx.fill();
+      }
+      cx.save(); cx.translate(x, fy - 12); cx.scale(1, 0.18);
+      const fg = cx.createRadialGradient(0, 0, 0, 0, 0, w1 * 0.55); fg.addColorStop(0, rayCol(r, a * 1.2)); fg.addColorStop(1, rayCol(r, 0));
+      cx.fillStyle = fg; cx.fillRect(-w1, -w1, w1 * 2, w1 * 2); cx.restore();
+      rayDust(r, a, (u, v) => [x + (v - 0.5) * (w0 + (w1 - w0) * u) * 0.8, y + (fy - y) * u]);
+    } else if (r.sun) {
+      const [sx, sy] = r.sun, rot = G.t * 0.00004;
+      for (let i = 0; i < 12; i++) {
+        const an = rot + i * Math.PI / 6 + Math.sin(i * 7.3) * 0.12, len = 260 + (i % 3) * 110, wd = 0.06 + (i % 2) * 0.04;
+        const g = cx.createRadialGradient(sx, sy, 24, sx, sy, len);
+        g.addColorStop(0, rayCol(r, a * (0.7 + 0.3 * Math.sin(G.t * 0.0007 + i)))); g.addColorStop(1, rayCol(r, 0));
+        cx.fillStyle = g; cx.beginPath(); cx.moveTo(sx, sy); cx.arc(sx, sy, len, an - wd, an + wd); cx.closePath(); cx.fill();
+      }
+      // Linsenreflexe auf der Linie von der Sonne durch die Bildmitte
+      const vx = modernUI() ? G.view.x + VW / 2 : W / 2, vy = SH * 0.55;
+      for (const [k, rr, al, c2] of [[0.5, 14, 1.2, '255,240,190'], [0.85, 30, 0.6, '190,230,255'], [1.25, 9, 1.1, '255,200,240'], [1.65, 46, 0.45, '220,255,200']]) {
+        const fx = sx + (vx - sx) * k, fy = sy + (vy - sy) * k, g = cx.createRadialGradient(fx, fy, 0, fx, fy, rr);
+        g.addColorStop(0, `rgba(${c2},${(a * al * 0.55).toFixed(3)})`); g.addColorStop(0.7, `rgba(${c2},${(a * al * 0.3).toFixed(3)})`); g.addColorStop(1, `rgba(${c2},0)`);
+        cx.fillStyle = g; cx.fillRect(fx - rr, fy - rr, rr * 2, rr * 2);
+      }
+    }
+  }
+  cx.restore();
+}
+
+// ---------- Leerlauf-Ticks ----------
+// Steht die Spielfigur eine Weile still, rückt Bernard die Brille oder grübelt, Hoagie spielt Luftgitarre, Laverne gähnt oder jagt eine Fliege
+const FIDGET = { bernard: [['glasses', 1700, 'squeak'], ['think', 2800, 'hmm']], hoagie: [['airguitar', 3300, 'airguitar']], laverne: [['yawn', 2600, 'yawn'], ['fly', 3800, 'buzz']] };
+function fidget(p, kind) {
+  const f = FIDGET[p.id] && (kind ? FIDGET[p.id].find(q => q[0] === kind) : pick(FIDGET[p.id])); if (!f) return;
+  p.pose = { kind: f[0], t0: G.t, dur: f[1], puff: 0, fidget: true };
+  G.stillSince = G.t + f[1] + 5000 + Math.random() * 7000;
+  if (f[2]) Sound.sfx(f[2], panX(p.x));
+}
+function updateFidget() {
+  if (G.screen !== 'game' || !G.state || G.fast) return;
+  const p = me(), f = p.pose && p.pose.fidget;
+  const calm = !G.busy && !G.speech && !G.dialog && !G.menu && !G.inIntro && G.fade === 0 && !p.walking && !p.talking && !p.climb && p.visible && !G.photoMode && p.room === viewRoomId();
+  if (!calm || (p.pose && !f)) { if (f && !calm) p.pose = null; G.stillSince = Math.max(G.stillSince || 0, G.t); return; }
+  if (!p.pose && G.t - (G.stillSince || 0) > 7000) fidget(p);
+}
+
 function fireLight(a) {
   const room = ROOMS[a.room], fx = room && ROOM_FX[room.id];
   if (!fx || fx.flicker !== 'fire' || a.room !== viewRoomId()) return null;
@@ -3164,7 +3319,7 @@ function update(dt) {
   updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt); updateCritters(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
-  updateParts(dt); updateMotes(dt); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
+  updateParts(dt); updateMotes(dt); updateFidget(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
   Sound.muffle(!!G.menu && G.menu !== 'jukebox' && G.screen === 'game');
   if (G.jbOn && G.menu !== 'jukebox') { G.jbOn = false; music(); }
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();
