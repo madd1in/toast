@@ -539,7 +539,7 @@ function updateBarks() {
   if (G.t < G.barkNext) return;
   G.barkNext = G.t + 11000 + Math.random() * 9000;
   const npcs = NPCS.filter(id => ACT[id].room === viewRoomId() && ACT[id].visible && BARKS[id]);
-  if (npcs.length) { const id = pick(npcs); startBark(id, pick(BARKS[id])); }
+  if (npcs.length) { const id = pick(npcs); startBark(id, pick(G.settings.party && PARTY_BARKS[id] && Math.random() < 0.6 ? PARTY_BARKS[id] : BARKS[id])); }
 }
 function drawBark() {
   const b = G.bark; if (!b || G.speech) return;
@@ -703,7 +703,7 @@ function irisAt(a) { const room = ROOMS[a.room]; G.irisX = a.x; G.irisY = a.y - 
 function music() {
   if (G.screen === 'rock') return Sound.play('rock');
   if (G.screen === 'toaster') return Sound.play('lounge');
-  if (G.screen === 'title' || G.screen === 'end') { Sound.ambience([]); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
+  if (G.screen === 'title' || G.screen === 'end') { Sound.ambience(G.screen === 'title' ? ['crickets', 'wind', 'owl'] : []); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
   const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
   Sound.play(fx.music || r.theme || ERA[r.era].theme);
   Sound.ambience(roomAmb());
@@ -714,8 +714,10 @@ async function goRoom(id, roomId, x, y, dir = 1) {
   const a = ACT[id], view = id === curId();
   if (view) { irisAt(a); await fadeTo(1, 280, 'iris'); }
   a.room = roomId; a.x = x; a.y = y; a.dir = dir; a.target = null; a.walking = false;
+  if (PLAYERS.includes(id) && G.state) markVisit(roomId);
   if (view) {
     G.first = null; G.parts.length = 0; G.ripples.length = 0; music(); irisAt(a); await fadeTo(0, 320, 'iris');
+    showSign(roomId);
     const r = ROOMS[roomId]; if (r.onEnter) await r.onEnter();
   }
 }
@@ -732,6 +734,7 @@ async function switchChar(ch) {
     G.state.cur = ch; G.parts.length = 0; G.ripples.length = 0; music();
     await wait(260);
     await fadeTo(0, 330, 'warp');
+    showSign(me().room);
     if (ARRIVALS[ch] && !fl()['arr_' + ch]) { fl()['arr_' + ch] = true; await ARRIVALS[ch](); }
   } finally { G.busy--; if (!G.busy) G.skipAll = false; }
   save();
@@ -1052,6 +1055,7 @@ window.addEventListener('keydown', e => {
     else if (k === 'Enter' && RK.done) startRock();
     return;
   }
+  if (konamiKey(k)) { e.preventDefault(); return; }
   if (k === 'f' || k === 'F') { toggleFullscreen(); return; }
   if (k === 'o' || k === 'O' || k === 'F2') { if (G.screen !== 'loading') { e.preventDefault(); takePhoto(); } return; }
   if (k === 'F1' || k === 'p' || k === 'P') { e.preventDefault(); toggleRetro(); return; }
@@ -1059,6 +1063,7 @@ window.addEventListener('keydown', e => {
   if (k === 'Enter') { e.preventDefault(); if (G.pointer === 'pad') onClick(G.mouse.x, G.mouse.y, false); else if (G.screen === 'title') { if (!G.menu) titleDefault(); } else if (G.speech) skipSpeech(); return; }
   if (G.screen === 'title') { if (k === 'Escape' && G.menu) G.menu = null; else if (k === ' ' && !G.menu) titleDefault(); return; }
   if (G.screen !== 'game') return;
+  if ((k === 'm' || k === 'M') && G.menu === 'map') { G.menu = null; return; }
   if (k === 'Escape') {
     if (G.menu) { G.menu = null; return; }
     if (G.busy && !G.dialog) { skipScene(); return; }
@@ -1070,6 +1075,7 @@ window.addEventListener('keydown', e => {
   if (G.busy || G.dialog || G.menu) return;
   if (k === 'h' || k === 'H') return showHint();
   if (k === 'k' || k === 'K') return quickKlo();
+  if (k === 'm' || k === 'M') { G.mapFrom = null; return openMap(); }
   const map = { 1: 'bernard', 2: 'hoagie', 3: 'laverne' };
   if (map[k]) return portraitClick(map[k]);
   const v = VERB_KEYS[k.toLowerCase()]; if (v) { G.verb = v; G.first = null; }
@@ -1182,8 +1188,8 @@ function menuItems() {
   const back = { id: G.screen === 'game' ? 'main' : 'close', label: 'Zurück' };
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
-  if (G.menu === 'album') return [back];
-  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
+  if (G.menu === 'album' || G.menu === 'bios') return [back];
+  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'bios', label: 'Figuren-Steckbriefe' }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
   if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
@@ -1203,6 +1209,7 @@ function menuItems() {
   return [
     { id: 'close', label: 'Weiterspielen' },
     { id: 'notes', label: 'Notizbuch' },
+    { id: 'map', label: 'Zeitreise-Karte  (M)' },
     { id: 'extras', label: 'Extras' },
     { id: 'save', label: 'Spiel speichern' },
     { id: 'load', label: 'Spiel laden' },
@@ -1232,9 +1239,12 @@ function menuClick(x, y) {
   else if (b.id === 'toaster') startToaster();
   else if (b.id.startsWith('jb_')) { G.jbOn = true; Sound.play(b.id.slice(3)); }
   else if (b.id.startsWith('ph_')) { G.albumView = +b.id.slice(3); Sound.sfx('page'); }
-  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album'].includes(b.id)) {
+  else if (b.id.startsWith('mp_')) fastTravel(b.id.slice(3));
+  else if (b.id === 'map') { G.mapFrom = 'main'; openMap(true); }
+  else if (b.id === 'mapback') G.menu = G.mapFrom === 'main' ? 'main' : null;
+  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album', 'bios'].includes(b.id)) {
     G.albumView = null;
-    if (b.id === 'notes') Sound.sfx('page');
+    if (b.id === 'notes' || b.id === 'bios') Sound.sfx('page');
     G.menu = b.id;
   }
   else if (b.id === 'new') G.menu = 'confirm';
@@ -1331,7 +1341,7 @@ function resetWorld() {
   for (const a of Object.values(ACT)) { a.nice = 0; a.talking = false; a.walking = false; a.target = null; a._res = null; a.speed = a.baseSpeed; }
 }
 function normalizeState(s) {
-  s.looked = s.looked || {}; s.talked = s.talked || {}; s.stats = s.stats || { sent: 0, ms: 0 }; s.crystals = s.crystals || {};
+  s.looked = s.looked || {}; s.talked = s.talked || {}; s.stats = s.stats || { sent: 0, ms: 0 }; s.crystals = s.crystals || {}; s.visited = s.visited || {}; s.signs = s.signs || {};
   if (s.progress == null) s.progress = 0;
   return s;
 }
@@ -1341,13 +1351,14 @@ async function startNew() {
   G.screen = 'game'; G.fade = 1; G.fadeMode = 'black'; music();
   await cutscene(INTRO);
   G.inIntro = false; G.fade = 0;
-  save();
+  save(); showSign(me().room);
   await cutscene(INTRO_TIP);
 }
 function continueGame(s) {
   resetWorld();
   G.state = normalizeState(s); applyActors(START_POS); if (s.actors) applyActors(s.actors);
   G.screen = 'game'; G.fade = 1; music(); irisAt(me()); fadeTo(0, 500, 'iris');
+  if (!G.fast) G.sign = { room: me().room, t0: G.t + 450 };   // beim Fortsetzen: wo war ich nochmal?
 }
 function titleDefault() { if (G.saved) continueGame(G.saved); else startNew(); }
 async function cutscene(fn) {
@@ -1432,10 +1443,11 @@ function drawActor(a, room) {
   cx.fillStyle = 'rgba(0,0,0,0.16)'; cx.beginPath(); cx.ellipse(sx, 2, 34 * sc * (a.shadowW || 1) * shrink, 8 * sc * shrink, 0, 0, Math.PI * 2); cx.fill();
   cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.beginPath(); cx.ellipse(sx * 0.4, 2, 21 * sc * (a.shadowW || 1) * shrink, 4.8 * sc * shrink, 0, 0, Math.PI * 2); cx.fill();
   if (lift) cx.translate(0, -lift);
-  if (lt) { cx.restore(); drawActorLit(a, sc, lt, (ROOM_FX[room.id] || {}).reflect); return; }
+  if (lt) { cx.restore(); drawActorLit(a, sc, lt, (ROOM_FX[room.id] || {}).reflect); partyHat(a, sc); return; }
   cx.scale(sc * (a.dir < 0 ? -1 : 1) * a._turn, sc);
   CHAR[a.kind](cx, a, G.t);
   cx.restore();
+  partyHat(a, sc);
 }
 function stageText(t) { return t.replace(/\*([^*]+)\*/g, '($1)'); }
 function wrap(text, maxW) {
@@ -1576,10 +1588,13 @@ function drawScene() {
   drawParts(); drawRipples(); drawRain(); drawGlint();
   cx.restore();
   drawLightFx(!cx.isPix);
+  drawDisco();
   if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
   drawReveal(room);
+  drawConfetti();
   drawHotspotHelp(room);
   drawChapterCard();
+  drawSign();
   drawTransition();
   cx.save(); camApply(); drawBark(); drawSpeech(); cx.restore();
   if (G.photoFlash && G.t - G.photoFlash < 260) { cx.fillStyle = `rgba(255,255,255,${(0.7 * (1 - (G.t - G.photoFlash) / 260)).toFixed(3)})`; cx.fillRect(0, 0, W, SH); }
@@ -1589,6 +1604,16 @@ function drawScene() {
     R(cx, W / 2 - w / 2, SH - 70, w, 46, 'rgba(20,10,32,0.85)', 0, 12);
     txt(cx, G.caption, W / 2, SH - 38, '400 26px "Titan One", sans-serif', '#ffd23a');
   }
+  drawToasts();
+  if (G.inIntro && !G.fast && !G.skipAll) {
+    button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
+    txt(cx, 'Klick: nächste Zeile', UI.skip.x + UI.skip.w / 2, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+  }
+  if (fsAvailable) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
+  cx.restore();
+}
+// Hinweiszeile oben und Erfolgs-Toast (im Spiel und auf dem Titelbildschirm)
+function drawToasts() {
   if (G.note && G.t < G.note.until) {
     cx.font = '700 15px "Baloo 2", sans-serif';
     const w = cx.measureText(G.note.text).width + 30;
@@ -1604,12 +1629,6 @@ function drawScene() {
     txt(cx, G.achToast.a.desc, x + 58, y + 46, '600 12px "Baloo 2", sans-serif', '#e6dcff', 'left');
     cx.restore();
   }
-  if (G.inIntro && !G.fast && !G.skipAll) {
-    button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
-    txt(cx, 'Klick: nächste Zeile', UI.skip.x + UI.skip.w / 2, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
-  }
-  if (fsAvailable) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
-  cx.restore();
 }
 function button(r, label, hot, active) {
   R(cx, r.x, r.y, r.w, r.h, hot ? '#3a2758' : '#24173a', 2, 8, active ? '#ffe066' : '#4a3672');
@@ -1757,15 +1776,19 @@ const HELP = [
   'LB/RB Figur wechseln · LT/RT Verb wählen · LS Klo-Post', 'Ansicht/Tab/Leertaste: Hotspots · F Vollbild · F1/P Pixel-Grafik',
   'Tastatur: Pfeile springen · Enter Aktion · 1–3 Figur · K Klo-Post', 'G Gib · N Nimm · B Benutze · S Schau an · R Rede mit',
   'Klo-Post: Gegenstand wählen → Gesicht unten rechts (geht überall) · O Foto',
-  'Menü → Extras: Minispiel Tentakel-Rock (A/S/D oder Tippen), Musikbox, Erfolge',
+  'Menü → Extras: Minispiele, Fotoalbum, Figuren-Steckbriefe, Musikbox, Erfolge',
+  'M: Zeitreise-Karte – besuchte Orte deiner Zeit per Schnellreise erreichen',
 ];
 function drawMenu() {
+  // Pixel-Modus: Texte werden erst am Ende über die Pixel gelegt – alles darunter würde durch das Menü scheinen
+  if (cx.isPix) cx.texts = cx.texts.filter(q => q.layer !== cx.layerIdx);
+  if (G.menu === 'map') return drawMap();
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
-  const extra = G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 31 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
-  const bw = G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
+  const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 28 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const bw = G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
-  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum' }[G.menu] || 'Pause';
+  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
   let y = by + 74;
   if (G.menu === 'main' && G.state) { txt(cx, `Fortschritt: ${progress()} von ${MILESTONES.length} Rätseln`, W / 2, y - 2, '600 13px "Baloo 2", sans-serif', '#a99ad0'); y += 10; }
@@ -1774,6 +1797,7 @@ function drawMenu() {
     HELP.forEach((l, i) => txt(cx, l, W / 2, y + 12 + i * 23, '600 15px "Baloo 2", sans-serif', '#e6dcff'));
     y += HELP.length * 23 + 10;
   }
+  if (G.menu === 'bios') { drawBios(bx, y); y += 3 * 140 + 8; }
   let photoBtns = [];
   if (G.menu === 'album') {
     const list = albumList();
@@ -1802,12 +1826,12 @@ function drawMenu() {
   }
   if (G.menu === 'ach') {
     ACH.forEach((a, i) => {
-      const got = !!G.ach[a.id], yy = y + 10 + i * 31;
+      const got = !!G.ach[a.id], yy = y + 10 + i * 28;
       cx.globalAlpha = got ? 1 : 0.4; trophy(cx, bx + 34, yy, 0.8); cx.globalAlpha = 1;
-      txt(cx, a.name, bx + 56, yy + 2, '800 15px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
+      txt(cx, !got && a.secret ? 'Geheimer Erfolg' : a.name, bx + 56, yy + 2, '800 15px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
       txt(cx, got ? a.desc : '???', bx + 230, yy + 2, '600 13px "Baloo 2", sans-serif', got ? '#e6dcff' : '#6a5a88', 'left');
     });
-    y += ACH.length * 31 + 10;
+    y += ACH.length * 28 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
   G.menuBtns = photoBtns.concat(items.map((it, i) => ({ id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 })));
@@ -1899,6 +1923,7 @@ function titleActor(id, x, y, sc, dir, seed, extra) {
   cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.beginPath(); cx.ellipse(x - 6 * sc, y + 2, 34 * sc * (base.shadowW || 1), 7 * sc, 0, 0, Math.PI * 2); cx.fill();
   if (cx.isPix) { cx.save(); cx.translate(x, y); cx.scale(sc * dir, sc); CHAR[base.kind](cx, a, G.t); cx.restore(); }
   else drawActorLit(a, sc, TITLE_LIGHT, 0);
+  if (G.settings.party) { const [hx, hk] = HAT[base.kind] || [0, 0.97]; hatAt(x + hx * sc * dir, y - base.h * hk * sc + bobY(a, G.t) * sc, sc, dir, seed); }
 }
 function drawTitle() {
   const t = G.t;
@@ -2384,6 +2409,232 @@ function toasterClick(x, y) {
 }
 function endToaster() { G.screen = G.state ? 'game' : 'title'; music(); }
 
+// ---------- Ortsschilder: beim ersten Betreten eines Raums ----------
+function showSign(roomId) {
+  if (G.fast || G.inIntro || !G.state) return;
+  const s = G.state.signs || (G.state.signs = {}); if (s[roomId]) return;
+  s[roomId] = 1; G.sign = { room: roomId, t0: G.t + 200 }; Sound.sfx('sign');
+}
+function markVisit(r) {
+  const v = G.state.visited || (G.state.visited = {});
+  if (r && !v[r]) { v[r] = 1; if (Object.keys(ROOMS).every(id => v[id])) unlock('reise'); }
+}
+function updateVisits() { if (G.screen === 'game' && G.state) for (const p of PLAYERS) markVisit(ACT[p].room); }
+// kleines Zeit-Symbol: Uhr (Gegenwart), Schreibfeder (1776), Planet (Zukunft)
+function eraIcon(c, era, x, y, s = 1) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  if (era === 'present') { E(c, 0, 0, 11, 11, '#fff6e0', 2); L(c, [0, 0, 0, -7], 2.2, '#3a2a1a'); L(c, [0, 0, 5, 2], 2.2, '#3a2a1a'); E(c, 0, 0, 1.6, 1.6, '#c8322e', 0); }
+  else if (era === 'past') { S(c, '#fff6e0', 2, () => { c.moveTo(-8, 10); c.quadraticCurveTo(-6, -4, 9, -12); c.quadraticCurveTo(4, 2, -8, 10); }); L(c, [-8, 10, 2, -3], 1.4, '#9a7a50'); E(c, -9, 11, 2, 2, '#1b1020', 0); }
+  else { E(c, 0, 0, 8, 8, '#e3a6ff', 2); S(c, null, 2, () => c.ellipse(0, 0, 14, 4.5, -0.35, 0, Math.PI * 2), '#fff6e0'); E(c, -3, -3, 2.5, 2, 'rgba(255,255,255,0.6)', 0); }
+  c.restore();
+}
+function drawSign() {
+  const s = G.sign; if (!s) return;
+  if (G.chapterCard || G.menu) { s.t0 = G.t; return; }   // wartet, bis die Kapitelkarte weg ist
+  const k = (G.t - s.t0) / 3300; if (k < 0) return; if (k > 1) { G.sign = null; return; }
+  const room = ROOMS[s.room], era = ERA[room.era], a = Math.min(1, k * 7, (1 - k) * 6), e = 1 - Math.pow(1 - Math.min(1, k * 4.5), 3);
+  cx.font = '400 30px "Titan One", sans-serif'; const tw = cx.measureText(room.name).width;
+  cx.font = '800 12px "Baloo 2", sans-serif'; const sw = cx.measureText(era.label.toUpperCase()).width;
+  const x = 18 - (1 - e) * 70, y = 18, w = Math.max(tw, sw) + 92, h = 68;
+  cx.save(); cx.globalAlpha = a;
+  glow(x + 36, y + 34, 80, era.col, 0.3);
+  R(cx, x, y, w, h, 'rgba(14,6,26,0.84)', 2, 16, mix(era.col, '#241739', 0.25));
+  if (!cx.isPix) L(cx, [x + 14, y + 4, x + w - 14, y + 4], 1.5, 'rgba(255,255,255,0.14)');
+  E(cx, x + 36, y + 34, 22, 22, mix(era.col, '#1a0e2c', 0.55), 2.5, 0, era.col);
+  eraIcon(cx, room.era, x + 36, y + 34, 1.05);
+  txt(cx, room.name, x + 68, y + 38, '400 30px "Titan One", sans-serif', '#fff6e0', 'left', 6, '#1b0a2a');
+  const lw = (w - 84) * Math.min(1, Math.max(0, k * 3.2 - 0.3));
+  if (lw > 0) L(cx, [x + 68, y + 46, x + 68 + lw, y + 46], 2, mix(era.col, '#ffffff', 0.2));
+  txt(cx, era.label.toUpperCase(), x + 69, y + 61, '800 12px "Baloo 2", sans-serif', era.col, 'left');
+  cx.restore();
+}
+
+// ---------- Zeitreise-Karte mit Schnellreise ----------
+const MAP_ORDER = { present: ['labor', 'lobby'], past: ['gasthaus', 'garten1776'], future: ['fgarten', 'vorraum', 'thron'] };
+const mapThumbs = {};
+function openMap(fromMenu) {
+  if (G.screen !== 'game' || !G.state || G.dialog || G.inIntro || (G.busy && !fromMenu)) return;
+  for (const k in mapThumbs) delete mapThumbs[k];
+  G.menu = 'map'; G.mapT0 = G.t; Sound.sfx('unfold');
+  if (G.pointer === 'pad') { G.mouse.x = W / 2; G.mouse.y = 0; snapNav(0, 1); }
+}
+function mapRooms(era) { const order = (MAP_ORDER[era] || []).filter(id => ROOMS[id]); return order.concat(Object.values(ROOMS).filter(r => r.era === era && !order.includes(r.id)).map(r => r.id)); }
+// Postkarten-Vorschau eines Raums: Hintergrund plus Gegenstände im aktuellen Zustand
+function mapThumb(room, w, h) {
+  const s = Math.min(2, VS * DPR); let c = mapThumbs[room.id];
+  if (c && c._s === s) return c;
+  c = document.createElement('canvas'); c.width = Math.ceil(w * s); c.height = Math.ceil(h * s); c._s = s;
+  const g = c.getContext('2d'), keep = cx;
+  g.setTransform(s * w / W, 0, 0, s * h / SH, 0, 0);
+  try {
+    cx = g; drawBg(room);
+    HDS.deco = true;
+    for (const o of room.objs) if (o.draw && isVisible(o)) o.draw(g, G.t);
+  } catch (e) { /* die Vorschau bleibt beim Hintergrund */ }
+  finally { HDS.deco = false; cx = keep; }
+  return (mapThumbs[room.id] = c);
+}
+function travelSpot(roomId) {
+  for (const r of Object.values(ROOMS)) for (const o of r.objs) if (o.exit && o.exit[0] === roomId && r.id !== roomId) return o.exit.slice(1);
+  const room = ROOMS[roomId], xs = room.walk.map(p => p[0]), ys = room.walk.map(p => p[1]);
+  return [...clampWalk(room, (Math.min(...xs) + Math.max(...xs)) / 2, Math.max(...ys) - 15), 1];
+}
+async function fastTravel(roomId) {
+  const a = me(), room = ROOMS[roomId];
+  if (!room || G.busy || a.room === roomId || room.era !== ROOMS[a.room].era || !G.state.visited[roomId]) return;
+  G.menu = null; ++actToken; if (a._res) { const r = a._res; a._res = null; r(false); } a.target = null; a.walking = false;
+  const [x, y, dir] = travelSpot(roomId);
+  G.busy++;
+  try { Sound.sfx('whoosh'); G.state.stats.trips = (G.state.stats.trips || 0) + 1; await goRoom(a.id, roomId, x, y, dir || 1); }
+  finally { G.busy--; if (!G.busy) G.skipAll = false; }
+  save();
+}
+function drawMap() {
+  const k = Math.min(1, (G.t - (G.mapT0 || 0)) / 260), e = 1 - Math.pow(1 - k, 3), t = G.t;
+  cx.fillStyle = `rgba(8,3,16,${(0.8 * e).toFixed(3)})`; cx.fillRect(0, 0, W, H);
+  cx.save(); cx.globalAlpha = e;
+  const bx = 24, by = 12, bw = W - 48, bh = H - 24;
+  R(cx, bx, by, bw, bh, grad(cx, 0, by, 0, by + bh, [[0, '#2a1a40'], [1, '#150b24']]), 3, 18, '#7a5ab8');
+  txt(cx, 'Zeitreise-Karte', W / 2, by + 42, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
+  txt(cx, 'Besuchte Orte deiner Zeit anklicken: Schnellreise · Andere Zeiten erreicht nur die Klo-Post', W / 2, by + 64, '600 13px "Baloo 2", sans-serif', '#a99ad0');
+  const here = me().room, myEra = ROOMS[here].era, btns = [], vis = G.state.visited || {}, colW = (bw - 40) / 3;
+  ['present', 'past', 'future'].forEach((era, ci) => {
+    const ex = bx + 20 + ci * colW + 6, ew = colW - 12, own = era === myEra, er = ERA[era], top = by + 78;
+    R(cx, ex, top, ew, bh - 150, own ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.025)', 2, 14, own ? er.col : '#3d2c5e');
+    E(cx, ex + 30, top + 30, 18, 18, mix(er.col, '#1a0e2c', 0.55), 2, 0, er.col); eraIcon(cx, era, ex + 30, top + 30, 0.85);
+    txt(cx, er.label, ex + 56, top + 37, '400 21px "Titan One", sans-serif', own ? er.col : mix(er.col, '#6a5a88', 0.5), 'left', 4, OUT);
+    const res = PLAYERS.find(p => HOME_ERA[p] === era);
+    if (res) { drawPortrait(cx, res, ex + ew - 28, top + 30, 18, er.bg, t, false); E(cx, ex + ew - 28, top + 30, 18, 18, null, 2.5, 0, res === curId() ? '#ffe066' : mix(er.col, '#241739', 0.35)); }
+    mapRooms(era).forEach((id, ri) => {
+      const room = ROOMS[id], cw = 196, th = Math.round(cw * SH / W), x = ex + (ew - cw) / 2, y = top + 62 + ri * 120, seen = !!vis[id];
+      const isHere = id === here, can = seen && own && !isHere && !G.busy, r = { id: 'mp_' + id, x, y, w: cw, h: th + 24 }, hot = can && inRect(G.mouse.x, G.mouse.y, r);
+      if (isHere && !cx.isPix) glow(x + cw / 2, y + th / 2, 140, '#ffd23a', 0.22 + Math.sin(t * 0.005) * 0.08);
+      if (hot && !cx.isPix) glow(x + cw / 2, y + th / 2, 130, er.col, 0.25);
+      cx.save(); if (!own && seen) cx.globalAlpha *= 0.62;
+      R(cx, x - 3, y - 3, cw + 6, th + 30, isHere ? '#3a2758' : hot ? '#33224f' : '#1d1330', 2.5, 9, isHere ? '#ffe066' : hot ? er.col : '#3d2c5e');
+      if (seen) {
+        const img = !cx.isPix && mapThumb(room, cw, th);
+        if (img) cx.drawImage(img, x, y, cw, th); else R(cx, x, y, cw, th, mix(er.bg, '#1a0e2c', 0.3), 0, 6);
+        for (const p of PLAYERS) if (ACT[p].room === id) { const pi = PLAYERS.indexOf(p), px = x + 18 + pi * 30, py = y + th - 16; drawPortrait(cx, p, px, py, 12, ERA[HOME_ERA[p]].bg, t, false); E(cx, px, py, 12, 12, null, 2, 0, p === curId() ? '#ffe066' : '#1b1020'); }
+        txt(cx, room.name, x + cw / 2, y + th + 18, '800 14px "Baloo 2", sans-serif', isHere ? '#ffe066' : hot ? '#ffffff' : '#e6dcff');
+        if (isHere) txt(cx, 'Du bist hier', x + cw - 8, y + 18, '800 12px "Baloo 2", sans-serif', '#ffe066', 'right', 4, '#1b1020');
+        else if (hot) txt(cx, 'Schnellreise »', x + cw - 8, y + 18, '800 12px "Baloo 2", sans-serif', '#ffffff', 'right', 4, '#1b1020');
+      } else {
+        R(cx, x, y, cw, th, '#120a1e', 0, 6);
+        for (let i = 0; i < 5; i++) E(cx, x + 30 + i * 34, y + th / 2 + Math.sin(t * 0.002 + i) * 6, 26, 14, 'rgba(120,100,170,0.08)', 0);
+        txt(cx, '?', x + cw / 2, y + th / 2 + 14, '400 38px "Titan One", sans-serif', '#4a3a68', 'center');
+        txt(cx, '???', x + cw / 2, y + th + 18, '800 14px "Baloo 2", sans-serif', '#6a5a88');
+      }
+      cx.restore();
+      if (can) btns.push(r);
+    });
+  });
+  const back = { id: 'mapback', x: W / 2 - 150, y: by + bh - 52, w: 300, h: 38 };
+  button(back, G.mapFrom === 'main' ? 'Zurück' : 'Karte schließen  (M)', inRect(G.mouse.x, G.mouse.y, back));
+  G.menuBtns = btns.concat([back]);
+  cx.restore();
+}
+
+// ---------- Figuren-Steckbriefe ----------
+// Figuren einmal pro Zustand vorrendern (bekannt/Silhouette); im Menü wird nur noch das Bild kopiert
+const bioCache = {};
+function bioKnown(id) { return PLAYERS.includes(id) || !!(G.state && (G.state.talked[id] || G.state.looked['a:' + id])); }
+function bioFigure(id, known, x, y, hgt) {
+  const base = ACT[id], a = Object.assign({}, base, { x: null, dir: 1, walking: false, talking: false, target: null, pose: null, climb: false, climbY: null, seed: 1 }), sc = hgt / base.h;
+  if (cx.isPix) {
+    if (!known) { txt(cx, '?', x, y - hgt * 0.4, '400 40px "Titan One", sans-serif', '#4a3a68'); return; }
+    cx.save(); cx.translate(x, y); cx.scale(sc, sc); CHAR[base.kind](cx, a, 0); cx.restore(); return;
+  }
+  const k = VS * DPR, bw = 110, bh = hgt + 14, key = `${id}|${known ? 1 : 0}|${k.toFixed(2)}`;
+  let c = bioCache[key];
+  if (!c) {
+    c = bioCache[key] = document.createElement('canvas'); c.width = Math.ceil(bw * k); c.height = Math.ceil(bh * k);
+    const g = c.getContext('2d'), keep = cx;
+    g.setTransform(k * sc, 0, 0, k * sc, bw / 2 * k, (bh - 4) * k);
+    cx = g;
+    try { CHAR[base.kind](g, a, 0); } catch (e) { /* Figur fehlt – leere Karte */ } finally { cx = keep; }
+    if (!known) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#0d0718'; g.fillRect(0, 0, c.width, c.height); }
+  }
+  cx.drawImage(c, x - bw / 2, y - bh + 4, bw, bh);
+}
+function drawBios(bx, y) {
+  ['bernard', 'hoagie', 'laverne', ...NPCS].forEach((id, i) => {
+    const x = bx + 20 + (i % 3) * 248, yy = y + 4 + Math.floor(i / 3) * 140, w = 240, h = 132, known = bioKnown(id), b = BIOS[id] || {}, col = ACT[id].color;
+    R(cx, x, yy, w, h, known ? '#281a40' : '#1a1129', 2, 12, known ? mix(col, '#241739', 0.45) : '#33224d');
+    if (known && !cx.isPix) glow(x + 40, yy + h - 30, 60, col, 0.12);
+    E(cx, x + 40, yy + h - 9, 26, 5, 'rgba(0,0,0,0.3)', 0);
+    bioFigure(id, known, x + 40, yy + h - 8, 112);
+    const nm = known ? ACT[id].name : '???'; let nz = 18; cx.font = `400 ${nz}px "Titan One", sans-serif`;
+    while (nz > 13 && cx.measureText(nm).width > w - 94) { nz--; cx.font = `400 ${nz}px "Titan One", sans-serif`; }
+    txt(cx, nm, x + 84, yy + 26, `400 ${nz}px "Titan One", sans-serif`, known ? '#ffd23a' : '#6a5a88', 'left', 4, OUT);
+    const role = known ? b.role || '' : 'Noch nicht getroffen'; let fz = 11; cx.font = `800 ${fz}px "Baloo 2", sans-serif`;
+    while (fz > 8 && cx.measureText(role).width > w - 92) { fz--; cx.font = `800 ${fz}px "Baloo 2", sans-serif`; }
+    txt(cx, role, x + 84, yy + 43, `800 ${fz}px "Baloo 2", sans-serif`, known ? mix(col, '#ffffff', 0.25) : '#5a4a78', 'left');
+    cx.font = '600 12px "Baloo 2", sans-serif';
+    wrap(known ? b.bio || '' : 'Schau dir diese Figur an oder sprich mit ihr, um mehr zu erfahren.', w - 94).slice(0, 5).forEach((l, j) => txt(cx, l, x + 84, yy + 62 + j * 15, '600 12px "Baloo 2", sans-serif', known ? '#e6dcff' : '#6a5a88', 'left'));
+  });
+}
+
+// ---------- Party-Modus: Geheimcode ↑ ↑ ↓ ↓ ← → ← → B A ----------
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+const CONF = [];
+function konamiKey(k) {
+  const kk = k.length === 1 ? k.toLowerCase() : k, i = G.kIdx || 0;
+  G.kIdx = kk === KONAMI[i] ? i + 1 : kk === KONAMI[0] ? (i === 2 ? 2 : 1) : 0;
+  if (G.kIdx < KONAMI.length) return false;
+  G.kIdx = 0; toggleParty(); return true;
+}
+function toggleParty() {
+  G.settings.party = !G.settings.party; saveSettings();
+  if (G.settings.party) { Sound.sfx('party'); confettiBurst(W / 2, G.screen === 'game' ? SH * 0.45 : H * 0.42, 140); unlock('party'); note('Party-Modus an! Hütchen auf! (Code noch mal = aus)'); }
+  else { Sound.sfx('click'); CONF.length = 0; note('Party-Modus aus. Schade eigentlich.'); }
+}
+function confettiBurst(x, y, n) {
+  for (let i = 0; i < n && CONF.length < 300; i++) {
+    const a = Math.random() * Math.PI * 2, v = 120 + Math.random() * 380;
+    CONF.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 240, r: Math.random() * 6, vr: (Math.random() - 0.5) * 12, s: 4 + Math.random() * 4, c: FW_COLS[i % FW_COLS.length], f: Math.random() * 6 });
+  }
+}
+function updateConfetti(dt) {
+  const s = dt / 1000, on = G.settings.party && (G.screen === 'game' || G.screen === 'title') && !G.menu && !G.fast;
+  if (on && Math.random() < dt * 0.011 && CONF.length < 150) CONF.push({ x: Math.random() * W, y: -10, vx: (Math.random() - 0.5) * 40, vy: 40 + Math.random() * 40, r: Math.random() * 6, vr: (Math.random() - 0.5) * 8, s: 4 + Math.random() * 3, c: pick(FW_COLS), f: Math.random() * 6 });
+  for (let i = CONF.length - 1; i >= 0; i--) {
+    const p = CONF[i];
+    p.vx -= p.vx * 2 * s; p.vy += (140 - 2 * p.vy) * s;   // Luftwiderstand: segelt mit ~70 px/s herab
+    p.x += p.vx * s + Math.sin(G.t * 0.003 + p.f) * 22 * s; p.y += p.vy * s; p.r += p.vr * s;
+    if (p.y > H + 12 || (!G.settings.party && p.y > H)) CONF.splice(i, 1);
+  }
+}
+function drawConfetti() {
+  for (const p of CONF) {
+    const w = p.s, h = Math.max(1, p.s * 0.6 * Math.abs(Math.cos(G.t * 0.008 + p.f)));
+    cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.fillStyle = p.c; cx.fillRect(-w / 2, -h / 2, w, h); cx.restore();
+  }
+}
+function drawDisco() {
+  if (!G.settings.party || cx.isPix) return;
+  for (let i = 0; i < 3; i++) glow(W / 2 + Math.sin(G.t * 0.0006 + i * 2.1) * 380, SH * 0.62 + Math.cos(G.t * 0.0009 + i * 1.3) * 90, 210, ['#ff5fa8', '#7fe8ff', '#ffd23a'][i], 0.15);
+}
+// Partyhütchen: [x-Versatz zur Kopfmitte, Anteil der Figurenhöhe] je Figurenart
+const HAT = { bernard: [6, 0.985], hoagie: [8, 0.975], laverne: [4, 0.9], drfred: [4, 0.97], gertrude: [4, 0.97], hancock: [4, 0.97], green: [0, 0.97], purple: [0, 0.97], guard: [0, 0.97] };
+const HAT_COLS = [['#ff5fa8', '#ffd23a'], ['#7fe8ff', '#ff5fa8'], ['#a6ff8f', '#d79bff'], ['#ffd23a', '#7fe8ff']];
+const CROUCH_LEN = { bernard: 82, hoagie: 64, laverne: 74 };
+function hatAt(x, y, s, dir, n) {
+  const [c1, c2] = HAT_COLS[Math.abs(Math.round(n)) % HAT_COLS.length], hw = h => 13 * (1 - h / 38);
+  cx.save(); cx.translate(x, y); cx.scale(s * dir, s); cx.rotate(0.2 + Math.sin(G.t * 0.004 + n) * 0.06);
+  P(cx, [-13, 0, 13, 0, 0, -38], c1, 0);
+  for (const [h1, h2] of [[7, 13], [20, 25]]) P(cx, [-hw(h1), -h1, hw(h1), -h1, hw(h2), -h2, -hw(h2), -h2], c2, 0);
+  P(cx, [-13, 0, 13, 0, 0, -38], null, 2.5);
+  E(cx, 0, -39, 5, 5, '#ffffff', 2);
+  cx.restore();
+}
+function partyHat(a, sc) {
+  if (!G.settings.party) return;
+  const [hx, hk] = HAT[a.kind] || [0, 0.97], d = a.dir < 0 ? -1 : 1, top = a.h * hk;
+  const ln = a.walking ? (a.run ? 0.08 : 0.035) : 0, cl = CROUCH_LEN[a.id] && !a.climb ? crouch(a, G.t, CROUCH_LEN[a.id]) : 0;
+  hatAt(a.x + (hx + ln * top * 0.55) * sc * d * (a._turn || 1), a.y + (-top + bobY(a, G.t) + cl + nod(a, G.t)) * sc, sc, d, PLAYERS.indexOf(a.id) + 1 + (a.seed || 0));
+}
+
 // ---------- Hauptschleife ----------
 function update(dt) {
   pollPad(dt);
@@ -2393,7 +2644,7 @@ function update(dt) {
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
-  updateEnd(dt); updateRock(); updateToaster(dt); updatePoses();
+  updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
   updateParts(dt); updateMotes(dt); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
@@ -2423,7 +2674,7 @@ function update(dt) {
   }
 }
 function drawScreen() {
-  if (G.screen === 'title') { drawTitle(); drawTitleBark(); if (!cx.isPix) drawBloom(0.2, H); if (G.menu) drawMenu(); }
+  if (G.screen === 'title') { drawTitle(); drawTitleBark(); drawConfetti(); if (!cx.isPix) drawBloom(0.2, H); drawToasts(); if (G.menu) drawMenu(); }
   else if (G.screen === 'end') { drawEnd(); if (!cx.isPix) drawBloom(0.22, H); }
   else if (G.screen === 'toaster') { drawToaster(); if (!cx.isPix) drawBloom(0.2, H); }
   else if (G.screen === 'rock') { drawRock(); if (!cx.isPix) drawBloom(0.25, H); }

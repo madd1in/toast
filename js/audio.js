@@ -294,6 +294,7 @@ const Sound = (() => {
     crickets: t => { if (Math.random() < 0.7) { const f = 4200 + Math.random() * 600; for (let i = 0; i < 3; i++) osc('sine', f, t + i * 0.045, 0.03, 0.012, ambBus, { decay: true }); } return 0.5 + Math.random() * 0.9; },
     creak: t => { osc('sawtooth', 140 + Math.random() * 80, t, 0.5, 0.012, ambBus, { f2: 90 + Math.random() * 60, lp: 700, q: 6, attack: 0.08 }); return 5 + Math.random() * 8; },
     drip: t => { osc('sine', 1400 + Math.random() * 700, t, 0.09, 0.03, ambBus, { f2: 500, decay: true }); return 1.5 + Math.random() * 3.5; },
+    owl: t => { if (Math.random() < 0.65) { osc('sine', 392, t, 0.42, 0.026, ambBus, { f2: 345, attack: 0.06 }); osc('sine', 370, t + 0.62, 0.2, 0.018, ambBus, { f2: 335, attack: 0.04 }); osc('sine', 380, t + 0.9, 0.55, 0.022, ambBus, { f2: 322, attack: 0.07 }); } return 9 + Math.random() * 13; },
     wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt
@@ -422,6 +423,15 @@ const Sound = (() => {
     },
     photo: t => { nz(t, 0.05, 0.3, sfxBus, { type: 'highpass', f: 3000 }); nz(t + 0.09, 0.08, 0.22, sfxBus, { type: 'bandpass', f: 1500, q: 2 }); },
     crystal: t => { ['E6', 'B5', 'G#6', 'E7'].forEach((n, i) => osc('sine', freq(n), t + i * 0.07, 0.5, 0.05, sfxBus, { decay: true })); osc('triangle', freq('E5'), t, 0.8, 0.04, sfxBus, { decay: true }); },
+    sign: t => { ['G4', 'D5', 'G5', 'B5'].forEach((n, i) => osc('triangle', freq(n), t + i * 0.07, 1.0, 0.03, sfxBus, { decay: true })); nz(t, 0.6, 0.025, sfxBus, { type: 'highpass', f: 5500, attack: 0.12 }); },
+    party: t => {
+      osc('sawtooth', 520, t, 0.55, 0.05, sfxBus, { f2: 700, lp: 1800, vib: 22, attack: 0.03 });   // Partytröte
+      osc('square', 523, t + 0.05, 0.5, 0.022, sfxBus, { f2: 690, lp: 1400, vib: 18 });
+      nz(t + 0.5, 0.08, 0.3, sfxBus, { type: 'highpass', f: 1500 });   // Konfetti-Knall
+      for (let i = 0; i < 12; i++) nz(t + 0.55 + Math.random() * 0.6, 0.02, 0.05, sfxBus, { type: 'highpass', f: 4000 + Math.random() * 3000 });
+      ['C5', 'E5', 'G5', 'C6', 'G5', 'C6'].forEach((n, i) => osc('square', freq(n), t + 0.6 + i * 0.09, 0.1, 0.035, sfxBus, { lp: 3000, decay: true }));
+    },
+    unfold: t => { nz(t, 0.35, 0.1, sfxBus, { type: 'bandpass', f: 1200, f2: 3200, q: 1, attack: 0.05 }); nz(t + 0.18, 0.22, 0.07, sfxBus, { type: 'bandpass', f: 2600, f2: 1200, q: 1.4 }); },
     sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },
   };
   const listeners = [];

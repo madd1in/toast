@@ -131,8 +131,31 @@ const ACH = [
   { id: 'kristalle', name: 'Kristallklar', desc: 'Alle sechs Chrono-Kristalle eingesammelt.' },
   { id: 'rockstar', name: 'Tentakel-Rockstar', desc: 'Im Minispiel mindestens 80 % der Töne getroffen.' },
   { id: 'toastmeister', name: 'Toast-Meister', desc: 'Im Gut-O-Mat-Minispiel mindestens 400 Punkte geröstet.' },
+  { id: 'reise', name: 'Weltenbummler', desc: 'Alle sieben Orte in drei Zeiten besucht.' },
+  { id: 'party', name: 'Partytier', desc: 'Den geheimen Code gefunden. Hütchen auf!', secret: true },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
+// Figuren-Steckbriefe (Menü → Extras); NPCs erscheinen erst, wenn man sie angeschaut oder angesprochen hat
+const BIOS = {
+  bernard: { role: 'Superhirn · Gegenwart', bio: 'Plant alles, sogar Spontaneität. Sein Taschenrechner kann „hELLO“ sagen – mehr Party braucht er nicht.' },
+  hoagie: { role: 'Roadie · Jahr 1776', bio: 'Trägt Verstärker wie andere Leute Einkaufstüten. Findet das 18. Jahrhundert erstaunlich entspannt.' },
+  laverne: { role: 'Medizinstudentin · Zukunft', bio: 'Untersucht alles, was nicht schnell genug wegläuft. Klettert lieber auf Bäume als auf Karriereleitern.' },
+  drfred: { role: 'Erfinder · Gegenwart', bio: 'Baute das Chrono-Klo und den Gut-O-Mat. Seine Frisur ist physikalisch nicht erklärbar.' },
+  green: { role: 'Rockstar in spe · Gegenwart', bio: 'Der nette Tentakel. Probt Schlagzeug ohne Schlagzeug und Lieder ohne Reime.' },
+  gertrude: { role: 'Wirtin · Jahr 1776', bio: 'Backt das beste Brot der Kolonien – wenn jemand Zucker bringt. Ur-Ur-Ur-Ur-Oma von Dr. Fred.' },
+  hancock: { role: 'Gründervater · Jahr 1776', bio: 'Übt seine Unterschrift, bis man sie vom Mond aus lesen kann. Verbraucht dabei Federn im Akkord.' },
+  wache: { role: 'Palastwache · Zukunft', bio: 'Bewacht seit vierzig Jahren den Thronsaal. Ohne Pause. Ohne Kaffee. Größter Wunsch: Feierabend.' },
+  lila: { role: 'Herrscher der Welt · Zukunft', bio: 'Bekam durch einen sehr ungesunden Schluck Arme und schlechte Laune. Schwäche: alles Knusprige.' },
+};
+// Party-Modus: die NPCs feiern mit
+const PARTY_BARKS = {
+  drfred: ['Eine Party? In MEINEM Labor? ...Großartig!', 'Konfetti! Ich muss das unbedingt analysieren.'],
+  green: ['Endlich Publikum! Eins, zwei, drei, vier!', 'Party! Ich hab sogar einen Hut. Und kein Schlagzeug.'],
+  gertrude: ['Wer hat hier Konfetti verstreut? Ach, egal – Tanz!', 'So ein Fest hatten wir nicht mehr seit der Teesteuer.'],
+  hancock: ['Ich unterschreibe euch jedes Partyhütchen!', 'Eine Feier! Darauf setze ich meinen Namen. Groß.'],
+  wache: ['Party? Im Dienst? ...Na gut, ein Tänzchen.', '*gähn* Selbst das Konfetti ist wacher als ich.'],
+  lila: ['Wer hat diese Fröhlichkeit genehmigt?!', 'Muahaha! Eine Party! ...Ich meine: Verboten! ...Hut ab.'],
+};
 
 const byChar = m => () => m[curId()] || m.bernard;
 const ITEMS = {
