@@ -34,7 +34,10 @@ const G = {
   parts: [], ripples: [], quality: 1, fpsAvg: 16.7, fpsGate: 0,
   motes: [], moteKind: null, storm: null, neon: null, bark: null, barkNext: 0, idleSince: 0, lastClick: null,
   cam: { z: 1, x: W / 2, y: SH / 2 }, photoFlash: 0,
+  view: { x: (W - W * SH / H) / 2 }, ms: { x: -99, y: -99 }, hudK: 0, invPin: false, coin: null, inScene: false, modernPass: false,
 };
+let VH = SH;   // Höhe der Fläche, auf die Szenen-Overlays gezeichnet werden (moderne Ansicht: ganzer Bildschirm)
+let SSK = 1;   // Überabtastung der Szene in der modernen Ansicht (schärfere Vergrößerung)
 const OBJ = {};
 
 // ---------- kleine Helfer ----------
@@ -51,7 +54,7 @@ function addItem(i, c = curId(), quiet) {
   if (c === curId() && G.screen === 'game' && !G.fast) {
     const a = me(), room = ROOMS[viewRoomId()];
     const from = a.room === room.id ? [a.x, a.y - a.h * roomScale(room, a.y) * 0.6] : [W / 2, SH / 2];
-    G.fly.push({ id: i, from, t0: G.t });
+    G.fly.push({ id: i, from, t0: G.t }); G.hudPeek = G.t + 1900;
     puff(from[0], from[1], '#fff1a8', 10, { vy: 80, vx: 150, r: 2.2, max: 650, spread: 12 });
   }
 }
@@ -294,7 +297,8 @@ function drawBloom(alpha, h = SH) {
   if (bloomC.height !== bh) bloomC.height = bh;
   bloomG.globalCompositeOperation = 'copy';
   bloomG.filter = 'brightness(0.7) contrast(3) saturate(1.3) blur(3px)';
-  bloomG.drawImage(cv, 0, 0, cv.width, Math.round(cv.height * h / H), 0, 0, bw, bh);
+  const src = cx.canvas && cx.canvas !== cv ? cx.canvas : cv;
+  bloomG.drawImage(src, 0, 0, src.width, src === cv ? Math.round(cv.height * h / H) : src.height, 0, 0, bw, bh);
   bloomG.filter = 'none';
   cx.save(); cx.globalCompositeOperation = 'screen'; cx.globalAlpha = alpha; cx.drawImage(bloomC, 0, 0, W, h); cx.restore();
 }
@@ -302,8 +306,23 @@ function drawBloom(alpha, h = SH) {
 // Figuren im HD-Modus: erst in einen Puffer zeichnen, dann Licht-/Schattenseite, Bodenschatten und Randlicht auftragen
 const actBuf = document.createElement('canvas'), actG = actBuf.getContext('2d');
 const rimBuf = document.createElement('canvas'), rimG = rimBuf.getContext('2d');
+const inkBuf = document.createElement('canvas'), inkG = inkBuf.getContext('2d');
+const INK_DIRS = Array.from({ length: 12 }, (_, i) => [Math.cos(i * Math.PI / 6), Math.sin(i * Math.PI / 6)]);
+// Tusche-Kontur: die Silhouette der ganzen Figur rundum versetzt in Konturfarbe hinterlegen –
+// eine durchgehende Außenlinie statt einzeln umrandeter Teile
+function inkify(src, pw, ph, rad) {
+  if (inkBuf.width < pw || inkBuf.height < ph) { inkBuf.width = Math.max(inkBuf.width, pw); inkBuf.height = Math.max(inkBuf.height, ph); }
+  if (rimBuf.width < pw || rimBuf.height < ph) { rimBuf.width = Math.max(rimBuf.width, pw); rimBuf.height = Math.max(rimBuf.height, ph); }
+  const r = rimG; r.setTransform(1, 0, 0, 1, 0, 0); r.globalAlpha = 1; r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, ph);
+  r.drawImage(src, 0, 0, pw, ph, 0, 0, pw, ph); r.globalCompositeOperation = 'source-in'; r.fillStyle = OUT; r.fillRect(0, 0, pw, ph); r.globalCompositeOperation = 'source-over';
+  const g = inkG; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, pw, ph);
+  const dirs = G.quality < 1 ? INK_DIRS.filter((_, i) => i % 3 === 0) : INK_DIRS;
+  for (const [dx, dy] of dirs) g.drawImage(rimBuf, 0, 0, pw, ph, dx * rad, dy * rad, pw, ph);
+  g.drawImage(src, 0, 0, pw, ph, 0, 0, pw, ph);
+  return inkBuf;
+}
 function drawActorLit(a, sc, lt, refl) {
-  const bs = Math.min(VS * DPR, G.quality < 1 ? 1.5 : 3), k = sc * bs, top = a.h + 90, bot = 30, fade = a.h * 0.55;
+  const bs = Math.min(VS * DPR * SSK, G.quality < 1 ? 1.5 : 3), k = sc * bs, top = a.h + 90, bot = 30, fade = a.h * 0.55;
   const pw = Math.ceil(270 * k), ph = Math.ceil((top + bot) * k), need = Math.ceil((top + Math.max(bot, fade)) * k);
   if (actBuf.width < pw || actBuf.height < need) { actBuf.width = rimBuf.width = Math.max(actBuf.width, pw); actBuf.height = rimBuf.height = Math.max(actBuf.height, need); }
   const g = actG, ox = pw / 2, oy = top * k, [side, key, fill] = lt;
@@ -311,7 +330,8 @@ function drawActorLit(a, sc, lt, refl) {
   const br = a.walking ? 0 : Math.sin(G.t * 0.0024 + (a.seed || 0) * 3) * 0.007;
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, pw, ph);
   g.setTransform(k * (a.dir < 0 ? -1 : 1) * (1 - br * 0.5) * (a._turn || 1), 0, 0, k * (1 + br), ox, oy);
-  CHAR[a.kind](g, a, G.t);
+  HDS.ink = true;
+  try { CHAR[a.kind](g, a, G.t); } finally { HDS.ink = false; }
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = 'source-atop';
   const half = (a.bw || 50) * 1.4 * k, hg = g.createLinearGradient(ox + side * half, 0, ox - side * half, 0);
@@ -336,17 +356,18 @@ function drawActorLit(a, sc, lt, refl) {
     g.globalCompositeOperation = 'overlay'; g.globalAlpha = 0.28; g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
   }
   g.globalCompositeOperation = 'source-over';
+  const out = inkify(actBuf, pw, ph, Math.max(1.5, 2.3 * k));
   if (refl) {
     // Spiegelbild: an der Fußlinie gespiegelt und nach unten ausgeblendet
     const r = rimG, fh = Math.ceil(fade * k);
     r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, oy + fh);
-    r.setTransform(1, 0, 0, -1, 0, 2 * oy); r.drawImage(actBuf, 0, 0, pw, ph, 0, 0, pw, ph);
+    r.setTransform(1, 0, 0, -1, 0, 2 * oy); r.drawImage(out, 0, 0, pw, ph, 0, 0, pw, ph);
     r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'destination-in';
     const fg = r.createLinearGradient(0, oy, 0, oy + fh); fg.addColorStop(0, 'rgba(0,0,0,1)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
     r.fillStyle = fg; r.fillRect(0, oy, pw, fh); r.globalCompositeOperation = 'source-over';
     cx.save(); cx.globalAlpha = refl; cx.drawImage(rimBuf, 0, oy, pw, fh, a.x - ox / bs, a.y + 1, pw / bs, fh / bs); cx.restore();
   }
-  cx.drawImage(actBuf, 0, 0, pw, ph, a.x - ox / bs, a.y - oy / bs, pw / bs, ph / bs);
+  cx.drawImage(out, 0, 0, pw, ph, a.x - ox / bs, a.y - oy / bs, pw / bs, ph / bs);
 }
 
 // Leben am Himmel: Vogelschwärme über dem Garten 1776, Schwebeautos über dem Zukunftsgarten
@@ -542,13 +563,14 @@ function updateBarks() {
   const npcs = NPCS.filter(id => ACT[id].room === viewRoomId() && ACT[id].visible && BARKS[id]);
   if (npcs.length) { const id = pick(npcs); startBark(id, pick(G.settings.party && PARTY_BARKS[id] && Math.random() < 0.6 ? PARTY_BARKS[id] : BARKS[id])); }
 }
-function drawBark() {
+function drawBark(scr) {
   const b = G.bark; if (!b || G.speech) return;
   const room = ROOMS[viewRoomId()], a = b.a; if (a.room !== room.id) return;
   const sc = roomScale(room, a.y) * (a.scaleMul || 1);
   cx.font = '700 17px "Baloo 2", system-ui, sans-serif';
   const lines = wrap(b.text, 300), lh = 19, maxW = Math.max(...lines.map(l => cx.measureText(l).width));
-  const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, a.x)), y = Math.max(lines.length * lh + 4, a.y - a.h * sc - 10);
+  let [ax, ay] = [a.x, a.y - a.h * sc - 10]; if (scr) [ax, ay] = scrPt(ax, ay);
+  const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, ax)), y = Math.max(lines.length * lh + 4, ay);
   cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, (b.until - G.t) / 300, (G.t - b.start) / 200)) * 0.92;
   cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round';
   lines.forEach((l, i) => { const ly = y - (lines.length - 1 - i) * lh; cx.lineWidth = 4; cx.strokeStyle = '#0b0610'; cx.strokeText(l, x, ly); cx.fillStyle = a.color; cx.fillText(l, x, ly); });
@@ -716,6 +738,7 @@ async function goRoom(id, roomId, x, y, dir = 1) {
   if (view) { irisAt(a); await fadeTo(1, 280, 'iris'); }
   a.room = roomId; a.x = x; a.y = y; a.dir = dir; a.target = null; a.walking = false;
   if (PLAYERS.includes(id) && G.state) markVisit(roomId);
+  if (view) G.viewRoomLast = null;
   if (view) {
     G.first = null; G.parts.length = 0; G.ripples.length = 0; music(); irisAt(a); await fadeTo(0, 320, 'iris');
     showSign(roomId);
@@ -925,6 +948,7 @@ function hitScene(x, y) {
   return null;
 }
 function dialogHit(x, y) {
+  if (G.dialog && modernUI()) { const { y0, lh } = dialogLayout(), i = Math.floor((y - y0 + lh * 0.7) / lh); return i >= 0 && i < G.dialog.opts.length && x > 20 && x < W - 20 ? i : -1; }
   if (!G.dialog || y < 470) return -1;
   const i = Math.floor((y - 472) / 24);
   return i >= 0 && i < G.dialog.opts.length && x < 790 ? i : -1;
@@ -968,6 +992,7 @@ function onClick(x, y, right) {
   if (G.inIntro && inRect(x, y, UI.skip)) { skipScene(); return; }
   if (G.speech) { skipSpeech(); return; }
   if (G.dialog) { const i = dialogHit(x, y); if (i >= 0) { const d = G.dialog; G.dialog = null; Sound.sfx('click'); d.res(d.opts[i].id); } return; }
+  if (modernUI()) return modernClick(x, y, right);
   const u = y >= SH ? hitUI(x, y) : null;
   if (u && u.type === 'menu') { openMenu(); return; }
   if (u && u.type === 'hint') { if (!G.busy) showHint(); return; }
@@ -1065,6 +1090,7 @@ window.addEventListener('keydown', e => {
   if (G.screen === 'title') { if (k === 'Escape' && G.menu) G.menu = null; else if (k === ' ' && !G.menu) titleDefault(); return; }
   if (G.screen !== 'game') return;
   if ((k === 'm' || k === 'M') && G.menu === 'map') { G.menu = null; return; }
+  if (k === 'Escape' && G.coin) { G.coin = null; return; }
   if (k === 'Escape') {
     if (G.menu) { G.menu = null; return; }
     if (G.busy && !G.dialog) { skipScene(); return; }
@@ -1077,6 +1103,7 @@ window.addEventListener('keydown', e => {
   if (k === 'h' || k === 'H') return showHint();
   if (k === 'k' || k === 'K') return quickKlo();
   if (k === 'm' || k === 'M') { G.mapFrom = null; return openMap(); }
+  if ((k === 'i' || k === 'I') && modernUI()) { G.invPin = !G.invPin; Sound.sfx('click'); return; }
   const map = { 1: 'bernard', 2: 'hoagie', 3: 'laverne' };
   if (map[k]) return portraitClick(map[k]);
   const v = VERB_KEYS[k.toLowerCase()]; if (v) { G.verb = v; G.first = null; }
@@ -1106,6 +1133,7 @@ function navTargets() {
   if (G.menu) return G.menuBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
   if (G.screen === 'title') return G.titleBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
   if (G.screen === 'end') return G.endBtn ? [[G.endBtn.x + G.endBtn.w / 2, G.endBtn.y + G.endBtn.h / 2]] : [];
+  if (G.screen === 'game' && modernUI()) return navTargetsModern();
   if (G.dialog) return G.dialog.opts.map((o, i) => [60, 484 + i * 24]);
   if (G.screen !== 'game') return [];
   const T = [], room = ROOMS[viewRoomId()];
@@ -1202,6 +1230,7 @@ function menuItems() {
     { id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') },
     { id: 'babble', label: 'Plapperstimmen: ' + (G.settings.babble ? 'an' : 'aus') },
     { id: 'tspeed', label: 'Textgeschwindigkeit: ' + (G.settings.textSpeed || 'normal') },
+    { id: 'ui', label: 'Bedienung: ' + (G.settings.ui === 'classic' ? 'Klassisch (Verben)' : 'Modern (minimal)') },
     { id: 'hotspots', label: 'Hotspot-Hilfe: ' + (G.settings.hotspots ? 'an' : 'aus') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
     fsAvailable && { id: 'fs', label: 'Vollbild: ' + (isFullscreen() ? 'an' : 'aus') },
@@ -1228,6 +1257,7 @@ function menuClick(x, y) {
   else if (b.id === 'voice') toggleVoice();
   else if (b.id === 'babble') { G.settings.babble = !G.settings.babble; saveSettings(); }
   else if (b.id === 'hotspots') { G.settings.hotspots = !G.settings.hotspots; saveSettings(); }
+  else if (b.id === 'ui') { G.settings.ui = G.settings.ui === 'classic' ? 'modern' : 'classic'; G.coin = null; G.viewRoomLast = null; saveSettings(); }
   else if (b.id === 'tspeed') { const o = ['langsam', 'normal', 'schnell']; G.settings.textSpeed = o[(o.indexOf(G.settings.textSpeed || 'normal') + 1) % 3]; saveSettings(); }
   else if (b.id === 'retro') toggleRetro();
   else if (b.id === 'fs') { G.settings.fullscreen = !isFullscreen(); saveSettings(); toggleFullscreen(); }
@@ -1371,7 +1401,7 @@ async function cutscene(fn) {
 // ---------- Rendering ----------
 function drawBg(room) {
   if (cx.isPix) return cx.blitRoom(room);
-  const s = VS * DPR, key = room.id;
+  const s = VS * DPR * SSK, key = room.id;
   let c = bgCache[key];
   if (!c || c._s !== s) {
     c = document.createElement('canvas'); c.width = Math.ceil(W * s); c.height = Math.ceil(SH * s); c._s = s;
@@ -1458,7 +1488,7 @@ function wrap(text, maxW) {
   if (line) lines.push(line);
   return lines;
 }
-function drawSpeech() {
+function drawSpeech(scr) {
   const sp = G.speech; if (!sp) return;
   const room = ROOMS[viewRoomId()];
   cx.font = '800 21px "Baloo 2", system-ui, sans-serif';
@@ -1466,7 +1496,7 @@ function drawSpeech() {
   let x = W / 2, y = 36 + lines.length * lh, col = '#ffffff';
   if (sp.a) {
     col = sp.a.color;
-    if (sp.a.room === room.id && sp.a.visible) { const sc = roomScale(room, sp.a.climbY != null ? sp.a.climbY : sp.a.y) * (sp.a.scaleMul || 1); x = sp.a.x; y = sp.a.y - sp.a.h * sc - 12; }
+    if (sp.a.room === room.id && sp.a.visible) { const sc = roomScale(room, sp.a.climbY != null ? sp.a.climbY : sp.a.y) * (sp.a.scaleMul || 1); x = sp.a.x; y = sp.a.y - sp.a.h * sc - 12; if (scr) [x, y] = scrPt(x, y); }
   }
   const maxW = Math.max(...lines.map(l => cx.measureText(l).width));
   x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, x));
@@ -1501,14 +1531,15 @@ function drawGrade() {
   cx.fillRect(0, 0, W, SH);
   cx.restore();
 }
-function drawReveal(room) {
+function drawReveal(room, scr) {
   if (G.t > G.reveal) return;
   const k = Math.min(1, (G.reveal - G.t) / 400), pulse = 1 + Math.sin(G.t * 0.012) * 0.25;
   cx.save(); cx.globalAlpha = k;
   const spots = [];
   for (const o of room.objs) if (isVisible(o)) spots.push([...hotspotCenter(o), (o.exit ? '» ' : '') + (typeof o.name === 'function' ? o.name() : o.name)]);
   for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) spots.push([a.x, a.y - a.h * roomScale(room, a.y) * 0.55, a.name]);
-  for (const [x, y, n] of spots) {
+  for (let [x, y, n] of spots) {
+    if (scr) { [x, y] = toScreen(x, y); if (x < -20 || x > W + 20) continue; }
     E(cx, x, y, 8 * pulse, 8 * pulse, 'rgba(255,224,102,0.25)', 2.5, 0, '#ffe066'); E(cx, x, y, 3, 3, '#ffe066', 0);
     txt(cx, n, x, y - 14, '800 13px "Baloo 2", sans-serif', '#fff6d0', 'center', 4, '#1b1020');
   }
@@ -1516,6 +1547,7 @@ function drawReveal(room) {
 }
 function drawTransition() {
   if (G.fade <= 0) return;
+  const SH = VH;
   if (G.fadeMode === 'iris') {
     const r = Math.max(0, 1 - G.fade) * Math.hypot(W, SH);
     cx.save(); cx.beginPath(); cx.rect(0, 0, W, SH); cx.arc(G.irisX, G.irisY, r, 0, Math.PI * 2); cx.fillStyle = '#0c0614'; cx.fill('evenodd');
@@ -1591,6 +1623,7 @@ function drawScene() {
   drawLightFx(!cx.isPix);
   drawDisco();
   if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
+  if (G.modernPass) { if (G.fadeMode === 'iris') drawTransition(); cx.restore(); return; }
   drawReveal(room);
   drawConfetti();
   drawHotspotHelp(room);
@@ -1599,12 +1632,7 @@ function drawScene() {
   drawTransition();
   cx.save(); camApply(); drawBark(); drawSpeech(); cx.restore();
   if (G.photoFlash && G.t - G.photoFlash < 260) { cx.fillStyle = `rgba(255,255,255,${(0.7 * (1 - (G.t - G.photoFlash) / 260)).toFixed(3)})`; cx.fillRect(0, 0, W, SH); }
-  if (G.caption) {
-    cx.font = '400 26px "Titan One", sans-serif';
-    const w = cx.measureText(G.caption).width + 40;
-    R(cx, W / 2 - w / 2, SH - 70, w, 46, 'rgba(20,10,32,0.85)', 0, 12);
-    txt(cx, G.caption, W / 2, SH - 38, '400 26px "Titan One", sans-serif', '#ffd23a');
-  }
+  drawCaption(SH - 70);
   drawToasts();
   if (G.inIntro && !G.fast && !G.skipAll) {
     button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
@@ -1721,13 +1749,14 @@ function drawSendFly() {
   const k = (G.t - f.t0 - 450) / 900; if (k < 0) return;
   if (k > 1) {   // Ankunft: Lichtring am Porträt
     const q = (k - 1) / 0.6; if (q > 1) { G.sendFx = null; return; }
-    const p = UI.ports.find(p => p.id === f.to); if (!p) return;
+    const p = portPos(f.to); if (!p) return;
     glow(p.x, p.y, 40 + q * 30, f.col, 0.6 * (1 - q));
     cx.save(); cx.globalAlpha = 1 - q; E(cx, p.x, p.y, p.r + 4 + q * 26, p.r + 4 + q * 26, null, 3, 0, f.col); cx.restore();
     return;
   }
-  const p = UI.ports.find(p => p.id === f.to); if (!p) return;
-  const e = k * k * (3 - 2 * k), x0 = f.x, y0 = f.y - 30, cx1 = (x0 + p.x) / 2, cy1 = Math.min(y0, p.y) - 160;
+  const p = portPos(f.to); if (!p) return;
+  const f0 = modernUI() ? toScreen(f.x, f.y - 30) : [f.x, f.y - 30];
+  const e = k * k * (3 - 2 * k), x0 = f0[0], y0 = f0[1], cx1 = (x0 + p.x) / 2, cy1 = Math.min(y0, p.y) - 160;
   const bx = (1 - e) * (1 - e) * x0 + 2 * (1 - e) * e * cx1 + e * e * p.x, by = (1 - e) * (1 - e) * y0 + 2 * (1 - e) * e * cy1 + e * e * p.y;
   for (let i = 1; i <= 5; i++) {   // Leuchtspur
     const e2 = Math.max(0, e - i * 0.04), tx = (1 - e2) * (1 - e2) * x0 + 2 * (1 - e2) * e2 * cx1 + e2 * e2 * p.x, ty = (1 - e2) * (1 - e2) * y0 + 2 * (1 - e2) * e2 * cy1 + e2 * e2 * p.y;
@@ -1739,6 +1768,7 @@ function drawSendFly() {
 // filmische Kapitelkarte: schwarze Balken fahren ein, Titel in der Mitte
 function drawChapterCard() {
   const c = G.chapterCard; if (!c) return;
+  const SH = VH;
   const k = (G.t - c.t0) / 3200; if (k > 1) { G.chapterCard = null; return; }
   const a = Math.min(1, k * 6, (1 - k) * 5), bar = 52 * a;
   cx.fillStyle = 'rgba(6,2,12,0.92)'; cx.fillRect(0, 0, W, bar); cx.fillRect(0, SH - bar, W, bar);
@@ -1752,11 +1782,11 @@ function drawChapterCard() {
   cx.restore();
 }
 // Hotspot-Hilfe: dezente, pulsierende Punkte an allem, was man benutzen kann (Einstellung)
-function drawHotspotHelp(room) {
+function drawHotspotHelp(room, scr) {
   if (!G.settings.hotspots || G.t < G.reveal || G.busy || G.dialog) return;
-  const pulse = 0.5 + 0.5 * Math.sin(G.t * 0.004);
-  for (const o of room.objs) if (isVisible(o)) { const [x, y] = hotspotCenter(o); cx.globalAlpha = 0.35 + pulse * 0.25; E(cx, x, y, 4, 4, o.exit ? '#7fe8ff' : '#ffe066', 1.5, 0, '#1b1020'); }
-  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) { cx.globalAlpha = 0.35 + pulse * 0.25; E(cx, a.x, a.y - a.h * roomScale(room, a.y) * 0.55, 4, 4, '#ff9ad9', 1.5, 0, '#1b1020'); }
+  const pulse = 0.5 + 0.5 * Math.sin(G.t * 0.004), P2 = (x, y) => scr ? toScreen(x, y) : [x, y];
+  for (const o of room.objs) if (isVisible(o)) { const [x, y] = P2(...hotspotCenter(o)); cx.globalAlpha = 0.35 + pulse * 0.25; E(cx, x, y, 4, 4, o.exit ? '#7fe8ff' : '#ffe066', 1.5, 0, '#1b1020'); }
+  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) { cx.globalAlpha = 0.35 + pulse * 0.25; const [x, y] = P2(a.x, a.y - a.h * roomScale(room, a.y) * 0.55); E(cx, x, y, 4, 4, '#ff9ad9', 1.5, 0, '#1b1020'); }
   cx.globalAlpha = 1;
 }
 function drawFly() {
@@ -1764,13 +1794,15 @@ function drawFly() {
   G.fly = G.fly.filter(f => G.t - f.t0 < 700);
   for (const f of G.fly) {
     const idx = inv().indexOf(f.id); if (idx < 0) continue;
-    const s = UI.inv[idx], to = [s.x + s.w / 2, s.y + s.h / 2], k = Math.min(1, (G.t - f.t0) / 700), e = 1 - Math.pow(1 - k, 3);
-    const x = f.from[0] + (to[0] - f.from[0]) * e, y = f.from[1] + (to[1] - f.from[1]) * e - Math.sin(k * Math.PI) * 110;
+    const to = flyTarget(idx), from = modernUI() ? toScreen(...f.from) : f.from, k = Math.min(1, (G.t - f.t0) / 700), e = 1 - Math.pow(1 - k, 3);
+    const x = from[0] + (to[0] - from[0]) * e, y = from[1] + (to[1] - from[1]) * e - Math.sin(k * Math.PI) * 110;
     cx.save(); cx.translate(x, y); cx.scale(1.6 - 0.6 * e, 1.6 - 0.6 * e); cx.rotate(Math.sin(k * Math.PI * 2) * 0.3); ICON[f.id](cx); cx.restore();
   }
 }
 const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
 const HELP = [
+  'Modern (HD): Linksklick = hingehen oder passende Aktion · Rechtsklick = Aktionsmenü',
+  'Inventar: Maus an den unteren Rand oder I · Gegenstand anklicken, dann Ziel oder Gesicht',
   'Maus: Verb anklicken, dann Gegenstand oder Person', 'Rechtsklick: Standard-Aktion · ohne Verb: hinlaufen',
   'Doppelklick/-tipp: rennen · Ausgänge sofort benutzen', 'Touch: tippen · lange drücken = Standard-Aktion',
   'Controller: Stick = Zeiger · Steuerkreuz = von Ziel zu Ziel', 'A Aktion · X Standard · B Zurück · Y Tipp · RS Pixel-Grafik',
@@ -1851,7 +1883,8 @@ function drawMenu() {
 function drawCursor() {
   if (G.pointer === 'touch' || G.mouse.x < 0) return;
   const { x, y } = G.mouse, pad = G.pointer === 'pad';
-  const hot = G.screen === 'game' ? (G.hover || (y >= SH && hitUI(x, y))) : G.titleBtns.some(b => inRect(x, y, b));
+  const inSc = G.screen === 'game' && (modernUI() ? G.inScene : y < SH);
+  const hot = G.screen === 'game' ? (G.hover || (modernUI() ? (G.coin ? G.coin.items.some(b => inRect(x, y, b)) : hitHUD(x, y)) : y >= SH && hitUI(x, y))) : G.titleBtns.some(b => inRect(x, y, b));
   const col = G.busy && G.screen === 'game' && !G.dialog && !G.menu ? '#8a7aa8' : hot ? '#ffe066' : '#ffffff';
   const s = pad ? 1.4 : 1;
   cx.lineCap = 'round';
@@ -1861,8 +1894,9 @@ function drawCursor() {
     cx.moveTo(x, y - 12 * s); cx.lineTo(x, y - 4 * s); cx.moveTo(x, y + 4 * s); cx.lineTo(x, y + 12 * s); cx.stroke();
     if (pad) { cx.beginPath(); cx.arc(x, y, 15, 0, Math.PI * 2); cx.stroke(); }
   }
-  if (pad && G.screen === 'game' && G.hover && y < SH && !G.busy) txt(cx, nameOf(G.hover), x, y - 24, '800 15px "Baloo 2", sans-serif', '#ffe066', 'center', 4, '#0b0610');
-  if (G.screen === 'game' && G.hover && y < SH && !G.busy && !G.verb && !G.first && !G.dialog && !G.menu) { const v = defaultVerb(G.hover); if (v) verbBadge(x, y, v); }
+  if (modernUI() && G.screen === 'game' && !G.menu && !G.busy && !G.dialog) { drawTip(x, y, inSc); return; }
+  if (pad && G.screen === 'game' && G.hover && inSc && !G.busy) txt(cx, nameOf(G.hover), x, y - 24, '800 15px "Baloo 2", sans-serif', '#ffe066', 'center', 4, '#0b0610');
+  if (G.screen === 'game' && G.hover && inSc && !G.busy && !G.verb && !G.first && !G.dialog && !G.menu) { const v = defaultVerb(G.hover); if (v) verbBadge(x, y, v); }
 }
 
 // ---------- Titel & Ende ----------
@@ -2556,8 +2590,10 @@ function bioFigure(id, known, x, y, hgt) {
     c = bioCache[key] = document.createElement('canvas'); c.width = Math.ceil(bw * k); c.height = Math.ceil(bh * k);
     const g = c.getContext('2d'), keep = cx;
     g.setTransform(k * sc, 0, 0, k * sc, bw / 2 * k, (bh - 4) * k);
-    cx = g;
-    try { CHAR[base.kind](g, a, 0); } catch (e) { /* Figur fehlt – leere Karte */ } finally { cx = keep; }
+    cx = g; HDS.ink = true;
+    try { CHAR[base.kind](g, a, 0); } catch (e) { /* Figur fehlt – leere Karte */ } finally { cx = keep; HDS.ink = false; }
+    const ink = inkify(c, c.width, c.height, Math.max(1.2, 2.3 * k * sc));
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.drawImage(ink, 0, 0, c.width, c.height, 0, 0, c.width, c.height);
     if (!known) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#0d0718'; g.fillRect(0, 0, c.width, c.height); }
   }
   cx.drawImage(c, x - bw / 2, y - bh + 4, bw, bh);
@@ -2640,6 +2676,271 @@ function partyHat(a, sc) {
   hatAt(a.x + (hx + ln * top * 0.55) * sc * d * (a._turn || 1), a.y + (-top + bobY(a, G.t) + cl + nod(a, G.t)) * sc, sc, d, PLAYERS.indexOf(a.id) + 1 + (a.seed || 0));
 }
 
+// ---------- Moderne, minimale Bedienung (HD) ----------
+// Die Szene füllt den ganzen Bildschirm (Kamera fährt mit), statt Verbleiste gibt es Linksklick = passende
+// Aktion, Rechtsklick = Aktionsmenü, eine einblendbare Inventarleiste und kleine Symbol-Knöpfe.
+const MK = H / SH, VW = W / MK;
+const sceneCv = document.createElement('canvas'), sceneCx = sceneCv.getContext('2d');
+function modernUI() { return !G.settings.retro && G.settings.ui !== 'classic'; }
+function toScreen(x, y) { return [(x - G.view.x) * MK, y * MK]; }
+function toScene(x, y) { return [G.view.x + x / MK, y / MK]; }
+function scrPt(x, y) { const c = G.cam; if (c.z > 1.001) { x = c.x + (x - c.x) * c.z; y = c.y + (y - c.y) * c.z; } return toScreen(x, y); }
+function camTarget() {
+  const room = viewRoomId(), p = me(), sp = G.speech && G.speech.a;
+  let fx = W / 2;
+  if (p.room === room && p.visible) {
+    fx = p.x + (p.walking ? (p.dir || 1) * 70 : 0);
+    if (sp && sp !== p && sp.room === room && sp.visible) fx = (p.x + sp.x) / 2;   // im Gespräch beide ins Bild
+  } else if (sp && sp.room === room) fx = sp.x;
+  return Math.max(0, Math.min(W - VW, fx - VW / 2));
+}
+function updateView(dt) {
+  if (!G.state || G.screen !== 'game') return;
+  const t = camTarget(), r = viewRoomId();
+  if (G.viewRoomLast !== r) { G.view.x = t; G.viewRoomLast = r; return; }
+  G.view.x += (t - G.view.x) * Math.min(1, dt * 0.0032);
+}
+function drawSceneModern() {
+  const s = VS * DPR * MK, w = Math.ceil(W * s), h = Math.ceil(SH * s);
+  if (sceneCv.width !== w || sceneCv.height !== h) { sceneCv.width = w; sceneCv.height = h; }
+  const keep = cx; cx = sceneCx; SSK = MK; G.modernPass = true;
+  try { cx.setTransform(s, 0, 0, s, 0, 0); cx.clearRect(0, 0, W, SH); drawScene(); }
+  finally { cx = keep; SSK = 1; G.modernPass = false; }
+  const k = VS * DPR; cx.setTransform(k, 0, 0, k, 0, 0);
+  cx.drawImage(sceneCv, G.view.x * s, 0, VW * s, SH * s, 0, 0, W, H);
+  drawSceneOverlays();
+}
+function drawCaption(y) {
+  if (!G.caption) return;
+  cx.font = '400 26px "Titan One", sans-serif';
+  const w = cx.measureText(G.caption).width + 40;
+  R(cx, W / 2 - w / 2, y, w, 46, 'rgba(20,10,32,0.85)', 0, 12);
+  txt(cx, G.caption, W / 2, y + 32, '400 26px "Titan One", sans-serif', '#ffd23a');
+}
+function drawSceneOverlays() {
+  const room = ROOMS[viewRoomId()];
+  VH = H;
+  try {
+    drawReveal(room, true); drawConfetti(); drawHotspotHelp(room, true);
+    drawChapterCard(); drawSign();
+    if (G.fadeMode !== 'iris') drawTransition();
+    drawBark(true); drawSpeech(true);
+    if (G.photoFlash && G.t - G.photoFlash < 260) { cx.fillStyle = `rgba(255,255,255,${(0.7 * (1 - (G.t - G.photoFlash) / 260)).toFixed(3)})`; cx.fillRect(0, 0, W, H); }
+    drawCaption(H - 128);
+    drawToasts();
+    if (G.inIntro && !G.fast && !G.skipAll) {
+      button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
+      txt(cx, 'Klick: nächste Zeile', UI.skip.x + UI.skip.w / 2, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+    }
+    if (fsAvailable) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
+  } finally { VH = SH; }
+}
+
+// Leiste: Symbol-Knöpfe oben rechts, Tasche unten links, Gesichter unten rechts, Inventar blendet sich ein
+const HUD = {
+  bag: { x: 12, y: H - 60, w: 52, h: 50 },
+  ports: PLAYERS.map((id, i) => ({ id, x: W - 122 + i * 45, y: H - 33, r: 19 })),
+  btns: [['klo', 'Klo-Post (K)'], ['reveal', 'Zeigen (Tab)'], ['hint', 'Tipp (H)'], ['menu', 'Menü (Esc)']].map(([id, tip], i) => ({ id, tip, x: W - 232 + i * 46, y: 8, w: 40, h: 32 })),
+};
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+function hudShelf() { return { x: 74, y: H - 68 + (1 - easeOut(G.hudK)) * 86, w: W - 74 - 152, h: 60 }; }
+function hudSlots() { const s = hudShelf(); return Array.from({ length: 12 }, (_, i) => ({ i, x: s.x + 8 + i * 60, y: s.y + 4, w: 56, h: 52 })); }
+function portPos(id) { return modernUI() ? HUD.ports.find(p => p.id === id) : UI.ports.find(p => p.id === id); }
+function flyTarget(idx) {
+  if (!modernUI()) { const s = UI.inv[idx]; return [s.x + s.w / 2, s.y + s.h / 2]; }
+  if (G.hudK > 0.5) { const s = hudSlots()[idx]; return [s.x + s.w / 2, s.y + s.h / 2]; }
+  return [HUD.bag.x + HUD.bag.w / 2, HUD.bag.y + HUD.bag.h / 2];
+}
+function updateHud(dt) {
+  if (G.screen !== 'game') { G.hudK = 0; return; }
+  const m = G.mouse, ptr = G.pointer !== 'touch' && m.x >= 0;
+  const over = ptr && (m.y > H - 12 || inRect(m.x, m.y, HUD.bag, 6) || (G.hudK > 0.3 && inRect(m.x, m.y, hudShelf(), 16)));
+  const want = !G.inIntro && !G.menu && !G.dialog && !(G.busy && G.t > (G.hudPeek || 0)) && (over || G.invPin || G.t < (G.hudPeek || 0));
+  G.hudK += ((want ? 1 : 0) - G.hudK) * Math.min(1, dt * 0.012);
+}
+function hitHUD(x, y) {
+  if (G.screen !== 'game' || G.inIntro) return null;
+  for (const b of HUD.btns) if (inRect(x, y, b)) return { type: b.id };
+  if (inRect(x, y, HUD.bag)) return { type: 'bag' };
+  for (const p of HUD.ports) if (Math.hypot(x - p.x, y - p.y) <= p.r + 5) return { type: 'port', id: p.id };
+  if (G.hudK > 0.6) { for (const s of hudSlots()) if (inRect(x, y, s)) return { type: 'inv', idx: s.i }; if (inRect(x, y, hudShelf())) return { type: 'shelf' }; }
+  return null;
+}
+function hudIcon(b, hot) {
+  R(cx, b.x, b.y, b.w, b.h, hot ? 'rgba(58,39,88,0.92)' : 'rgba(18,10,30,0.5)', 1.5, 10, hot ? '#ffe066' : 'rgba(170,140,230,0.55)');
+  const x = b.x + b.w / 2, y = b.y + b.h / 2, col = hot ? '#ffe066' : '#e6dcff';
+  if (b.id === 'menu') for (const d of [-6, 0, 6]) L(cx, [x - 9, y + d, x + 9, y + d], 2.4, col);
+  else if (b.id === 'hint') txt(cx, '?', x, y + 8, '400 22px "Titan One", sans-serif', col);
+  else if (b.id === 'reveal') { E(cx, x, y, 11, 6.5, null, 2.2, 0, col); E(cx, x, y, 3.5, 3.5, col, 0); }
+  else if (b.id === 'klo') { R(cx, x - 8, y - 10, 9, 9, null, 2, 2, col); S(cx, null, 2.2, () => { cx.moveTo(x - 10, y + 1); cx.lineTo(x + 10, y + 1); cx.quadraticCurveTo(x + 8, y + 9, x, y + 10); cx.quadraticCurveTo(x - 8, y + 9, x - 10, y + 1); }, col); }
+}
+function drawHUD() {
+  if (G.inIntro) return;
+  const mx = G.mouse.x, my = G.mouse.y, dim = G.busy && !G.dialog;
+  cx.save(); if (dim) cx.globalAlpha = 0.4;
+  // Symbol-Knöpfe oben rechts (mit Hinweis beim Darüberfahren)
+  for (const b of HUD.btns) {
+    const hot = !dim && inRect(mx, my, b);
+    hudIcon(b, hot || (b.id === 'reveal' && G.t < G.reveal) || (b.id === 'klo' && G.verb === 'give' && !G.first));
+    if (hot) txt(cx, b.tip, b.x + b.w / 2, b.y + b.h + 16, '700 12px "Baloo 2", sans-serif', '#fff6d0', 'center', 4, '#0b0610');
+  }
+  // Tasche unten links mit Anzahl
+  const bg = HUD.bag, bh = inRect(mx, my, bg) || G.invPin, n = inv().length;
+  if (!cx.isPix) glow(bg.x + bg.w / 2, bg.y + bg.h / 2, 46, '#000000', 0);
+  R(cx, bg.x, bg.y, bg.w, bg.h, bh ? 'rgba(58,39,88,0.92)' : 'rgba(18,10,30,0.55)', 1.5, 14, bh ? '#ffe066' : 'rgba(170,140,230,0.55)');
+  const bx = bg.x + bg.w / 2, by = bg.y + bg.h / 2 + 3;
+  R(cx, bx - 14, by - 9, 28, 20, '#a8743a', 2, 6, '#3a2010'); S(cx, '#c08848', 2, () => { cx.moveTo(bx - 14, by - 7); cx.quadraticCurveTo(bx, by + 6, bx + 14, by - 7); cx.lineTo(bx + 14, by - 9); cx.quadraticCurveTo(bx, by - 15, bx - 14, by - 9); cx.closePath(); }, '#3a2010');
+  S(cx, null, 2.4, () => { cx.moveTo(bx - 8, by - 10); cx.quadraticCurveTo(bx, by - 22, bx + 8, by - 10); }, '#3a2010'); E(cx, bx, by - 1, 2.6, 2.6, '#ffd23a', 1.2, 0, '#3a2010');
+  if (n) { E(cx, bg.x + bg.w - 6, bg.y + 6, 9, 9, '#ff5fa8', 2, 0, '#1b1020'); txt(cx, String(n), bg.x + bg.w - 6, bg.y + 10.5, '800 12px "Baloo 2", sans-serif', '#ffffff'); }
+  // Gesichter unten rechts: Figur wechseln, Gegenstand hierher = Klo-Post
+  for (const p of HUD.ports) {
+    const isCur = p.id === curId(), fla = G.flash[p.id] && G.t - G.flash[p.id] < 2000, hot = !dim && Math.hypot(mx - p.x, my - p.y) <= p.r + 5;
+    if ((isCur || hot) && !cx.isPix) glow(p.x, p.y, 34, isCur ? '#ffe066' : '#c8b0ff', 0.35);
+    drawPortrait(cx, p.id, p.x, p.y, p.r, ERA[HOME_ERA[p.id]].bg, G.t, !!(G.speech && G.speech.a && G.speech.a.id === p.id));
+    E(cx, p.x, p.y, p.r, p.r, null, isCur || fla || hot ? 3 : 2, 0, fla && Math.floor(G.t / 200) % 2 ? '#7dff7a' : isCur ? '#ffe066' : hot ? '#ffffff' : mix(ERA[HOME_ERA[p.id]].col, '#241739', 0.3));
+    if (hot) txt(cx, G.first && G.first[0] === 'i' ? `An ${ACT[p.id].name} schicken` : `${ACT[p.id].name} · ${ERA[HOME_ERA[p.id]].label}`, Math.min(W - 70, p.x), p.y - 30, '800 13px "Baloo 2", sans-serif', '#fff6d0', 'center', 4, '#0b0610');
+  }
+  // Inventarleiste
+  if (G.hudK > 0.02) {
+    const sh = hudShelf(), items = inv();
+    cx.save(); cx.globalAlpha *= Math.min(1, G.hudK * 1.6);
+    R(cx, sh.x, sh.y, sh.w, sh.h, 'rgba(14,7,26,0.82)', 1.5, 16, 'rgba(170,140,230,0.45)');
+    if (!cx.isPix) L(cx, [sh.x + 16, sh.y + 2, sh.x + sh.w - 16, sh.y + 2], 1.5, 'rgba(255,255,255,0.12)');
+    for (const s of hudSlots()) {
+      const id = items[s.i], hot = id && inRect(mx, my, s), sel = id && G.first === 'i:' + id;
+      if (hot || sel) R(cx, s.x, s.y, s.w, s.h, sel ? 'rgba(255,224,102,0.16)' : 'rgba(200,180,255,0.12)', 1.5, 12, sel ? '#ffe066' : 'rgba(200,180,255,0.5)');
+      else E(cx, s.x + s.w / 2, s.y + s.h / 2 + 18, 16, 3, 'rgba(0,0,0,0.25)', 0);
+      if (id && !G.fly.some(f => f.id === id) && !(G.sendFx && G.sendFx.item === id && G.sendFx.to === curId() && G.t - G.sendFx.t0 < 1350)) {
+        const lift = hot ? 4 : sel ? 2 + Math.sin(G.t * 0.006) * 2 : 0;
+        if ((hot || sel) && !cx.isPix) glow(s.x + s.w / 2, s.y + s.h / 2, 30, sel ? '#ffe066' : '#c8b0ff', 0.3);
+        cx.save(); cx.translate(s.x + s.w / 2, s.y + s.h / 2 - lift); cx.scale(0.92, 0.92); ICON[id](cx); cx.restore();
+      }
+    }
+    if (!items.length) txt(cx, 'Noch nichts dabei', sh.x + sh.w / 2, sh.y + 36, '700 15px "Baloo 2", sans-serif', '#8a7aa8');
+    cx.restore();
+  }
+  cx.restore();
+  // Gesprächsauswahl als Overlay unten
+  if (G.dialog) {
+    const { y0, lh } = dialogLayout(), hi = dialogHit(mx, my);
+    cx.fillStyle = grad(cx, 0, y0 - 46, 0, H, [[0, 'rgba(8,3,16,0)'], [0.35, 'rgba(8,3,16,0.78)'], [1, 'rgba(8,3,16,0.92)']]); cx.fillRect(0, y0 - 46, W, H - y0 + 46);
+    G.dialog.opts.forEach((o, i) => {
+      const yy = y0 + i * lh, on = i === hi;
+      if (on) R(cx, 24, yy - lh * 0.72, W - 48, lh - 2, 'rgba(255,224,102,0.1)', 0, 10);
+      txt(cx, (on ? '›  ' : '·  ') + o.text, 44, yy, '700 20px "Baloo 2", sans-serif', on ? '#ffe066' : '#d7c6ff', 'left', 4, '#0b0610');
+    });
+  }
+  if (G.coin) drawCoin();
+}
+function dialogLayout() { const n = G.dialog ? G.dialog.opts.length : 0, lh = 32; return { y0: H - 20 - (n - 1) * lh, lh }; }
+
+// Aktionsmenü (Rechtsklick / langes Tippen): nur die Aktionen, die bei diesem Ding etwas bewirken können
+function verbsFor(key) {
+  const [k, id] = key.split(':');
+  if (k === 'i') return ['look', 'use'];
+  const out = [];
+  if (k === 'o' && OBJ[id].exit) out.push('walk');
+  out.push('look');
+  const dv = defaultVerb(key); if (dv && !out.includes(dv)) out.push(dv);
+  if (k === 'a' && ACT[id].talk && !out.includes('talk')) out.push('talk');
+  for (const [v] of VERBS) if (!out.includes(v) && RULES[`${v} ${key}`]) out.push(v);
+  if (k === 'o' && OBJ[id].txt) for (const v of Object.keys(OBJ[id].txt)) if (VERB_LABEL[v] && !out.includes(v)) out.push(v);
+  if (k === 'o' && OBJ[id].klo && !out.includes('use')) out.push('use');
+  return out.slice(0, 6);
+}
+function openCoin(x, y, key) {
+  const vs = verbsFor(key); if (!vs.length) return;
+  cx.font = '800 15px "Baloo 2", sans-serif';
+  const n = vs.length, rad = n <= 2 ? 44 : 64;
+  const ccx = Math.max(110, Math.min(W - 110, x)), ccy = Math.max(90, Math.min(H - 70, y));
+  const items = vs.map((v, i) => {
+    const a = -Math.PI / 2 + (i / n) * Math.PI * 2, label = VERB_LABEL[v], w = cx.measureText(label).width + 26, h = 30;
+    return { v, label, x: ccx + Math.cos(a) * rad * 1.25 - w / 2, y: ccy + Math.sin(a) * rad - h / 2, w, h };
+  });
+  G.coin = { x: ccx, y: ccy, key, items, t0: G.t };
+  Sound.sfx('menu');
+}
+function drawCoin() {
+  const c = G.coin, k = easeOut(Math.min(1, (G.t - c.t0) / 160)), mx = G.mouse.x, my = G.mouse.y;
+  cx.save(); cx.globalAlpha = k;
+  if (!cx.isPix) glow(c.x, c.y, 120, '#000000', 0);
+  E(cx, c.x, c.y, 9, 9, 'rgba(14,7,26,0.86)', 2, 0, '#ffe066');
+  const n = c.items.length, ny = c.y + (n === 1 ? 34 : n === 2 ? 76 : n === 3 ? 62 : 92);
+  txt(cx, nameOf(c.key), c.x, ny, '800 15px "Baloo 2", sans-serif', '#ffe066', 'center', 4, '#0b0610');
+  for (const b of c.items) {
+    const hot = inRect(mx, my, b), bx = c.x + (b.x - c.x) * k, by = c.y + (b.y - c.y) * k;
+    L(cx, [c.x, c.y, bx + b.w / 2, by + b.h / 2], 1.5, 'rgba(255,224,102,0.35)');
+    R(cx, bx, by, b.w, b.h, hot ? '#ffe066' : 'rgba(30,18,50,0.94)', 2, 15, hot ? '#fff6d0' : 'rgba(255,224,102,0.7)');
+    txt(cx, b.label, bx + b.w / 2, by + 20, '800 15px "Baloo 2", sans-serif', hot ? '#2a0a3a' : '#fff6d0');
+  }
+  cx.restore();
+}
+function coinPick(v, key) {
+  if (key[0] === 'i') { const it = key.slice(2); if (v === 'use' && !ITEMS[it].alone) { G.verb = 'use'; G.first = key; return; } return runSentence(v, key); }
+  runSentence(v, key);
+}
+function modernItemClick(it) {
+  const k = 'i:' + it;
+  if (G.first === k) { if (ITEMS[it].alone) { G.first = null; G.verb = null; return runSentence('use', k); } G.first = null; G.verb = null; return; }
+  if (G.first) { const v = G.verb || 'use', a = G.first; G.first = null; G.verb = null; return runSentence(v, a, k); }
+  if (G.verb && G.verb !== 'use' && G.verb !== 'give') { const v = G.verb; G.verb = null; return runSentence(v, k); }
+  G.verb = G.verb || 'use'; G.first = k; Sound.sfx('click');
+}
+function modernClick(x, y, right) {
+  if (G.coin) { const b = G.coin.items.find(b => inRect(x, y, b)), key = G.coin.key; G.coin = null; if (b) { Sound.sfx('click'); coinPick(b.v, key); } return; }
+  const u = hitHUD(x, y);
+  if (u) {
+    if (u.type === 'menu') return openMenu();
+    if (u.type === 'hint') { if (!G.busy) showHint(); return; }
+    if (u.type === 'reveal') return toggleReveal();
+    if (u.type === 'klo') return quickKlo();
+    if (u.type === 'bag') { G.invPin = !G.invPin; Sound.sfx('click'); return; }
+    if (G.busy) return;
+    if (u.type === 'inv') { const it = inv()[u.idx]; if (!it) return; if (right) { G.first = null; G.verb = null; return openCoin(x, y, 'i:' + it); } return modernItemClick(it); }
+    if (u.type === 'port') return portraitClick(u.id);
+    return;
+  }
+  if (G.busy) return;
+  const [sx, sy] = toScene(x, y), h = hitScene(sx, sy);
+  if (right) {
+    if (G.first || G.verb) { G.first = null; G.verb = null; Sound.sfx('click'); return; }
+    if (h) openCoin(x, y, h);
+    return;
+  }
+  const lc = G.lastClick, dbl = lc && G.t - lc.t < 380 && Math.hypot(sx - lc.x, sy - lc.y) < 30;
+  G.lastClick = dbl ? null : { x: sx, y: sy, t: G.t };
+  G.ripples.push({ x: sx, y: sy, t: G.t });
+  if (!h) { G.first = null; G.verb = null; ++actToken; walkTo(me(), sx, sy); }
+  else if (G.first) { const v = G.verb || 'use', a = G.first; G.first = null; G.verb = null; runSentence(v, a, h); }
+  else { const v = G.verb || defaultVerb(h) || 'walk'; G.verb = null; runSentence(v, h); }
+  if (dbl) quickArrive(sx, sy);
+}
+// Beschriftung am Zeiger: Ding unter dem Zeiger bzw. ganzer Satz, getragener Gegenstand hängt am Zeiger
+function drawTip(x, y, inSc) {
+  if (G.pointer === 'touch' || x < 0) return;
+  if (G.first && G.first[0] === 'i') { cx.save(); cx.globalAlpha = 0.9; cx.translate(x + 22, y + 22); cx.scale(0.62, 0.62); ICON[G.first.slice(2)](cx); cx.restore(); }
+  let label = null;
+  if (G.first || G.verb) label = sentence();
+  else if (G.hover && (inSc || G.hover[0] === 'i')) label = nameOf(G.hover);
+  if (G.hover && inSc && !G.verb && !G.first) { const v = defaultVerb(G.hover); if (v) verbBadge(x, y, v); }
+  if (!label) return;
+  cx.font = '800 15px "Baloo 2", sans-serif';
+  const w = cx.measureText(label).width, tx = Math.max(w / 2 + 8, Math.min(W - w / 2 - 8, x)), ty = Math.max(24, y - 22);
+  txt(cx, label, tx, ty, '800 15px "Baloo 2", sans-serif', G.first ? '#ffffff' : '#ffe066', 'center', 4, '#0b0610');
+}
+function navTargetsModern() {
+  if (G.coin) return G.coin.items.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
+  if (G.dialog) { const { y0, lh } = dialogLayout(); return G.dialog.opts.map((o, i) => [80, y0 + i * lh - 6]); }
+  const T = [], room = ROOMS[viewRoomId()], add = (x, y) => { const [sx, sy] = toScreen(x, y); if (sx > 4 && sx < W - 4 && sy < H - 70) T.push([sx, sy]); };
+  for (const o of room.objs) if (isVisible(o)) add(...hotspotCenter(o));
+  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) add(a.x, a.y - a.h * roomScale(room, a.y) * 0.55);
+  for (const b of HUD.btns) T.push([b.x + b.w / 2, b.y + b.h / 2]);
+  T.push([HUD.bag.x + HUD.bag.w / 2, HUD.bag.y + HUD.bag.h / 2]);
+  for (const p of HUD.ports) T.push([p.x, p.y]);
+  if (G.hudK > 0.6) inv().forEach((id, i) => { const s = hudSlots()[i]; T.push([s.x + s.w / 2, s.y + s.h / 2]); });
+  return T;
+}
+
 // ---------- Hauptschleife ----------
 function update(dt) {
   pollPad(dt);
@@ -2663,12 +2964,22 @@ function update(dt) {
   }
   if (G.screen === 'game' && G.state && !G.menu) G.state.stats.ms += dt;
   G.hover = null;
+  if (modernUI()) { updateView(dt); updateHud(dt); }
+  if (G.mouse.x < 0) { G.ms.x = -99; G.ms.y = -99; } else if (modernUI() && G.screen === 'game') [G.ms.x, G.ms.y] = toScene(G.mouse.x, G.mouse.y); else { G.ms.x = G.mouse.x; G.ms.y = G.mouse.y; }
+  if (G.coin && (G.busy || G.menu || G.dialog || G.screen !== 'game')) G.coin = null;
   if (G.screen === 'game' && G.pointer === 'mouse' && !G.busy) {
-    const u = G.mouse.y >= SH ? hitUI(G.mouse.x, G.mouse.y) : null, key = u && u.type === 'verb' ? u.id : u && u.type === 'inv' && inv()[u.idx] ? 'inv' + u.idx : null;
+    const u = modernUI() ? hitHUD(G.mouse.x, G.mouse.y) : G.mouse.y >= SH ? hitUI(G.mouse.x, G.mouse.y) : null, key = u && u.type === 'verb' ? u.id : u && u.type === 'inv' && inv()[u.idx] ? 'inv' + u.idx : null;
     if (key && key !== G.lastVerbHover) Sound.sfx('hover');
     G.lastVerbHover = key;
   }
-  if (G.screen === 'game' && !G.dialog && !G.menu && G.state) {
+  G.inScene = false;
+  if (G.screen === 'game' && !G.dialog && !G.menu && G.state && modernUI()) {
+    const { x, y } = G.mouse, u = hitHUD(x, y);
+    G.inScene = !u && !G.coin && x >= 0;
+    if (u && u.type === 'inv') { const id = inv()[u.idx]; if (id) G.hover = 'i:' + id; }
+    else if (u && u.type === 'port' && G.first) G.hover = 'p:' + u.id;
+    else if (G.inScene) G.hover = hitScene(...toScene(x, y));
+  } else if (G.screen === 'game' && !G.dialog && !G.menu && G.state) {
     const { x, y } = G.mouse;
     if (y < SH) G.hover = hitScene(x, y);
     else {
@@ -2683,7 +2994,7 @@ function drawScreen() {
   else if (G.screen === 'end') { drawEnd(); if (!cx.isPix) drawBloom(0.22, H); }
   else if (G.screen === 'toaster') { drawToaster(); if (!cx.isPix) drawBloom(0.2, H); }
   else if (G.screen === 'rock') { drawRock(); if (!cx.isPix) drawBloom(0.25, H); }
-  else if (G.screen === 'game') { drawScene(); drawUI(); drawFly(); if (G.menu) drawMenu(); }
+  else if (G.screen === 'game') { if (modernUI()) { drawSceneModern(); drawHUD(); } else { drawScene(); drawUI(); } drawFly(); if (G.menu) drawMenu(); }
   else {   // Ladebildschirm: hüpfender Toast mit Tentakel-Schatten
     cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#0c0420'], [1, '#2a0f4a']]); cx.fillRect(0, 0, W, H);
     const t = G.t, y = H / 2 - 20 - Math.abs(Math.sin(t * 0.006)) * 26, sq = 1 + Math.max(0, Math.cos(t * 0.012)) * 0.06;

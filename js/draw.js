@@ -24,7 +24,9 @@ function pth(c, p) { c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.
 // Für Raum-Grafik (HDS.deco) zusätzlich: leicht handgezeichnete Kanten, Fasen, Holzmaserung
 // und – beim einmaligen Zeichnen der Hintergründe (HDS.shadow) – weiche Schlagschatten.
 // Der Pixel-Modus (c.isPix) schattiert selbst und bleibt unberührt.
-const HDS = { on: true, deco: false, shadow: false, scale: 2 };
+// HDS.ink: Figuren im HD-Modus – feine farbige Innenlinien, Cartoon-Schattierung, runde Ecken;
+// die kräftige Außenkontur entsteht danach aus der Silhouette der ganzen Figur (engine.js, inkify)
+const HDS = { on: true, deco: false, shadow: false, scale: 2, ink: false };
 const shadeMemo = new Map();
 function shadeOf(col) {
   let s = shadeMemo.get(col);
@@ -50,8 +52,22 @@ function shadeFill(c, fill, box) {
   }
   return fill;
 }
+function toonFill(c, fill, box) {
+  if (!box || (box[3] - box[1] <= 5 && box[2] - box[0] <= 5)) return fill;
+  const s = shadeOf(fill), g = c.createLinearGradient(box[0], box[1], box[0] + (box[2] - box[0]) * 0.38, box[3]);
+  g.addColorStop(0, s[0]); g.addColorStop(0.32, s[1]); g.addColorStop(0.66, s[1]); g.addColorStop(0.69, mix(s[1], s[2], 0.8)); g.addColorStop(1, s[2]);
+  return g;
+}
 function fs(c, fill, lw, stroke, box) {
   const hd = HDS.on && !c.isPix && isHex(fill);
+  if (HDS.ink && !c.isPix) {   // Figur: weiche Innenlinie in abgedunkelter Flächenfarbe
+    if (fill) { c.fillStyle = hd ? toonFill(c, fill, box) : fill; c.fill(); }
+    if (lw) {
+      c.lineWidth = stroke ? lw * 0.8 : Math.max(0.8, lw * 0.4); c.strokeStyle = stroke || (hd ? shadeOf(fill)[3] : 'rgba(27,16,32,0.6)');
+      c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke();
+    }
+    return;
+  }
   if (fill) { c.fillStyle = hd ? shadeFill(c, fill, box) : fill; c.fill(); }
   if (lw) {
     c.lineWidth = hd && !stroke ? lw * 0.82 : lw;
@@ -132,9 +148,32 @@ function fsDeco(c, path, fill, lw, stroke, box) {
     c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(path);
   }
 }
+// Polygon als organische Cartoon-Form (Figuren): Kanten leicht nach außen gewölbt, Ecken weich gerundet,
+// spitze Ecken (Haarspitzen, Kragen) bleiben spitz – nimmt den Formen den Lineal-Look
+function roundPoly(c, pts) {
+  const n = pts.length / 2, V = i => [pts[((i % n) + n) % n * 2], pts[((i % n) + n) % n * 2 + 1]];
+  let cx0 = 0, cy0 = 0; for (let i = 0; i < n; i++) { cx0 += pts[i * 2]; cy0 += pts[i * 2 + 1]; } cx0 /= n; cy0 /= n;
+  const A = [], B = [];
+  for (let i = 0; i < n; i++) {
+    const [px, py] = V(i - 1), [x, y] = V(i), [nx, ny] = V(i + 1), l1 = Math.hypot(x - px, y - py) || 1, l2 = Math.hypot(nx - x, ny - y) || 1;
+    const cosA = ((px - x) * (nx - x) + (py - y) * (ny - y)) / (l1 * l2), r = Math.min(4.5, l1 / 3, l2 / 3) * Math.max(0.12, Math.min(1, (1 - cosA) / 1.3));
+    A.push([x + (px - x) / l1 * r, y + (py - y) / l1 * r]); B.push([x + (nx - x) / l2 * r, y + (ny - y) / l2 * r]);
+  }
+  c.beginPath(); c.moveTo(B[0][0], B[0][1]);
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, [sx, sy] = B[i], [ex, ey] = A[j], len = Math.hypot(ex - sx, ey - sy) || 1;
+    let nx = (ey - sy) / len, ny = -(ex - sx) / len; const mx = (sx + ex) / 2, my = (sy + ey) / 2;
+    if ((mx - cx0) * nx + (my - cy0) * ny < 0) { nx = -nx; ny = -ny; }
+    const bow = Math.min(3.2, len * 0.055);
+    c.quadraticCurveTo(mx + nx * bow, my + ny * bow, ex, ey);
+    const [vx, vy] = V(j); c.quadraticCurveTo(vx, vy, B[j][0], B[j][1]);
+  }
+  c.closePath();
+}
 function P(c, pts, fill, lw = 3, stroke) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (let i = 0; i < pts.length; i += 2) { const x = pts[i], y = pts[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (HDS.ink && !c.isPix && pts.length >= 6) { roundPoly(c, pts); return fs(c, fill, lw, stroke, [x0, y0, x1, y1]); }
   if (deco(c)) { const p = new Path2D(); wobblePoly(p, pts); return fsDeco(c, p, fill, lw, stroke, [x0, y0, x1, y1]); }
   pth(c, pts);
   fs(c, fill, lw, stroke, [x0, y0, x1, y1]);
@@ -157,6 +196,8 @@ function L(c, pts, lw = 3, stroke) {
   c.lineWidth = lw; c.strokeStyle = stroke || OUT; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke();
 }
 function S(c, fill, lw, fn, stroke) { c.beginPath(); fn(); fs(c, fill, lw, stroke); }
+// freie Kurvenform mit Licht-Verlauf (box = Begrenzung für die Schattierung)
+function shape(c, fill, box, fn, lw = 3) { c.beginPath(); fn(); fs(c, fill, lw, null, box); }
 function grad(c, x0, y0, x1, y1, stops) { const g = c.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; }
 function txt(c, s, x, y, font, col, align = 'center', stroke = 0, strokeCol = OUT) {
   c.font = font; c.textAlign = align; c.textBaseline = 'alphabetic';
@@ -177,41 +218,89 @@ function mix(a, b, k) {
   return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, '0')).join('');
 }
 
-// Bein/Arm als gedrehtes Rechteck um den Drehpunkt (Hüfte/Schulter)
-// Bein: mit bend > 0 knickt es im Knie (Unterschenkel nach hinten), der Fuß bleibt fast waagrecht
+// organisches Glied entlang der y-Achse: verjüngt sich von w0 (oben) zu w1 (unten), leicht gewölbt, runde Enden
+function seg(c, y0, len, w0, w1, fill, bulge = 0.1, lw = 3) {
+  const a = w0 / 2, b = w1 / 2, m = Math.max(a, b) * (1 + bulge), y1 = y0 + len, my = y0 + len * 0.42;
+  c.beginPath();
+  c.moveTo(-a, y0); c.quadraticCurveTo(-m, my, -b, y1);
+  c.arc(0, y1, b, Math.PI, 0, true);
+  c.quadraticCurveTo(m, my, a, y0);
+  c.arc(0, y0, a, 0, Math.PI, true);
+  c.closePath();
+  fs(c, fill, lw, null, [-m, y0 - a, m, y1 + b]);
+}
+// Ärmel/Hosenbein-Stück: oben rund, zum Saum leicht ausgestellt
+function sleeveSeg(c, y0, len, w0, w1, fill) {
+  const a = w0 / 2, b = w1 / 2, y1 = y0 + len;
+  c.beginPath();
+  c.moveTo(-a, y0 + a * 0.6); c.quadraticCurveTo(-a * 1.08, y0 + len * 0.5, -b, y1);
+  c.quadraticCurveTo(0, y1 + 2.2, b, y1);
+  c.quadraticCurveTo(a * 1.08, y0 + len * 0.5, a, y0 + a * 0.6);
+  c.quadraticCurveTo(a, y0 - a * 0.45, 0, y0 - a * 0.45); c.quadraticCurveTo(-a, y0 - a * 0.45, -a, y0 + a * 0.6);
+  c.closePath();
+  fs(c, fill, 3, null, [-b, y0 - a, b, y1 + 2]);
+}
+// Hand als Fäustling mit Daumen (zeigt nach vorn, +x)
+function hand(c, x, y, r, fill) {
+  if (!hd(c)) { E(c, x, y, r, r, fill, 3); return; }
+  c.beginPath();
+  c.moveTo(x - r * 0.85, y - r * 0.7);
+  c.quadraticCurveTo(x - r * 1.2, y + r * 0.8, x - r * 0.15, y + r * 1.2);
+  c.quadraticCurveTo(x + r * 1.0, y + r * 1.25, x + r * 0.95, y + r * 0.15);
+  c.quadraticCurveTo(x + r * 1.65, y - r * 0.35, x + r * 1.25, y - r * 0.95);
+  c.quadraticCurveTo(x + r * 0.75, y - r * 1.15, x + r * 0.5, y - r * 0.6);
+  c.quadraticCurveTo(x - r * 0.1, y - r * 1.15, x - r * 0.85, y - r * 0.7);
+  c.closePath();
+  fs(c, fill, 3, null, [x - r, y - r, x + r, y + r]);
+  L(c, [x - r * 0.25, y + r * 0.35, x - r * 0.3, y + r * 0.95], 0.9, 'rgba(120,60,40,0.45)');
+  L(c, [x + r * 0.25, y + r * 0.35, x + r * 0.25, y + r * 1.0], 0.9, 'rgba(120,60,40,0.45)');
+}
+// Schuh: flache Sohle, runde Kappe vorn, Absatz hinten (Mitte x, y; halbe Länge l, halbe Höhe h)
+function shoe(c, x, y, l, h, fill) {
+  if (!hd(c)) { E(c, x, y, l, h, fill, 3); return; }
+  const x0 = x - l, x1 = x + l;
+  c.beginPath();
+  c.moveTo(x0 + l * 0.3, y - h * 1.05);
+  c.quadraticCurveTo(x0 - l * 0.08, y - h * 0.6, x0 + l * 0.02, y + h * 0.9);
+  c.lineTo(x1 - l * 0.12, y + h * 0.9);
+  c.quadraticCurveTo(x1 + l * 0.16, y + h * 0.85, x1 + l * 0.06, y - h * 0.05);
+  c.quadraticCurveTo(x1 - l * 0.12, y - h * 1.3, x - l * 0.05, y - h * 1.1);
+  c.closePath();
+  fs(c, fill, 3, null, [x0, y - h, x1, y + h]);
+  L(c, [x0 + l * 0.08, y + h * 0.42, x1 - l * 0.02, y + h * 0.42], 1.1, 'rgba(255,255,255,0.18)');   // Sohlenkante
+  E(c, x + l * 0.35, y - h * 0.45, l * 0.32, h * 0.25, 'rgba(255,255,255,0.3)', 0);   // Glanz auf der Kappe
+}
+// Bein um den Drehpunkt (Hüfte): mit bend > 0 knickt es im Knie (Unterschenkel nach hinten), der Fuß bleibt fast waagrecht
 function limb(c, px, py, w, len, ang, fill, foot, bend = 0) {
   c.save(); c.translate(px, py); c.rotate(ang);
-  const drawFoot = (y) => {
-    if (!foot) return;
-    E(c, foot.dx || 6, y, foot.l, foot.h || 6, foot.fill, 3);
-    if (hd(c)) E(c, (foot.dx || 6) + foot.l * 0.25, y - (foot.h || 6) * 0.35, foot.l * 0.38, (foot.h || 6) * 0.22, 'rgba(255,255,255,0.26)', 0);
-  };
+  const drawFoot = (y) => { if (foot) shoe(c, foot.dx || 6, y, foot.l, foot.h || 6, foot.fill); };
   if (bend > 0.02) {
     const up = len * 0.52;
     c.save(); c.translate(0, up); c.rotate(bend);
-    R(c, -w * 0.46, -w * 0.3, w * 0.92, len - up + w * 0.3, fill, 3, w / 2.3);
+    seg(c, -w * 0.3, len - up + w * 0.3, w * 0.92, w * 0.8, fill, 0.12);
     c.translate(0, len - up); c.rotate(-bend * 0.8 - ang * 0.5); drawFoot(0);
     c.restore();
-    R(c, -w / 2, 0, w, up + w * 0.25, fill, 3, w / 2.2);
-  } else { R(c, -w / 2, 0, w, len, fill, 3, w / 2.2); drawFoot(len); }
+    seg(c, 0, up + w * 0.25, w, w * 0.9, fill, 0.06);
+  } else { seg(c, 0, len, w, w * 0.84, fill, 0.08); drawFoot(len); }
   c.restore();
 }
 // Arm: mit bend > 0 knickt der Unterarm im Ellbogen nach vorn; ein langer Ärmel läuft über beide Teile
-function arm(c, px, py, ang, sleeve, sleeveLen, skin, len, w, hand = 5.5, bend = 0) {
+function arm(c, px, py, ang, sleeve, sleeveLen, skin, len, w, hr = 5.5, bend = 0) {
+  if (HDS.ink && !c.isPix) { w *= 1.12; hr *= 1.22; }   // HD: kräftigere Arme, cartoonhaft große Hände
   c.save(); c.translate(px, py); c.rotate(ang);
   if (bend > 0.02) {
     const up = len * 0.5;
     c.save(); c.translate(0, up); c.rotate(-bend);
-    R(c, -w * 0.47, -w * 0.3, w * 0.94, len - up + w * 0.3, skin, 3, w / 2.2);
-    if (sleeve && sleeveLen > up) R(c, -w / 2 - 1.5, -w * 0.3, w + 3, sleeveLen - up + w * 0.3, sleeve, 3, 4);
-    E(c, 0, len - up + 2, hand, hand, skin, 3);
+    seg(c, -w * 0.3, len - up + w * 0.3, w * 0.9, w * 0.74, skin, 0.08);
+    if (sleeve && sleeveLen > up) sleeveSeg(c, -w * 0.3, sleeveLen - up + w * 0.3, w + 3, w + 4.5, sleeve);
+    hand(c, 0, len - up + 2, hr, skin);
     c.restore();
-    R(c, -w / 2, 0, w, up + w * 0.3, skin, 3, w / 2.2);
-    if (sleeve) R(c, -w / 2 - 1.5, -2, w + 3, Math.min(sleeveLen, up + w * 0.3) + 2, sleeve, 3, 4);
+    seg(c, 0, up + w * 0.3, w, w * 0.9, skin, 0.08);
+    if (sleeve) sleeveSeg(c, -2, Math.min(sleeveLen, up + w * 0.3) + 2, w + 3, w + 4, sleeve);
   } else {
-    R(c, -w / 2, 0, w, len, skin, 3, w / 2.2);
-    if (sleeve) R(c, -w / 2 - 1.5, -2, w + 3, sleeveLen, sleeve, 3, 4);
-    E(c, 0, len + 2, hand, hand, skin, 3);
+    seg(c, 0, len, w, w * 0.76, skin, 0.08);
+    if (sleeve) sleeveSeg(c, -2, sleeveLen, w + 3, w + 4.5, sleeve);
+    hand(c, 0, len + 2, hr, skin);
   }
   c.restore();
 }
@@ -254,9 +343,10 @@ function pupil(c, a, t, x, y, r) {
   if (blinking(a, t)) { L(c, [x - r * 2.2, y, x + r * 2.2, y], 2.2); return; }
   // die Pupillen folgen leicht dem Zeiger – die Figuren wirken aufmerksam
   let dx = 0, dy = 0;
-  if (a.x != null && a.h != null && G && G.mouse && G.mouse.x >= 0) {
-    dx = Math.max(-r * 0.85, Math.min(r * 0.85, (G.mouse.x - a.x) / 45 * (a.dir || 1)));
-    dy = Math.max(-r * 0.45, Math.min(r * 0.45, (G.mouse.y - (a.y - a.h * 0.85)) / 150));
+  const m = G && (G.ms || G.mouse);
+  if (a.x != null && a.h != null && m && m.x >= 0) {
+    dx = Math.max(-r * 0.85, Math.min(r * 0.85, (m.x - a.x) / 45 * (a.dir || 1)));
+    dy = Math.max(-r * 0.45, Math.min(r * 0.45, (m.y - (a.y - a.h * 0.85)) / 150));
   }
   E(c, x + dx, y + dy, r, r * 1.15, OUT, 0);
   if (!c.isPix && r > 1.2) { E(c, x - r * 0.38, y - r * 0.45, r * 0.42, r * 0.42, 'rgba(255,255,255,0.92)', 0); E(c, x + r * 0.4, y + r * 0.45, r * 0.18, r * 0.18, 'rgba(255,255,255,0.6)', 0); }
@@ -304,7 +394,8 @@ CHAR.bernard = (c, a, t) => {
   c.save(); c.translate(0, b + cr); lean(c, a, -88); arm(c, -5, -144, poseAng(0.12 - sw * 0.45, po, 'back'), shirt, 18, skin, 50, 9, 5.5, poseAng(elbow(a, -1), po, 'bb')); c.restore();
   limb(c, 5, -88 + cr, 13, 82, sw * 0.42 - sq * 0.55, pants, { l: 13, h: 6, dx: 7, fill: shoe }, poseKnee(a, t, 1));
   c.save(); c.translate(0, b + cr + nod(a, t)); lean(c, a, -88);
-  P(c, [-14, -84, 15, -84, 18, -148, -15, -150], shirt);
+  shape(c, shirt, [-18, -151, 20, -83], () => { c.moveTo(-13, -84); c.quadraticCurveTo(-18, -112, -16, -139); c.quadraticCurveTo(-15, -151, -3, -151); c.lineTo(8, -150); c.quadraticCurveTo(19, -149, 19, -137); c.quadraticCurveTo(20, -110, 16, -84); c.quadraticCurveTo(1, -81, -13, -84); c.closePath(); });
+  if (hd(c)) { S(c, null, 1.2, () => { c.moveTo(-11, -90); c.quadraticCurveTo(-6, -96, -2, -91); c.moveTo(4, -91); c.quadraticCurveTo(9, -97, 13, -90); }, 'rgba(120,105,80,0.4)'); }   // Hemd in die Hose gesteckt
   R(c, -15, -93, 31, 8, '#4a2e18', 2.5, 2);
   if (hd(c)) {
     R(c, -1, -93, 7, 8, '#c8a040', 1.5, 1.5);   // Gürtelschnalle
@@ -389,10 +480,10 @@ function stocking(c, px, py, ang, back, bend = 0) {
   c.save(); c.translate(px, py); c.rotate(ang);
   if (bend > 0.02) {
     c.save(); c.translate(0, 37); c.rotate(bend); c.translate(0, -37);
-    piece(34, 74); c.translate(6, 74); c.rotate(-bend * 0.8 - ang * 0.5); E(c, 0, 0, 11, 5.5, '#1e1a22', 3);
+    piece(34, 74); c.translate(6, 74); c.rotate(-bend * 0.8 - ang * 0.5); shoe(c, 0, 0, 11, 5.5, '#2a2430');
     c.restore();
     piece(0, 40);
-  } else { piece(0, 74); E(c, 6, 74, 11, 5.5, '#1e1a22', 3); }
+  } else { piece(0, 74); shoe(c, 6, 74, 11, 5.5, '#2a2430'); }
   c.restore();
 }
 
@@ -406,8 +497,12 @@ CHAR.laverne = (c, a, t) => {
   stocking(c, 5, -80 + cr, a.climb ? -0.55 - cl * 0.45 : sw * 0.45 - sq * 0.55, false, a.climb ? 0.9 - cl * 0.5 : poseKnee(a, t, 1));
   c.save(); c.translate(0, b + cr + nod(a, t)); lean(c, a, -80);
   P(c, [-6, -186, -26, -196, -20, -178, -34, -170, -20, -160, -30, -146, -12, -150, -4, -140, 6, -160], hair);
-  P(c, [-13, -142, 13, -142, 25, -74, -23, -74], dress);
-  L(c, [-20, -84, 22, -84], 2, '#2f7a48');
+  shape(c, dress, [-26, -146, 27, -69], () => {
+    c.moveTo(-12, -143); c.quadraticCurveTo(-18, -139, -16, -124); c.quadraticCurveTo(-16, -104, -22, -82); c.quadraticCurveTo(-27, -74, -20, -72);
+    c.quadraticCurveTo(-10, -77, 0, -73); c.quadraticCurveTo(10, -69, 19, -73); c.quadraticCurveTo(28, -75, 24, -82);
+    c.quadraticCurveTo(17, -104, 16, -124); c.quadraticCurveTo(17, -139, 12, -143); c.quadraticCurveTo(0, -147, -12, -143); c.closePath();
+  });
+  S(c, null, 2, () => { c.moveTo(-21, -84); c.quadraticCurveTo(-10, -88, 1, -84); c.quadraticCurveTo(12, -80, 23, -85); }, '#2f7a48');
   if (hd(c)) { L(c, [-5, -134, -12, -86], 1.5, 'rgba(0,0,0,0.18)'); L(c, [6, -134, 11, -86], 1.5, 'rgba(0,0,0,0.18)'); L(c, [-1, -138, 0, -90], 1.2, 'rgba(255,255,255,0.12)'); }
   R(c, -2, -158, 8, 16, skin, 3, 3);
   E(c, 6, -168, 17, 20, skin);
@@ -436,7 +531,7 @@ CHAR.drfred = (c, a, t) => {
   limb(c, 5, -64, 11, 58, sw * 0.4, '#3a3a4a', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' }, knee(a, 1));
   c.save(); c.translate(0, b + nod(a, t)); c.rotate(0.08); lean(c, a, -64);
   arm(c, -8, -118, 0.25 - sw * 0.3, coat, 40, skin, 46, 10, 5.5, elbow(a, -1));
-  P(c, [-18, -124, 14, -126, 26, -40, -26, -38], coat);
+  shape(c, coat, [-28, -129, 27, -36], () => { c.moveTo(-16, -125); c.quadraticCurveTo(-24, -80, -27, -40); c.quadraticCurveTo(-1, -34, 26, -41); c.quadraticCurveTo(22, -84, 13, -126); c.quadraticCurveTo(-2, -130, -16, -125); c.closePath(); });
   L(c, [2, -124, 8, -42], 2);
   R(c, 8, -110, 10, 12, '#e6e6e6', 2, 2);
   L(c, [11, -112, 11, -104], 2, '#3a7ad8');
@@ -458,7 +553,7 @@ CHAR.drfred = (c, a, t) => {
   if (gF > 0.15) {   // Geistesblitz: Glühbirne über dem Kopf
     const by = -186 - gF * 10;
     c.save(); c.globalAlpha *= Math.min(1, gF * 1.6);
-    if (hd(c)) { const g = c.createRadialGradient(8, by, 2, 8, by, 32); g.addColorStop(0, 'rgba(255,240,140,0.6)'); g.addColorStop(1, 'rgba(255,240,140,0)'); c.fillStyle = g; c.fillRect(-24, by - 32, 64, 64); }
+    if (hd(c) && !HDS.ink) { const g = c.createRadialGradient(8, by, 2, 8, by, 32); g.addColorStop(0, 'rgba(255,240,140,0.6)'); g.addColorStop(1, 'rgba(255,240,140,0)'); c.fillStyle = g; c.fillRect(-24, by - 32, 64, 64); }
     E(c, 8, by, 8, 9, '#fff3a0', 2.5); R(c, 4, by + 7, 8, 6, '#a8a8b8', 2, 1.5);
     L(c, [5, by + 3, 8, by - 3, 11, by + 3], 1.4, '#d8a020');
     if (gF > 0.5) for (let i = 0; i < 5; i++) { const an = -Math.PI / 2 + (i - 2) * 0.5; L(c, [8 + Math.cos(an) * 14, by + Math.sin(an) * 14, 8 + Math.cos(an) * 20, by + Math.sin(an) * 20], 2, '#ffd23a'); }

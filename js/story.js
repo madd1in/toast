@@ -746,6 +746,11 @@ async function INTRO() {
   G.inIntro = false;
 }
 async function INTRO_TIP() {
+  if (modernUI()) {
+    await say(null, 'Linksklick: hingehen oder die passende Aktion. Rechtsklick: alle Aktionen für ein Ding.');
+    await say(null, 'Inventar: Maus an den unteren Rand oder Taste I. Gegenstand anklicken, dann ein Ziel – oder ein Gesicht unten rechts: ab durchs Chrono-Klo in eine andere Zeit.');
+    return;
+  }
   await say(null, 'Unten rechts wechselst du zwischen Bernard, Hoagie und Laverne.');
   await say(null, 'Gegenstände schickst du am Chrono-Klo durch die Zeit: "Gib" anklicken, Gegenstand wählen, dann ein Gesicht.');
 }

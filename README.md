@@ -25,7 +25,9 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 
 ## Features
 
-- Klassische Verb-Steuerung im Stil der SCUMM-Adventures (Gib, Nimm, Benutze, Öffne, Schau an, Drücke, Schließe, Rede mit, Ziehe)
+- **Minimale, moderne Bedienung (HD):** Die Szene füllt den ganzen Bildschirm, eine Kamera fährt mit und nimmt im Gespräch beide Figuren ins Bild. Linksklick = hingehen oder die passende Aktion, Rechtsklick = Aktionsmenü mit genau den Aktionen, die beim Ding etwas bewirken. Das Inventar blendet sich am unteren Rand ein (oder Taste I), der gewählte Gegenstand hängt am Zeiger, Gesprächsoptionen erscheinen als Overlay
+- Klassische Verb-Steuerung im Stil der SCUMM-Adventures (Gib, Nimm, Benutze, Öffne, Schau an, Drücke, Schließe, Rede mit, Ziehe) – im Pixel-Modus oder per Einstellung „Bedienung: Klassisch“
+- **Gezeichnete Figuren:** eine durchgehende Tusche-Außenkontur statt einzeln umrandeter Teile, feine farbige Innenlinien, Cartoon-Schattierung mit harter Schattenkante, organisch geschwungene Formen, sich verjüngende Gliedmaßen, Fäustlinge mit Daumen und Schuhe mit Sohle und Absatz
 - 3 spielbare Figuren in 3 Zeitebenen und 7 Räumen, Wechsel mit Zeitstrudel-Effekt
 - Zeitreise-Rätsel: Was du 1776 tust, verändert die Zukunft
 - Dialogbäume mit Dr. Fred, Grünem Tentakel, Oma Gertrude, John Hancock, der Tentakel-Wache und Lila Tentakel
@@ -76,8 +78,9 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 | Aktion | Maus / Tastatur | Touch | Xbox-Controller |
 |---|---|---|---|
 | Zeiger bewegen | Maus · Pfeiltasten springen | – | Linker Stick · Steuerkreuz springt |
-| Aktion | Klick · Enter | Tippen | A |
-| Standard-Aktion | Rechtsklick | Lange drücken | X |
+| Aktion (modern: passende Aktion) | Klick · Enter | Tippen | A |
+| Aktionsmenü (klassisch: Standard-Aktion) | Rechtsklick | Lange drücken | X |
+| Inventar (modern) | Maus an den unteren Rand · I · Tasche | Tasche | Tasche ansteuern |
 | Zurück / Text überspringen | Esc · Punkt | Tippen | B |
 | Verb wählen | Klick · G N B O S D C R Z | Tippen | LT / RT |
 | Figur wechseln | Gesichter · 1–3 | Gesichter | LB / RB |
@@ -90,7 +93,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 | Foto | O · F2 | – | – |
 | Menü | Esc | „Menü“ | Menü |
 
-Gegenstände schickst du per Chrono-Klo durch die Zeit: **Gib** → Gegenstand → Gesicht unten rechts. Das klappt von überall – die Figur läuft kurz zum Klo und kommt zurück.
+Gegenstände schickst du per Chrono-Klo durch die Zeit: Gegenstand anklicken → Gesicht unten rechts (klassisch: **Gib** → Gegenstand → Gesicht). Das klappt von überall – die Figur läuft kurz zum Klo und kommt zurück.
 
 <details>
 <summary><strong>Komplettlösung (Spoiler!)</strong></summary>
