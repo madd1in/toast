@@ -35,7 +35,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Prozedurale Grafik (Canvas 2D) und Musik (WebAudio-Synthesizer) mit eigenen Themen pro Zeitalter, Umgebungsgeräuschen, Schritten je nach Boden und Plapperstimmen pro Figur
 - Lebendige Szene: Laufstaub je nach Untergrund, weiche Schatten unter Möbeln, Lichtstimmung pro Raum und sanftes Klick-Feedback
 - **Gemalter HD-Look:** Jede Fläche bekommt automatisch einen Licht-Verlauf, Konturen sind fein und farbig statt schwarz, Raumhintergründe bekommen weiches Leuchten, Licht-Verlauf und Maltextur
-- **HD-Licht:** Figuren bekommen pro Raum eine Licht- und Schattenseite mit Randlicht, dazu Bloom auf hellen Stellen, Kaminflackern, flackernde Laborröhren und ein Gewitter über Lilas Palast
+- **HD-Licht:** Figuren bekommen pro Raum eine Licht- und Schattenseite mit Randlicht, dazu Bloom auf hellen Stellen, Kaminflackern, flackernde Laborröhren und ein Gewitter über Lilas Palast – im Zukunftsgarten regnet es sichtbar in Schauern – mit Donner, Aufprall-Spritzern und natschplatschenden Schritten, während sich die Glühwürmchen verstecken
 - Schwebeteilchen pro Raum: Staub im Lampenlicht, fallendes Herbstlaub 1776, Glühwürmchen im Zukunftsgarten (sie weichen dir aus), magische Funken im Palast
 - Raumklang: eigener Hall pro Raum (vom trockenen Garten bis zum hallenden Thronsaal), Schritte und Stimmen im Stereo-Panorama
 - NPCs murmeln nebenbei vor sich hin, und wer zu lange herumsteht, bekommt einen Spruch von der eigenen Figur
@@ -45,7 +45,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
 - **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
 - **Großes Finale:** Feuerwerk, Konfetti, alle Figuren auf dem Hügel, Abspann und eine größere Abspannmusik
-- Lebendige Porträts (blinzeln, reden mit) und versteckte Gags auf dem Titelbildschirm
+- Lebendige Porträts und Figuren (blinzeln, reden mit, die Pupillen folgen dem Zeiger) und versteckte Gags auf dem Titelbildschirm
 - **Adaptive Musik:** Mit jedem gelösten Rätsel kommen neue Instrumente dazu; jede Figur hat ein kurzes Erkennungsmotiv beim Gesprächsbeginn; im Pausenmenü klingt alles gedämpft
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
 - **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG

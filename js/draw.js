@@ -199,7 +199,13 @@ function blinking(a, t) { return ((t + (a.seed || 0) * 1777) % 3900) < 130; }
 // Pupille – oder ein geschlossenes Lid, wenn die Figur gerade blinzelt
 function pupil(c, a, t, x, y, r) {
   if (blinking(a, t)) { L(c, [x - r * 2.2, y, x + r * 2.2, y], 2.2); return; }
-  E(c, x, y, r, r * 1.15, OUT, 0);
+  // die Pupillen folgen leicht dem Zeiger – die Figuren wirken aufmerksam
+  let dx = 0, dy = 0;
+  if (a.x != null && a.h != null && G && G.mouse && G.mouse.x >= 0) {
+    dx = Math.max(-r * 0.85, Math.min(r * 0.85, (G.mouse.x - a.x) / 45 * (a.dir || 1)));
+    dy = Math.max(-r * 0.45, Math.min(r * 0.45, (G.mouse.y - (a.y - a.h * 0.85)) / 150));
+  }
+  E(c, x + dx, y + dy, r, r * 1.15, OUT, 0);
   if (!c.isPix && r > 1.2) { E(c, x - r * 0.38, y - r * 0.45, r * 0.42, r * 0.42, 'rgba(255,255,255,0.92)', 0); E(c, x + r * 0.4, y + r * 0.45, r * 0.18, r * 0.18, 'rgba(255,255,255,0.6)', 0); }
 }
 // Feine Details (Haarsträhnen, Falten, Glanzlichter) nur im HD-Modus – in 320×200 wären sie nur Rauschen
@@ -316,7 +322,7 @@ CHAR.laverne = (c, a, t) => {
   P(c, [-12, -176, -14, -196, -2, -188, 2, -208, 10, -190, 20, -204, 22, -186, 32, -190, 24, -176, 14, -182, 4, -178], hair);
   if (blinking(a, t)) { E(c, 13, -170, 5.5, 6.5, skin, 2.5); E(c, 25, -170, 5, 6.5, skin, 2.5); L(c, [8, -170, 18, -170], 2.2); L(c, [21, -170, 30, -170], 2.2); }
   else {
-    E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5); E(c, 15, -169, 2, 2.2, OUT, 0); E(c, 27, -169, 2, 2.2, OUT, 0);
+    E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5); pupil(c, a, t, 15, -169, 2); pupil(c, a, t, 27, -169, 2);
     if (hd(c)) { E(c, 14.2, -170, 0.85, 0.85, '#fff', 0); E(c, 26.2, -170, 0.85, 0.85, '#fff', 0); }
   }
   if (hd(c)) {

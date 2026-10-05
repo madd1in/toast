@@ -37,7 +37,7 @@ const Sound = (() => {
     // Raumhall: Effekte und Umgebung bekommen einen Hall-Anteil, die Musik nur einen Hauch
     verb = ac.createConvolver(); verb.connect(master);
     verbSend = ac.createGain(); verbSend.gain.value = verbWanted[1]; verbSend.connect(verb);
-    musicSend = ac.createGain(); musicSend.gain.value = 0.06; musicSend.connect(verb);
+    musicSend = ac.createGain(); musicSend.gain.value = retro ? 0 : 0.06; musicSend.connect(verb);
     sfxBus.connect(verbSend); ambBus.connect(verbSend); musicBus.connect(musicSend);
     setReverb(verbWanted[0], verbWanted[1]);
     if (!offline) setInterval(tick, 100);
@@ -255,7 +255,7 @@ const Sound = (() => {
     const th = THEMES[cur]; if (!th) return;
     const spb = 60 / th.bpm;
     const lg = ac.createGain(); lg.connect(musicBus);
-    if (fadeNext) { lg.gain.setValueAtTime(0.0001, t0); lg.gain.exponentialRampToValueAtTime(1, t0 + 0.9); fadeNext = false; } else lg.gain.value = 1;
+    if (fadeNext) { lg.gain.setValueAtTime(0.06, t0); lg.gain.exponentialRampToValueAtTime(1, t0 + 0.3); fadeNext = false; } else lg.gain.value = 1;
     let maxLen = 0;
     for (const tr of th.tracks) {
       const p = tr._p || (tr._p = parse(tr.seq));
@@ -322,8 +322,8 @@ const Sound = (() => {
     }
   }
   function stopMusic() {
-    // weicher Übergang: alter Loop blendet über gut eine Sekunde aus
-    if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.3); const g = l.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 1.8); }
+    // alter Loop blendet kurz aus; der neue startet fast sofort darüber
+    if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.22); const g = l.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 1.0); }
     loops = []; cur = null;
   }
   function play(name) {
@@ -331,7 +331,7 @@ const Sound = (() => {
     if (cur === name) return;
     const had = !!cur;
     stopMusic(); cur = name; fadeNext = had;
-    if (name) { songT0 = ac.currentTime + (had ? 0.35 : 0.15); scheduleLoop(songT0); }
+    if (name) { songT0 = ac.currentTime + (had ? 0.12 : 0.05); scheduleLoop(songT0); }
   }
   // einzelner Ton auf dem Musik-Bus (z. B. die selbst gespielte Lead-Gitarre)
   function note(instName, n, sec) { if (ac) inst(instName, n, ac.currentTime + 0.005, sec || 0.3, musicBus); }
@@ -443,12 +443,13 @@ const Sound = (() => {
   }
   // Schritte je nach Untergrund
   const STEP = { wood: { f: 900, q: 1.2, v: 0.1 }, tile: { f: 2400, q: 2, v: 0.07 }, grass: { f: 3800, q: 0.7, v: 0.045, type: 'highpass' }, marble: { f: 3000, q: 3, v: 0.06 }, carpet: { f: 380, q: 0.8, v: 0.06 } };
-  function step(kind, pan, weight = 1) {
+  function step(kind, pan, weight = 1, wet) {
     if (!ac) return;
     const s = STEP[kind] || STEP.wood, k = Math.max(0.7, Math.min(1.5, weight));
     panned(pan, () => {
       nz(ac.currentTime + 0.005, 0.06, s.v * (0.75 + 0.3 * k), sfxBus, { type: s.type || 'bandpass', f: s.f * (0.9 + Math.random() * 0.2) / k, q: s.q });
       if (k > 1.15) osc('sine', 70, ac.currentTime + 0.005, 0.08, 0.05 * k, sfxBus, { f2: 45, decay: true });   // schwere Schritte wummern
+      if (wet) nz(ac.currentTime + 0.012, 0.1, s.v * 0.7, sfxBus, { type: 'highpass', f: 2400 + Math.random() * 1000 });   // nasse Schritte platschen
     });
   }
 
@@ -481,7 +482,16 @@ const Sound = (() => {
   function setRetro(on) {
     if (retro === on) return;
     retro = on;
-    if (ac && cur) { const c = cur; stopMusic(); cur = c; scheduleLoop(ac.currentTime + 0.1); }
+    // Chiptunes klingen trocken am besten: Musik-Hall nur im HD-Modus
+    if (ac && musicSend) musicSend.gain.setTargetAtTime(retro ? 0 : 0.06, ac.currentTime, 0.1);
+    if (ac && cur) {
+      const c = cur;
+      // Stilwechsel: alter Loop endet sofort – sonst überlagern sich zwei Versionen desselben Stücks
+      for (const l of loops) { try { l.g.disconnect(); } catch (e) { /* schon getrennt */ } }
+      loops = [];
+      cur = c; fadeNext = true;
+      scheduleLoop(ac.currentTime + 0.06);
+    }
   }
 
   // Für Trailer-Aufnahmen: Klang in einen OfflineAudioContext rendern, getaktet über tick()

@@ -461,6 +461,13 @@ room({
     S(c, '#2a2a30', 3, () => { c.moveTo(114, 256); c.quadraticCurveTo(112, 290, 140, 290); c.quadraticCurveTo(168, 290, 166, 256); c.closePath(); });
     E(c, 140, 256, 26, 5, '#3a3a40', 2.5);
     for (let i = 0; i < 2; i++) { const k = ((t * 0.0005) + i * 0.5) % 1; c.save(); c.globalAlpha = (1 - k) * 0.7; E(c, 134 + i * 14 + Math.sin(t * 0.003 + i) * 5, 248 - k * 40, 6 + k * 8, 5 + k * 6, '#f4f0ea', 0); c.restore(); }
+    // Funken steigen aus dem Feuer auf
+    for (let i = 0; i < 4; i++) {
+      const k = ((t * 0.0008) + i * 0.25) % 1;
+      c.save(); c.globalAlpha = (1 - k) * 0.9;
+      E(c, 118 + i * 16 + Math.sin(t * 0.004 + i * 2) * 6, 298 - k * 88, 1.4, 1.4, k < 0.3 ? '#ffd23a' : '#ff8a3d', 0);
+      c.restore();
+    }
   },
   objs: [
     { id: 'fenster_1776', name: 'Fenster', rect: [474, 60, 132, 124], look: 'Draußen scheint die Sonne auf das Jahr 1776. Keine Autos, kein WLAN. Nur Pferde. Sehr viele Pferde.' },
@@ -547,15 +554,29 @@ function drawBeet(c, t) {
 }
 
 room({
-  id: 'garten1776', era: 'past', name: 'Garten 1776', klo: 'plumpsklo', floor: 'grass', amb: ['birds'],
+  id: 'garten1776', era: 'past', name: 'Garten 1776', klo: 'plumpsklo', floor: 'grass', amb: ['birds', 'wind'],
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
   draw: bgGarten1776,
   dyn: (c, t) => {
+    // langsam wandernde Wolkenschatten auf der Wiese
+    for (let i = 0; i < 2; i++) {
+      const wp = ((t * 0.009 + i * 640) % (W + 460)) - 230;
+      c.save(); c.globalAlpha = 0.1;
+      E(c, wp, 344 + i * 28, 130, 32, '#1c3a14', 0); E(c, wp + 85, 356 + i * 28, 90, 22, '#1c3a14', 0);
+      c.restore();
+    }
     // zwei Schmetterlinge
     for (let i = 0; i < 2; i++) {
       const x = 480 + Math.sin(t * 0.0006 + i * 2) * 160 + Math.sin(t * 0.0023 + i) * 30, y = 300 + Math.cos(t * 0.0009 + i * 3) * 40 + Math.sin(t * 0.004 + i) * 10;
       const w = Math.abs(Math.sin(t * 0.025 + i)) * 7 + 1, col = i ? '#ff8ac0' : '#ffd23a';
       E(c, x - 4, y, w, 5, col, 1.5); E(c, x + 4, y, w, 5, col, 1.5); L(c, [x, y - 4, x, y + 4], 2);
+    }
+    // Glitzern auf dem Brunnenwasser
+    for (let i = 0; i < 3; i++) {
+      const k = ((t * 0.00012) + i * 0.33) % 1, gx = 271 + (k - 0.5) * 84;
+      c.save(); c.globalAlpha = Math.sin(k * Math.PI) * 0.8;
+      E(c, gx, 272 + Math.sin(i * 2.3) * 3, 3, 1.2, '#bfe8ff', 0); E(c, gx + 5, 278, 2, 0.9, 'rgba(191,232,255,0.6)', 0);
+      c.restore();
     }
     for (let i = 0; i < 2; i++) {
       const x = (t * 0.03 + i * 420) % (W + 200) - 100, y = 110 + i * 30 + Math.sin(t * 0.003 + i) * 8, f = Math.sin(t * 0.02 + i) * 5;
@@ -705,8 +726,17 @@ function bgVorraum(c) {
   R(c, 0, 0, W, 36, '#2e0f45', 0); R(c, -4, 34, W + 8, 8, '#d8b040', 2.5);
   const fp = [0, 316, W, 310, W, SH, 0, SH];
   P(c, fp, '#cdb6e6'); c.save(); pth(c, fp); c.clip(); checkerFloor(c, 310, SH, '#cdb6e6', '#9d7cc4', 6, 12); c.restore();
+  wallAO(c, 306, 330, 0.3);
+  gloss(c, fp, 60, 660, 0.05);
   R(c, -4, 302, W + 8, 14, '#2e0f45', 2.5);
   [104, 352, 592, 886].forEach(x => { R(c, x, 42, 34, 262, '#6b2f96', 3); R(c, x - 6, 42, 46, 16, '#d8b040', 2.5, 2); R(c, x - 6, 288, 46, 16, '#d8b040', 2.5, 2); });
+  // Marmor-Adern in den Paneelen
+  [104, 352, 592, 886].forEach(x => {
+    c.save(); c.globalAlpha = 0.28;
+    L(c, [x + 8, 58, x + 15, 130, x + 6, 210, x + 17, 292], 1.5, '#f0e6ff');
+    L(c, [x + 25, 66, x + 21, 170, x + 28, 262], 1, '#7a5a9a');
+    c.restore();
+  });
   S(c, '#1a0a2a', 3, () => { c.moveTo(4, 340); c.lineTo(4, 170); c.quadraticCurveTo(48, 118, 92, 170); c.lineTo(92, 336); c.closePath(); });
   // Plakat
   R(c, 150, 92, 130, 146, '#ffd23a', 3, 3);
@@ -757,9 +787,12 @@ function bgThron(c) {
   for (let i = 0; i < 13; i++) {
     const x = i * 80 - 20;
     S(c, i % 2 ? '#7a1fa2' : '#6a1a8e', 2.5, () => { c.moveTo(x, 0); c.quadraticCurveTo(x + 20, 160, x - 6, 324); c.lineTo(x + 80, 324); c.quadraticCurveTo(x + 60, 160, x + 80, 0); c.closePath(); });
+    L(c, [x + 5, 0, x + 15, 160, x + 7, 322], 2, 'rgba(18,4,30,0.38)');   // Vorhangfalte
+    L(c, [x + 63, 4, x + 57, 160, x + 65, 320], 1.5, 'rgba(255,214,255,0.1)');
   }
   for (let i = 0; i < 8; i++) S(c, '#d8b040', 3, () => { c.moveTo(i * 120, -2); c.quadraticCurveTo(i * 120 + 60, 52, i * 120 + 120, -2); c.closePath(); });
   P(c, [0, 324, W, 318, W, SH, 0, SH], '#2a0a3a');
+  wallAO(c, 318, 342, 0.32);
   P(c, [380, SH, 640, SH, 612, 350, 518, 350], '#b0213a');
   L(c, [380, SH, 518, 350], 3, '#d8b040'); L(c, [640, SH, 612, 350], 3, '#d8b040');
   P(c, [440, 352, 862, 352, 848, 332, 456, 332], '#c9a040');
