@@ -211,6 +211,12 @@ function pupil(c, a, t, x, y, r) {
 // Feine Details (Haarsträhnen, Falten, Glanzlichter) nur im HD-Modus – in 320×200 wären sie nur Rauschen
 const hd = c => HDS.on && !c.isPix;
 function lensGlint(c, x, y, len = 3) { L(c, [x, y, x + len, y - len], 1.6, 'rgba(255,255,255,0.85)'); }
+// kleine Geste im Stand: alle paar Sekunden für gut eine Sekunde (0 → 1 → 0), nur bei Figuren in der Szene
+function gesture(a, t) {
+  if (a.walking || a.talking || a.x == null) return 0;
+  const c = (t + (a.seed || 0) * 2971) % 9000;
+  return c < 1400 ? Math.sin(Math.PI * c / 1400) : 0;
+}
 function swing(a) { return a.walking ? Math.sin(a.phase) : 0; }
 function bobY(a, t) { return a.walking ? -Math.abs(Math.cos(a.phase)) * 3 : Math.sin(t * 0.002 + (a.seed || 0)) * 0.7; }
 
@@ -254,15 +260,17 @@ CHAR.bernard = (c, a, t) => {
   if (hd(c)) { lensGlint(c, 8, -192); lensGlint(c, 23, -192); }   // Brillenglas-Reflex
   E(c, 29, -177, 8, 6.5, '#efb48c');
   if (mo) E(c, 18, -165, 5, 4, '#7a2222', 2); else L(c, [12, -165, 22, -166], 2.5);
-  arm(c, 7, -144, -0.12 + sw * 0.45, shirt, 18, skin, 50, 9);
+  const gB = gesture(a, t);
+  arm(c, 7, -144, (-0.12 + sw * 0.45) * (1 - gB) - 2.75 * gB, shirt, 18, skin, 50, 9);
   c.restore();
 };
 
 CHAR.hoagie = (c, a, t) => {
-  const sw = swing(a), b = bobY(a, t), mo = mouthOpen(a, t);
+  const gH = gesture(a, t), drum = Math.sin(t * 0.03) * 0.45 * gH;
+  const sw = swing(a), b = bobY(a, t) + Math.abs(Math.sin(t * 0.015)) * 3 * gH, mo = mouthOpen(a, t);
   const skin = '#e9b088', shirt = '#26232c', jeans = '#3d5fa6', jeansB = '#34518e', boot = '#3a2416', hair = '#1d1a1e';
   limb(c, -10, -70, 20, 64, -sw * 0.35, jeansB, { l: 16, h: 8, dx: 6, fill: boot });
-  c.save(); c.translate(0, b); arm(c, -22, -126, 0.1 - sw * 0.4, shirt, 16, skin, 44, 15, 8); c.restore();
+  c.save(); c.translate(0, b); arm(c, -22, -126, 0.1 - sw * 0.4 - gH * 0.9 + drum, shirt, 16, skin, 44, 15, 8); c.restore();
   limb(c, 10, -70, 20, 64, sw * 0.35, jeans, { l: 16, h: 8, dx: 6, fill: boot });
   c.save(); c.translate(0, b);
   R(c, -24, -82, 50, 18, jeans, 3, 7);
@@ -290,7 +298,7 @@ CHAR.hoagie = (c, a, t) => {
   E(c, 30, -147, 6.5, 5, '#df9a72');
   if (mo) E(c, 20, -136, 7, 5, '#6e1f1f', 2.5);
   else S(c, null, 2.5, () => { c.moveTo(12, -139); c.quadraticCurveTo(20, -132, 28, -139); });
-  arm(c, 24, -126, -0.1 + sw * 0.4, shirt, 16, skin, 44, 15, 8);
+  arm(c, 24, -126, -0.1 + sw * 0.4 - gH * 0.9 - drum, shirt, 16, skin, 44, 15, 8);
   c.restore();
 };
 
@@ -331,7 +339,8 @@ CHAR.laverne = (c, a, t) => {
   }
   E(c, 26, -159, 3.5, 3, '#efc4ac', 2);
   if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else L(c, [14, -151, 21, -152], 2.5);
-  arm(c, 6, -138, -0.15 + sw * 0.45, dress, 36, skin, 48, 8);
+  const gL = gesture(a, t);
+  arm(c, 6, -138, (-0.15 + sw * 0.45) * (1 - gL) + (-2.9 + Math.sin(t * 0.02) * 0.35) * gL, dress, 36, skin, 48, 8);
   c.restore();
 };
 
@@ -360,7 +369,8 @@ CHAR.drfred = (c, a, t) => {
   if (hd(c)) { lensGlint(c, 11, -152, 4); lensGlint(c, 26, -152, 4); }
   E(c, 35, -137, 9, 6.5, '#e9a888');
   if (mo) E(c, 25, -126, 6, 4.5, '#6a1a1a', 2); else L(c, [19, -127, 29, -126], 2.5);
-  arm(c, 8, -118, -0.2 + sw * 0.3, coat, 40, skin, 46, 10);
+  const gF = gesture(a, t);
+  arm(c, 8, -118, (-0.2 + sw * 0.3) * (1 - gF) + (-2.35 + Math.sin(t * 0.025) * 0.12) * gF, coat, 40, skin, 46, 10);
   c.restore();
 };
 

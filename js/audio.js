@@ -221,6 +221,15 @@ const Sound = (() => {
       { inst: 'drum', seq: Array(8).fill('-:1 C:1 -:1 C:1').join(' ') },
       { inst: 'drum', seq: Array(64).fill('H:0.5').join(' ') },
     ] },
+    // Wachparade: komischer Marsch für den Palast-Vorraum
+    march: { bpm: 112, tracks: [
+      { inst: 'tuba', seq: x2('Bb1:1 F2:1 Bb1:1 F2:1 Eb2:1 Bb1:1 Eb2:1 Bb1:1 F2:1 C2:1 F2:1 C2:1 Bb1:1 F2:1 Bb1:2') },
+      { inst: 'brass', seq: 'F4:1 Bb4:0.5 C5:0.5 D5:1 Bb4:1 Eb5:1 D5:0.5 C5:0.5 Bb4:1 G4:1 A4:1 C5:0.5 Bb4:0.5 A4:1 F4:1 Bb4:2 F4:1 -:1 D5:1 C5:0.5 Bb4:0.5 F4:1 Bb4:1 G4:1 Bb4:0.5 C5:0.5 Eb5:1 G5:1 F5:1 Eb5:0.5 D5:0.5 C5:1 A4:1 Bb4:3 -:1' },
+      { inst: 'drum', seq: Array(16).fill('S:0.5 S:0.25 S:0.25 S:1').join(' ') },
+      { inst: 'drum', seq: Array(8).fill('K:2 K:2').join(' ') },
+      { inst: 'clar', lvl: 1, seq: x2('D5:4 Eb5:4 C5:4 D5:4') },
+      { inst: 'drum', lvl: 2, seq: Array(32).fill('-:0.5 H:0.5').join(' ') },
+    ] },
     // Tentakel-Rock: Begleitung fürs Minispiel – die Lead-Gitarre spielt der Spieler selbst
     rock: { bpm: 120, tracks: [
       { inst: 'drum', seq: Array(16).fill('K:1 S:1 K:0.5 K:0.5 S:1').join(' ') },

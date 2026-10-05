@@ -87,6 +87,12 @@ const BARKS = {
   wache: ['*gähn*', 'Nicht... einschlafen... nicht...', 'Wer da? Ach, niemand. Wie immer.', 'Vierzig Jahre Dienst. Kein einziger Kaffee.'],
   lila: ['Die Welt gehört mir! Und der Rest auch!', 'Muahaha. Ha. Hm. Das muss ich noch üben.', 'Unterwerfung ist auch nur eine Form von Ordnung.', 'Wer hat meine Statue geputzt? Sie glänzt nicht genug!'],
 };
+// wer dasselbe Ding zu oft anschaut, bekommt einen genervten Kommentar
+const LOOK_AGAIN = {
+  bernard: ['Ich habe es mir jetzt dreimal angesehen. Es hat sich nicht verändert. Wissenschaftlich bestätigt.', 'Falls es sich bewegt, sage ich Bescheid.', 'Mein Gedächtnis ist ausgezeichnet. Leider.'],
+  hoagie: ['Mann, das hab ich doch schon gesehen.', 'Immer noch dasselbe Ding, Alter.', 'Wenn ich noch länger hingucke, guckt es zurück.'],
+  laverne: ['Ich glaube, es fühlt sich langsam beobachtet.', 'Noch einmal und wir sind verlobt.', 'Spannend. Beim vierten Mal sogar noch spannender. Nicht.'],
+};
 // Spielfigur meldet sich, wenn 40 Sekunden lang nichts passiert
 const IDLE = {
   bernard: ['Wenn ich nur wüsste, was als Nächstes kommt...', 'Ich könnte ja mal auf den Tipp-Knopf drücken.', 'Mein Taschenrechner und ich langweilen uns.', '*räusper* Ich warte.'],

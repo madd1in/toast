@@ -117,7 +117,7 @@ const ROOM_FX = {
   gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire', music: 'tavern' },
   garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, amb: ['future', 'rain'], motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars', storm: true, rain: true },
-  vorraum: { verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
+  vorraum: { music: 'march', verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
   thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
 };
 function roomFx() { return (G.state && ROOM_FX[viewRoomId()]) || {}; }
@@ -495,9 +495,22 @@ function drawCrystal(room) {
 }
 
 // Foto-Taste: aktuelles Bild als PNG speichern
+const ALBUM_KEY = 'tentakel-toast-fotos-v1', ALBUM_MAX = 12, albumImgs = [];
+function albumList() { try { return JSON.parse(localStorage.getItem(ALBUM_KEY) || '[]') || []; } catch (e) { return []; } }
+function albumAdd() {
+  try {
+    const c = document.createElement('canvas'); c.width = 384; c.height = 240;
+    c.getContext('2d').drawImage(cv, 0, 0, c.width, c.height);
+    const list = albumList(); list.unshift({ src: c.toDataURL('image/jpeg', 0.72), at: Date.now(), room: G.state ? viewRoomId() : G.screen });
+    while (list.length > ALBUM_MAX) list.pop();
+    localStorage.setItem(ALBUM_KEY, JSON.stringify(list)); albumImgs.length = 0;
+  } catch (e) { /* Speicher voll oder gesperrt */ }
+}
+function albumImage(i, src) { let im = albumImgs[i]; if (!im) { im = albumImgs[i] = new Image(); im.src = src; } return im; }
 function takePhoto() {
   if (!cv.toBlob) return;
   G.photoFlash = G.t; Sound.sfx('photo');
+  albumAdd();
   cv.toBlob(b => {
     if (!b) return;
     const a = document.createElement('a'); a.href = URL.createObjectURL(b);
@@ -615,6 +628,7 @@ function updateActors(dt) {
       a.x += dx / d * sp; a.y += dy / d * sp; a.walking = true;
       const before = Math.floor((a.phase || 0) / Math.PI);
       a.phase = (a.phase || 0) + dt * (a.run ? 0.02 : 0.011);
+      if (Math.floor(a.phase / Math.PI) !== before && G.state && a.id === curId()) G.state.stats.steps = (G.state.stats.steps || 0) + 1;
       if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
         Sound.step(room.floor, panX(a.x), (a.bw || 50) / 55, rainFx.on);
         puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
@@ -812,7 +826,11 @@ async function runSentence(v, a, b) {
 }
 async function resolve(v, a, b) {
   const p = curId(), st = G.state;
-  if (v === 'look' && !b) { st.looked[a] = 1; if (Object.keys(st.looked).length >= 25) unlock('neugier'); }
+  if (v === 'look' && !b) {
+    st.looked[a] = (st.looked[a] || 0) + 1;
+    if (Object.keys(st.looked).length >= 25) unlock('neugier');
+    if (st.looked[a] >= 4 && st.looked[a] % 3 === 1 && LOOK_AGAIN[p]) return say(p, pick(LOOK_AGAIN[p]));
+  }
   if (b && b[0] === 'p') {
     if (a[0] !== 'i') return say(p, 'Das kann ich nicht verschicken.');
     return sendItem(a.slice(2), b.slice(2));
@@ -1137,7 +1155,8 @@ function menuItems() {
   const back = { id: G.screen === 'game' ? 'main' : 'close', label: 'Zurück' };
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
-  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
+  if (G.menu === 'album') return [back];
+  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
   if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
@@ -1165,6 +1184,7 @@ function menuItems() {
   ];
 }
 function menuClick(x, y) {
+  if (G.menu === 'album' && G.albumView != null) { G.albumView = null; return; }
   const b = G.menuBtns.find(b => inRect(x, y, b)); if (!b) return;
   Sound.sfx('click');
   if (b.id === 'close' || b.id === 'back') G.menu = null;
@@ -1181,7 +1201,9 @@ function menuClick(x, y) {
   else if (b.id === 'import') importSave();
   else if (b.id === 'rock') startRock();
   else if (b.id.startsWith('jb_')) { G.jbOn = true; Sound.play(b.id.slice(3)); }
-  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras'].includes(b.id)) {
+  else if (b.id.startsWith('ph_')) { G.albumView = +b.id.slice(3); Sound.sfx('page'); }
+  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album'].includes(b.id)) {
+    G.albumView = null;
     if (b.id === 'notes') Sound.sfx('page');
     G.menu = b.id;
   }
@@ -1652,7 +1674,7 @@ function drawFly() {
     cx.save(); cx.translate(x, y); cx.scale(1.6 - 0.6 * e, 1.6 - 0.6 * e); cx.rotate(Math.sin(k * Math.PI * 2) * 0.3); ICON[f.id](cx); cx.restore();
   }
 }
-const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['palace', 'Lilas Palast'], ['ending', 'Abspann']];
+const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
 const HELP = [
   'Maus: Verb anklicken, dann Gegenstand oder Person', 'Rechtsklick: Standard-Aktion · ohne Verb: hinlaufen',
   'Doppelklick/-tipp: rennen · Ausgänge sofort benutzen', 'Touch: tippen · lange drücken = Standard-Aktion',
@@ -1665,10 +1687,10 @@ const HELP = [
 function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
-  const extra = G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 31 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
-  const bw = G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
+  const extra = G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 31 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const bw = G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
-  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras' }[G.menu] || 'Pause';
+  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
   let y = by + 74;
   if (G.menu === 'main' && G.state) { txt(cx, `Fortschritt: ${progress()} von ${MILESTONES.length} Rätseln`, W / 2, y - 2, '600 13px "Baloo 2", sans-serif', '#a99ad0'); y += 10; }
@@ -1676,6 +1698,20 @@ function drawMenu() {
   if (G.menu === 'help') {
     HELP.forEach((l, i) => txt(cx, l, W / 2, y + 12 + i * 23, '600 15px "Baloo 2", sans-serif', '#e6dcff'));
     y += HELP.length * 23 + 10;
+  }
+  let photoBtns = [];
+  if (G.menu === 'album') {
+    const list = albumList();
+    if (!list.length) txt(cx, 'Noch keine Fotos. Drück O (oder F2) im Spiel, um eins zu machen.', W / 2, y + 40, '600 15px "Baloo 2", sans-serif', '#c3b2ff');
+    else if (cx.isPix) txt(cx, 'Die Fotos sind nur im HD-Modus zu sehen.', W / 2, y + 40, '600 15px "Baloo 2", sans-serif', '#c3b2ff');
+    else list.forEach((ph, i) => {
+      const r = { id: 'ph_' + i, x: bx + 26 + (i % 4) * 148, y: y + 8 + Math.floor(i / 4) * 92, w: 138, h: 86 };
+      const im = albumImage(i, ph.src), hot = inRect(G.mouse.x, G.mouse.y, r);
+      R(cx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, hot ? '#ffe066' : '#3d2c5e', 0, 6);
+      if (im.complete && im.naturalWidth) cx.drawImage(im, r.x, r.y, r.w, r.h);
+      photoBtns.push(r);
+    });
+    y += 3 * 92 + 34;
   }
   if (G.menu === 'notes' && G.state) {
     NOTES.forEach(([m, text], i) => {
@@ -1685,7 +1721,7 @@ function drawMenu() {
     });
     y += NOTES.length * 28 + 8;
     const st = G.state.stats;
-    txt(cx, `Spielzeit ${fmtTime(st.ms)} · Zeitreise-Sendungen: ${st.sent} · Chrono-Kristalle: ${crystalCount()}/${CRYSTAL_ROOMS.length}`, W / 2, y + 10, '700 14px "Baloo 2", sans-serif', '#ffd23a');
+    txt(cx, `Spielzeit ${fmtTime(st.ms)} · Sendungen: ${st.sent} · Schritte: ${(st.steps || 0).toLocaleString('de-DE')} · Kristalle: ${crystalCount()}/${CRYSTAL_ROOMS.length}`, W / 2, y + 10, '700 14px "Baloo 2", sans-serif', '#ffd23a');
     txt(cx, 'Feststecken? Der Tipp-Knopf verrät den nächsten Schritt.', W / 2, y + 30, '600 13px "Baloo 2", sans-serif', '#a99ad0');
     y += 42;
   }
@@ -1699,8 +1735,18 @@ function drawMenu() {
     y += ACH.length * 31 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
-  G.menuBtns = items.map((it, i) => ({ id: it.id, off: it.off, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 }));
-  G.menuBtns.forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
+  G.menuBtns = photoBtns.concat(items.map((it, i) => ({ id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 })));
+  G.menuBtns.filter(b => !b.id.startsWith('ph_')).forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
+  if (G.menu === 'album' && G.albumView != null && !cx.isPix) {
+    const ph = albumList()[G.albumView];
+    if (ph) {
+      cx.fillStyle = 'rgba(6,2,12,0.88)'; cx.fillRect(0, 0, W, H);
+      const im = albumImage(G.albumView, ph.src);
+      R(cx, 96, 46, 768, 480, '#000000', 4, 6, '#ffe066');
+      if (im.complete && im.naturalWidth) cx.drawImage(im, 96, 46, 768, 480);
+      txt(cx, new Date(ph.at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' · Klick zum Schließen', W / 2, 560, '700 15px "Baloo 2", sans-serif', '#e6dcff', 'center', 4, '#0b0610');
+    }
+  }
 }
 function drawCursor() {
   if (G.pointer === 'touch' || G.mouse.x < 0) return;
@@ -2008,8 +2054,8 @@ function drawEnd() {
     txt(cx, ch, x, y, '400 96px "Titan One", sans-serif', grad(cx, 0, y - 80, 0, y, [[0, mix('#fff0a0', '#ffffff', hl)], [1, '#ff7a30']]), 'center', 12, '#2a0a3a');
   });
   txt(cx, 'Lila Tentakel ist jetzt nett. Vorerst.', W / 2, 172, '700 24px "Baloo 2", sans-serif', '#f3e6ff', 'center', 5, '#2a0a3a');
-  const st = G.endStats || { ms: 0, sent: 0 };
-  txt(cx, `Spielzeit ${fmtTime(st.ms)} · Zeitreise-Sendungen: ${st.sent} · Erfolge: ${achCount()}/${ACH.length} · Kristalle: ${G.state ? crystalCount() : 0}/${CRYSTAL_ROOMS.length}`, W / 2, 204, '800 16px "Baloo 2", sans-serif', '#ffd23a', 'center', 4, '#2a0a3a');
+  const st = G.endStats || { ms: 0, sent: 0 }, steps = G.state && G.state.stats.steps ? ` · ${G.state.stats.steps.toLocaleString('de-DE')} Schritte` : '';
+  txt(cx, `Spielzeit ${fmtTime(st.ms)} · Sendungen: ${st.sent}${steps} · Erfolge: ${achCount()}/${ACH.length} · Kristalle: ${G.state ? crystalCount() : 0}/${CRYSTAL_ROOMS.length}`, W / 2, 204, '800 16px "Baloo 2", sans-serif', '#ffd23a', 'center', 4, '#2a0a3a');
   const ci = Math.floor(t / 3600) % CREDITS.length, ck = (t % 3600) / 3600, ca = Math.min(1, ck * 6, (1 - ck) * 6);
   cx.save(); cx.globalAlpha = ca;
   txt(cx, CREDITS[ci][0], W / 2, 246, '400 22px "Titan One", sans-serif', '#ffffff', 'center', 5, '#2a0a3a');
@@ -2203,7 +2249,17 @@ function drawScreen() {
   else if (G.screen === 'end') { drawEnd(); if (!cx.isPix) drawBloom(0.22, H); }
   else if (G.screen === 'rock') { drawRock(); if (!cx.isPix) drawBloom(0.25, H); }
   else if (G.screen === 'game') { drawScene(); drawUI(); drawFly(); if (G.menu) drawMenu(); }
-  else { cx.fillStyle = '#120a1c'; cx.fillRect(0, 0, W, H); txt(cx, 'Lade …', W / 2, H / 2, '700 22px sans-serif', '#d7c6ff'); }
+  else {   // Ladebildschirm: hüpfender Toast mit Tentakel-Schatten
+    cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#0c0420'], [1, '#2a0f4a']]); cx.fillRect(0, 0, W, H);
+    const t = G.t, y = H / 2 - 20 - Math.abs(Math.sin(t * 0.006)) * 26, sq = 1 + Math.max(0, Math.cos(t * 0.012)) * 0.06;
+    E(cx, W / 2, H / 2 + 34, 34 - Math.abs(Math.sin(t * 0.006)) * 10, 7, 'rgba(0,0,0,0.35)', 0);
+    cx.save(); cx.translate(W / 2, y); cx.scale(sq, 2 - sq); cx.rotate(Math.sin(t * 0.004) * 0.15);
+    S(cx, '#e8b060', 3, () => { cx.moveTo(-28, 26); cx.lineTo(-28, -10); cx.quadraticCurveTo(-34, -34, -14, -34); cx.quadraticCurveTo(0, -44, 14, -34); cx.quadraticCurveTo(34, -34, 28, -10); cx.lineTo(28, 26); cx.closePath(); });
+    R(cx, -20, -20, 40, 40, '#f6dca0', 0, 6); E(cx, -8, -4, 3, 3.5, '#1b1020', 0); E(cx, 8, -4, 3, 3.5, '#1b1020', 0);
+    S(cx, null, 2.5, () => { cx.moveTo(-7, 8); cx.quadraticCurveTo(0, 14, 7, 8); });
+    cx.restore();
+    txt(cx, 'Lade' + '.'.repeat(1 + Math.floor(t / 400) % 3), W / 2, H / 2 + 80, '400 26px "Titan One", sans-serif', '#ffd23a', 'center', 5, '#1b1020');
+  }
   drawCursor();
 }
 function render() {

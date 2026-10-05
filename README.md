@@ -48,7 +48,10 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Lebendige Porträts und Figuren (blinzeln, reden mit, die Pupillen folgen dem Zeiger) und versteckte Gags auf dem Titelbildschirm
 - **Adaptive Musik:** Mit jedem gelösten Rätsel kommen neue Instrumente dazu; jede Figur hat ein kurzes Erkennungsmotiv beim Gesprächsbeginn; im Pausenmenü klingt alles gedämpft
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
-- **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG
+- **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG und legt es im **Fotoalbum** (Menü → Extras) ab
+- Kleine Gesten im Stand: Bernard schiebt die Brille hoch, Hoagie trommelt Luftschlagzeug, Laverne winkt, Dr. Fred reibt sich das Kinn
+- Schrittzähler im Notizbuch und im Abspann; wer dasselbe Ding zu oft anschaut, bekommt einen genervten Spruch
+- Neue Musik: komischer Marsch „Wachparade“ im Palast-Vorraum
 - Automatisch adaptive Qualität: Bei ruckelnder Bildrate reduziert das Spiel Auflösung und Effekte von selbst – und schaltet hoch, wenn wieder Luft ist
 - Einstellbare Textgeschwindigkeit (langsam, normal, schnell); Gegenstände im Inventar heben sich beim Überfahren und leuchten
 - Optionale Sprachausgabe über die Browser-Stimmen (Web Speech API): natürliche Stimmen bevorzugt, eigene Stimme und Tonlage pro Figur
