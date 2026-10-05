@@ -7,7 +7,7 @@
 
 const Sound = (() => {
   let ac = null, master = null, musicBus = null, sfxBus = null, ambBus = null, noiseBuf = null;
-  let verb = null, verbSend = null, musicSend = null, verbWanted = [0.6, 0.18], muffleF = null, muffled = false, intensity = 0;
+  let verbIn = null, verbSend = null, musicSend = null, verbWanted = [0.6, 0.18], muffleF = null, muffled = false, intensity = 0;
   const verbCache = {};
   let musicOn = true, ducked = false, retro = false, fadeNext = false, songT0 = 0;
   let cur = null, wanted = null, loopEnd = 0, loops = [];
@@ -19,12 +19,12 @@ const Sound = (() => {
   // Musik wird nicht mehr als ganzer Loop auf einmal angelegt, sondern kurz vor dem Erklingen (Lookahead):
   // so warten nie Hunderte Klangknoten gleichzeitig, und der Hauptthread bekommt keine Lastspitzen
   let noteQ = [];
-  const AHEAD = 1.2;
+  const AHEAD = 1.5;
   function queueNote(t, i, n, d, out, tr = 0, layer = false) { noteQ.push({ t, i, n, d, out, tr, layer }); }
-  function flushNotes() {
+  function flushNotes(ahead = AHEAD) {
     if (!ac || !noteQ.length) return;
     const now = ac.currentTime; let k = 0;
-    while (k < noteQ.length && noteQ[k].t < now + AHEAD) {
+    while (k < noteQ.length && noteQ[k].t < now + ahead) {
       const e = noteQ[k++];
       if (e.t > now - 0.04) inst(e.i, e.n, Math.max(e.t, now + 0.004), e.d, e.out, e.tr);
     }
@@ -54,9 +54,9 @@ const Sound = (() => {
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     // Raumhall: Effekte und Umgebung bekommen einen Hall-Anteil, die Musik nur einen Hauch
-    verb = ac.createConvolver(); verb.connect(master);
-    verbSend = ac.createGain(); verbSend.gain.value = verbWanted[1]; verbSend.connect(verb);
-    musicSend = ac.createGain(); musicSend.gain.value = retro ? 0 : 0.06; musicSend.connect(verb);
+    verbIn = ac.createGain();   // Sammelpunkt für den Hall; die Faltungs-Knoten je Raumgröße hängen dahinter
+    verbSend = ac.createGain(); verbSend.gain.value = verbWanted[1]; verbSend.connect(verbIn);
+    musicSend = ac.createGain(); musicSend.gain.value = retro ? 0 : 0.06; musicSend.connect(verbIn);
     sfxBus.connect(verbSend); ambBus.connect(verbSend); musicBus.connect(musicSend);
     setReverb(verbWanted[0], verbWanted[1]);
     if (!offline) {
@@ -352,7 +352,7 @@ const Sound = (() => {
     loopEnd = t0 + maxLen * spb; loopT0 = t0;
     noteQ.sort((a, b) => a.t - b.t);
     if (hero) scheduleHero(t0, 0);
-    flushNotes();
+    flushNotes(2.5);   // beim Start gleich etwas mehr vorbereiten, falls der neue Raum kurz den Hauptthread belegt
     loops.push({ g: lg, end: loopEnd + 1.5 });
     loops = loops.filter(l => { if (l.end < ac.currentTime) { try { l.g.disconnect(); } catch (e) { /* schon getrennt */ } return false; } return true; });
   }
@@ -379,22 +379,30 @@ const Sound = (() => {
     wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt
+  // Je Raumgröße ein fertig vorbereiteter Faltungshall: beim Raumwechsel wird nur übergeblendet statt die
+  // Impulsantwort neu zu laden (das kostete auf Handys spürbar Zeit und knackte); unbenutzte Knoten werden abgekoppelt
+  let verbCur = null;
   function setReverb(sec, wet) {
     verbWanted = [sec, wet];
     if (lite) sec = Math.min(sec, 1.1);
     if (!ac) return;
     const key = sec.toFixed(2);
-    let buf = verbCache[key];
-    if (!buf) {
-      const len = Math.max(1, Math.floor(ac.sampleRate * sec));
-      buf = ac.createBuffer(2, len, ac.sampleRate);
+    let vn = verbCache[key];
+    if (!vn) {
+      const len = Math.max(1, Math.floor(ac.sampleRate * sec)), buf = ac.createBuffer(2, len, ac.sampleRate);
       for (let ch = 0; ch < 2; ch++) {
         const d = buf.getChannelData(ch);
         for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6) * (i < 60 ? i / 60 : 1);
       }
-      verbCache[key] = buf;
+      const conv = ac.createConvolver(), g = ac.createGain(); conv.buffer = buf; g.gain.value = 0.0001; conv.connect(g); g.connect(master);
+      vn = verbCache[key] = { conv, g, on: false };
     }
-    if (verb.buffer !== buf) verb.buffer = buf;
+    if (verbCur !== vn) {
+      const t = ac.currentTime, old = verbCur;
+      if (old) { old.g.gain.setTargetAtTime(0.0001, t, 0.12); later(() => { if (verbCur !== old && old.on) { try { verbIn.disconnect(old.conv); } catch (e) { /* ok */ } old.on = false; } }, 1.0); }
+      if (!vn.on) { verbIn.connect(vn.conv); vn.on = true; }
+      vn.g.gain.setTargetAtTime(1, t, 0.12); verbCur = vn;
+    }
     verbSend.gain.setTargetAtTime(wet, ac.currentTime, 0.2);
   }
   function ambience(list) {
