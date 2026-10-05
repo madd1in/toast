@@ -259,7 +259,7 @@ RULES['look o:hebel'] = line('Der große Hebel. Laut Dr. Fred: "Erst ziehen, wen
 async function LEVER() {
   const f = fl();
   if (f.toast) return s('Ein Toast reicht. Mehr Freundlichkeit verträgt die Welt nicht.');
-  G.leverT = G.t; Sound.sfx('click2'); await wait(300);
+  act(curId(), 'pull', 700); G.leverT = G.t; Sound.sfx('click2'); await wait(300);
   if (!f.cellIn) { Sound.sfx('bad'); return s('Nichts passiert. Der Gut-O-Mat hat keinen Strom.'); }
   if (!f.breadIn) { Sound.sfx('hum'); return s('Er brummt, aber ohne Brot kommt kein Toast raus. Das ist Wissenschaft.'); }
   if (f.regler !== 'good') {
@@ -306,7 +306,7 @@ RULES['pick o:obstschale'] = async () => {
   await s('Einen für den Hoagie.');
 };
 RULES['use i:apfel'] = async () => {
-  Sound.sfx('chomp'); await wait(700);
+  act(curId(), 'eat', 1500); Sound.sfx('chomp'); await wait(1500);
   takeItem('apfel'); addItem('butzen', curId(), true); unlock('apfel');
   await s('Mampf... mampf... Lecker. Den Rest hebe ich auf. Man weiß nie.');
 };
@@ -330,7 +330,7 @@ RULES['pick o:eimer'] = async () => { fl().eimer = true; addItem('eimer'); await
 RULES['look o:eimer'] = line('Ein Holzeimer steht auf dem Brunnenrand.');
 RULES['use i:eimer o:brunnen'] = async () => {
   await s('Ich lasse den Eimer runter...');
-  Sound.sfx('splash'); await wait(800);
+  act(curId(), 'rope', 1600); Sound.sfx('splash'); await wait(1600);
   takeItem('eimer'); addItem('wasser');
   await s('...und ziehe ihn wieder hoch. Hoagie, der Brunnenmeister.');
 };
@@ -347,14 +347,14 @@ RULES['look o:beet'] = line(() => [
 multi(['pick', 'use'], 'o:beet', line('Mit bloßen Händen graben? Bin ich ein Maulwurf? ...Antwort lieber nicht.'));
 RULES['use i:schaufel o:beet'] = async () => {
   if (fl().beet) return s('Das Loch ist tief genug. Tiefer, und ich komme in China raus. Oder im Jahr 1500.');
-  Sound.sfx('dig'); await wait(900); fl().beet = 1;
+  act(curId(), 'dig', 1300); Sound.sfx('dig'); await wait(1300); fl().beet = 1;
   await s('Hau ruck... hau ruck... Ein Loch!');
 };
 RULES['use i:butzen o:beet'] = async () => {
   const b = fl().beet || 0;
   if (b === 0) return s('Der Boden ist steinhart. Ich brauche erst ein Loch.');
   if (b > 1) return s('Da ist schon was gepflanzt.');
-  takeItem('butzen'); fl().beet = 2; Sound.sfx('dig');
+  act(curId(), 'pick', 800); takeItem('butzen'); fl().beet = 2; Sound.sfx('dig'); await wait(500);
   await s('Rein mit dir, kleiner Butzen. Werd groß und stark. Und lecker.');
 };
 RULES['use i:apfel o:beet'] = line('Einen ganzen Apfel vergraben? Erst essen, dann pflanzen. So hat es meine Oma gemacht.');
@@ -362,7 +362,7 @@ RULES['use i:eimer o:beet'] = line('Der Eimer ist leer. Ich bräuchte Wasser.');
 RULES['use i:brot o:beet'] = line('Brot pflanzen? Dann wächst ein Brotbaum. ...Moment, das ist eigentlich genial. Nein. Fokus, Hoagie.');
 async function PLANT_WATER() {
   takeItem('wasser'); addItem('eimer', curId(), true);
-  Sound.sfx('splash');
+  act(curId(), 'pour', 1500); Sound.sfx('splash'); await wait(900);
   await s('Ein bisschen Wasser für den kleinen Kerl...');
   fl().beet = 3; fl().tree = true; Sound.sfx('grow'); unlock('baum'); await wait(900);
   await s('Er wächst! Okay, nur ein winziges bisschen. Aber in zweihundert Jahren ist der riesig!');

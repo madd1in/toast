@@ -639,6 +639,17 @@ function updateActors(dt) {
     }
   }
 }
+// Aktions-Pose starten (wird von draw.js gezeichnet); beim Graben fliegt Erde
+function act(id, kind, dur) { const a = ACT[id]; if (a && !G.fast) a.pose = { kind, t0: G.t, dur, puff: 0 }; }
+function updatePoses() {
+  const view = G.state ? viewRoomId() : null;
+  for (const a of Object.values(ACT)) {
+    const p = a.pose; if (!p) continue;
+    if (G.t - p.t0 > p.dur) { a.pose = null; continue; }
+    if (p.kind === 'dig' && a.room === view && G.t - p.puff > 260) { p.puff = G.t; puff(a.x + a.dir * 34, a.y - 4, '#6a4a2a', 4, { vy: 60, vx: 70, r: 3.2, max: 650, spread: 14 }); }
+    if (p.kind === 'pour' && a.room === view && G.t - p.puff > 120) { p.puff = G.t; puff(a.x + a.dir * 44, a.y - 40, '#8ac8ff', 2, { vy: -30, vx: 20, r: 2.4, max: 500, spread: 8 }); }
+  }
+}
 function walkPoint(key) {
   const [k, id] = key.split(':');
   if (k === 'o') { const o = OBJ[id]; const w = typeof o.walk === 'function' ? o.walk() : o.walk; return w || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10]; }
@@ -822,6 +833,8 @@ async function runSentence(v, a, b) {
     if (!ok || tok !== actToken) return;
   }
   if (tgt) faceTarget(tgt);
+  // bei jeder Handlung bewegt sich die Figur: greifen, ziehen oder in die Hocke zum Aufheben
+  if (tgt && v !== 'look' && v !== 'talk' && v !== 'walk') act(curId(), v === 'pick' ? 'pick' : v === 'pull' ? 'pull' : 'reach', v === 'pick' ? 650 : 520);
   G.busy++;
   try { await resolve(v, a, b); }
   catch (e) { console.error(e); }
@@ -2380,7 +2393,7 @@ function update(dt) {
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
-  updateEnd(dt); updateRock(); updateToaster(dt);
+  updateEnd(dt); updateRock(); updateToaster(dt); updatePoses();
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
   updateParts(dt); updateMotes(dt); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
