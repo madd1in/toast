@@ -23,7 +23,11 @@ const Sound = (() => {
     ac = useCtx || new AC(); offline = !!useCtx;
     // Tiefpass hinter dem Master: dämpft alles, solange das Pausenmenü offen ist
     muffleF = ac.createBiquadFilter(); muffleF.type = 'lowpass'; muffleF.frequency.value = muffled ? 650 : 20000; muffleF.Q.value = 0.7; muffleF.connect(ac.destination);
-    master = ac.createGain(); master.gain.value = 0.8; master.connect(muffleF);
+    // Kompressor hält die Mischung zusammen und macht sie lauter, ohne dass Spitzen übersteuern
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 10; comp.ratio.value = 3.2; comp.attack.value = 0.008; comp.release.value = 0.22;
+    const makeup = ac.createGain(); makeup.gain.value = 2.0; comp.connect(makeup); makeup.connect(muffleF);
+    master = ac.createGain(); master.gain.value = 0.8; master.connect(comp);
     musicBus = ac.createGain(); musicBus.gain.value = musicOn ? 0.2 : 0; musicBus.connect(master);
     sfxBus = ac.createGain(); sfxBus.gain.value = 0.55; sfxBus.connect(master);
     ambBus = ac.createGain(); ambBus.gain.value = 0.5; ambBus.connect(master);
@@ -50,7 +54,7 @@ const Sound = (() => {
   const freq = n => 440 * Math.pow(2, (midi(n) - 69) / 12);
 
   function osc(type, f, t, dur, vol, bus, o = {}) {
-    const { attack = 0.01, release = 0.08, lp = null, q = 1, f2 = null, detune = 0, decay = false, vib = 0 } = o;
+    const { attack = 0.01, release = 0.08, lp = null, lp2 = null, lpT = null, q = 1, f2 = null, detune = 0, decay = false, vib = 0 } = o;
     const s = ac.createOscillator(); s.type = type; s.frequency.setValueAtTime(f, t);
     if (f2) s.frequency.exponentialRampToValueAtTime(f2, t + dur);
     if (detune) s.detune.value = detune;
@@ -60,8 +64,21 @@ const Sound = (() => {
     if (decay) g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     else { g.gain.setValueAtTime(vol, Math.max(t + attack, t + dur - release)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
     let n = s;
-    if (lp) { const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; fl.Q.value = q; s.connect(fl); n = fl; }
+    if (lp) {
+      const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(lp, t); fl.Q.value = q;
+      if (lp2) fl.frequency.exponentialRampToValueAtTime(lp2, t + (lpT || dur));
+      s.connect(fl); n = fl;
+    }
     n.connect(g); g.connect(bus); s.start(t); s.stop(t + dur + 0.05);
+  }
+  // FM-Klang: Modulator steuert die Frequenz des Trägers (E-Piano, Glocken)
+  function fm(f, t, dur, vol, bus, ratio = 1, index = 1.2) {
+    const car = ac.createOscillator(), mod = ac.createOscillator(), mg = ac.createGain(), g = ac.createGain();
+    car.frequency.value = f; mod.frequency.value = f * ratio;
+    mg.gain.setValueAtTime(f * index, t); mg.gain.exponentialRampToValueAtTime(Math.max(1, f * 0.04), t + Math.min(dur, 0.9));
+    mod.connect(mg); mg.connect(car.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    car.connect(g); g.connect(bus); car.start(t); mod.start(t); car.stop(t + dur + 0.05); mod.stop(t + dur + 0.05);
   }
   function nz(t, dur, vol, bus, o = {}) {
     const { type = 'lowpass', f = 1000, f2 = null, q = 1, attack = 0.005 } = o;
@@ -75,9 +92,14 @@ const Sound = (() => {
 
   // ---------- Instrumente ----------
   function inst(name, n, t, d, bus) {
-    if (n === 'K') return osc('sine', 150, t, 0.16, 0.5, bus, { f2: 45, decay: true });
-    if (n === 'S') { nz(t, 0.14, 0.22, bus, { type: 'bandpass', f: 1800, q: 0.8 }); return osc('triangle', 190, t, 0.08, 0.12, bus, { decay: true }); }
-    if (n === 'H') return nz(t, 0.05, 0.1, bus, { type: 'highpass', f: 7000 });
+    // Schlagzeug: K Kick, S Snare, H Hi-Hat, O offene Hi-Hat, C Klatschen, T Tom/Bodhrán, R Rimshot
+    if (n === 'K') { nz(t, 0.012, 0.16, bus, { type: 'highpass', f: 3000 }); return osc('sine', 165, t, 0.24, 0.55, bus, { f2: 42, decay: true }); }
+    if (n === 'S') { nz(t, 0.16, 0.2, bus, { type: 'bandpass', f: 1800, q: 0.8 }); nz(t, 0.08, 0.1, bus, { type: 'highpass', f: 5200 }); osc('triangle', 330, t, 0.06, 0.05, bus, { decay: true }); return osc('triangle', 185, t, 0.09, 0.12, bus, { decay: true }); }
+    if (n === 'H') { nz(t, 0.045, 0.075, bus, { type: 'highpass', f: 8000 }); return nz(t, 0.03, 0.035, bus, { type: 'bandpass', f: 11000, q: 1.5 }); }
+    if (n === 'O') return nz(t, 0.3, 0.06, bus, { type: 'highpass', f: 7000 });
+    if (n === 'C') { [0, 0.011, 0.023].forEach(d => nz(t + d, 0.03, 0.14, bus, { type: 'bandpass', f: 1500, q: 1 })); return nz(t + 0.03, 0.16, 0.08, bus, { type: 'bandpass', f: 1300, q: 0.9 }); }
+    if (n === 'T') { nz(t, 0.05, 0.18, bus, { type: 'lowpass', f: 420 }); return osc('sine', 125, t, 0.28, 0.34, bus, { f2: 68, decay: true }); }
+    if (n === 'R') { nz(t, 0.02, 0.1, bus, { type: 'bandpass', f: 2600, q: 2 }); return osc('square', 1700, t, 0.02, 0.05, bus, { decay: true }); }
     for (const part of n.split('+')) {
       const f = freq(part);
       if (retro) {
@@ -97,6 +119,11 @@ const Sound = (() => {
         case 'bell': osc('sine', f, t, 0.9, 0.08, bus, { decay: true }); osc('sine', f * 2.01, t, 0.5, 0.025, bus, { decay: true }); break;
         case 'clar': osc('square', f, t, d * 0.9, 0.04, bus, { lp: 1500, attack: 0.03, release: 0.08, vib: 3 }); osc('triangle', f, t, d * 0.9, 0.05, bus, { attack: 0.03 }); break;
         case 'pad': osc('sawtooth', f, t, d, 0.022, bus, { lp: 900, attack: 0.25, release: 0.3, detune: -7 }); osc('sawtooth', f, t, d, 0.022, bus, { lp: 900, attack: 0.25, release: 0.3, detune: 7 }); break;
+        case 'strings': for (const dt of [-9, 0, 9]) osc('sawtooth', f, t, d, 0.016, bus, { lp: 2400, attack: 0.18, release: 0.25, detune: dt, vib: 2.5 }); break;
+        case 'brass': osc('sawtooth', f, t, d * 0.9, 0.045, bus, { lp: 480, lp2: 2600, lpT: 0.09, attack: 0.03, release: 0.08 }); osc('sawtooth', f, t, d * 0.9, 0.025, bus, { lp: 480, lp2: 2200, lpT: 0.1, attack: 0.04, detune: 7 }); break;
+        case 'epiano': fm(f, t, Math.max(d, 0.5) * 1.3, 0.055, bus, 1, 1.6); fm(f, t, 0.35, 0.012, bus, 14, 0.4); break;
+        case 'pluck': osc('triangle', f, t, 0.6, 0.11, bus, { decay: true, attack: 0.002 }); osc('sawtooth', f, t, 0.35, 0.035, bus, { lp: 3400, lp2: 600, lpT: 0.3, decay: true, attack: 0.002 }); break;
+        case 'fiddle': osc('sawtooth', f, t, d * 0.95, 0.04, bus, { lp: 2800, attack: 0.04, release: 0.06, vib: 5 }); osc('sawtooth', f, t, d * 0.95, 0.018, bus, { lp: 2000, attack: 0.05, detune: 6, vib: 4 }); break;
         case 'organ': osc('triangle', f, t, d * 0.95, 0.035, bus, { attack: 0.06, release: 0.15 }); osc('sine', f * 2, t, d * 0.95, 0.015, bus, { attack: 0.06, release: 0.15 }); break;
         default: osc('triangle', f, t, d, 0.08, bus);
       }
@@ -105,6 +132,14 @@ const Sound = (() => {
 
   // ---------- Musikstücke (eigene Kompositionen, je 8 Takte als Loop) ----------
   const x2 = s => s + ' ' + s;
+  // Begleitung aus Akkordsymbolen erzeugen: 'jig' = 6/8-Zupfmuster, 'bossa' = synkopierte Bossa-Akkorde
+  const TRIADS = { D: ['D3', 'F#3', 'A3'], G: ['G2', 'B2', 'D3'], A: ['A2', 'C#3', 'E3'], Bm: ['B2', 'D3', 'F#3'] };
+  function CHORDS(list, style) {
+    return list.split(' ').map(ch => {
+      if (style === 'jig') { const [r, m, f] = TRIADS[ch]; return `${r}:0.5 ${f}:0.5 ${m}:0.5 ${r.replace(/\d/, n => +n + 1)}:0.5 ${f}:0.5 ${m}:0.5`; }
+      return `${ch}:1 -:0.5 ${ch}:0.5 -:0.5 ${ch}:1 ${ch}:0.5`;
+    }).join(' ');
+  }
   const THEMES = {
     title: { bpm: 100, tracks: [
       { inst: 'tuba', seq: x2('E2:1 B2:1 E2:1 B2:1 E2:1 B2:1 E2:1 B2:1 C2:1 G2:1 C2:1 G2:1 B1:1 F#2:1 B1:1 F#2:1') },
@@ -145,6 +180,23 @@ const Sound = (() => {
       { inst: 'organ', lvl: 1, seq: x2('C5+G5:4 C5+Eb5:4 C5+F5:4 B4+D5:4') },
       { inst: 'drum', lvl: 2, seq: Array(16).fill('K:0.5 K:0.5 -:1').join(' ') },
     ] },
+    tavern: { bpm: 150, tracks: [
+      { inst: 'fiddle', seq: 'A4:0.5 F#4:0.5 A4:0.5 D5:0.5 A4:0.5 F#4:0.5 B4:0.5 G4:0.5 B4:0.5 D5:0.5 B4:0.5 G4:0.5 A4:0.5 F#4:0.5 A4:0.5 F#5:0.5 E5:0.5 D5:0.5 E5:0.5 C#5:0.5 A4:0.5 E4:0.5 F#4:0.5 G4:0.5 A4:0.5 F#4:0.5 A4:0.5 D5:0.5 A4:0.5 F#4:0.5 B4:0.5 D5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:0.5 C#5:0.5 E5:0.5 A5:0.5 G5:0.5 E5:0.5 C#5:0.5 D5:1.5 A4:0.5 B4:0.5 C#5:0.5 ' +
+        'F#5:0.5 D5:0.5 B4:0.5 F#5:0.5 D5:0.5 B4:0.5 G5:0.5 D5:0.5 B4:0.5 G5:0.5 D5:0.5 B4:0.5 F#5:0.5 E5:0.5 D5:0.5 A4:0.5 F#4:0.5 A4:0.5 E5:0.5 F#5:0.5 E5:0.5 C#5:0.5 B4:0.5 A4:0.5 B4:0.5 D5:0.5 F#5:0.5 B5:0.5 A5:0.5 F#5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:0.5 B4:0.5 G4:0.5 A4:0.5 C#5:0.5 E5:0.5 A5:0.5 G5:0.5 E5:0.5 D5:1.5 D4:1.5' },
+      { inst: 'pluck', seq: CHORDS('D G D A D G A D Bm G D A Bm G A D', 'jig') },
+      { inst: 'pizz', seq: 'D2:1.5 A2:1.5 G2:1.5 D2:1.5 D2:1.5 A2:1.5 A2:1.5 E2:1.5 D2:1.5 A2:1.5 G2:1.5 D2:1.5 A2:1.5 E2:1.5 D2:1.5 A2:1.5 B1:1.5 F#2:1.5 G2:1.5 D2:1.5 D2:1.5 A2:1.5 A2:1.5 E2:1.5 B1:1.5 F#2:1.5 G2:1.5 D2:1.5 A2:1.5 E2:1.5 D2:3' },
+      { inst: 'drum', seq: Array(16).fill('T:1.5 T:0.5 T:0.5 T:0.5').join(' ') },
+      { inst: 'clar', lvl: 1, seq: 'D5:3 D5:3 F#5:3 E5:3 D5:3 D5:3 C#5:3 D5:3 B4:3 B4:3 A4:3 C#5:3 D5:3 B4:3 C#5:3 D5:3' },
+      { inst: 'drum', lvl: 2, seq: Array(16).fill('-:0.5 H:0.5 H:0.5 -:0.5 H:0.5 H:0.5').join(' ') },
+    ] },
+    lounge: { bpm: 112, tracks: [
+      { inst: 'epiano', seq: CHORDS('A3+C4+E4+G4 D3+F3+A3+C4 G3+B3+D4+F4 C4+E4+G4+B4 F3+A3+C4+E4 B3+D4+F4+A4 E3+G#3+B3+D4 A3+C4+E4+G4', 'bossa') },
+      { inst: 'pizz', seq: 'A2:1.5 E2:0.5 A2:1.5 E2:0.5 D2:1.5 A2:0.5 D2:1.5 A2:0.5 G2:1.5 D2:0.5 G2:1.5 D2:0.5 C2:1.5 G2:0.5 C2:1.5 G2:0.5 F2:1.5 C2:0.5 F2:1.5 C2:0.5 B1:1.5 F2:0.5 B1:1.5 F2:0.5 E2:1.5 B1:0.5 E2:1.5 B1:0.5 A2:1.5 E2:0.5 A2:1.5 E2:0.5' },
+      { inst: 'clar', seq: 'E5:1.5 D5:0.5 C5:1 B4:1 A4:2 C5:1 D5:1 F5:1.5 E5:0.5 D5:1 B4:1 E5:3 -:1 A5:1.5 G5:0.5 E5:1 C5:1 D5:1.5 C5:0.5 A4:1 F4:1 G#4:1 B4:1 D5:1 F5:1 E5:2 -:2' },
+      { inst: 'drum', seq: Array(8).fill('K:1 H:0.5 R:0.5 H:0.5 K:0.5 R:0.5 H:0.5').join(' ') },
+      { inst: 'strings', lvl: 1, seq: 'E4:4 F4:4 F4:4 E4:4 E4:4 D4:4 D4:4 C4:4' },
+      { inst: 'drum', lvl: 2, seq: Array(16).fill('-:1.5 O:0.5').join(' ') },
+    ] },
     ending: { bpm: 126, tracks: [
       { inst: 'bell', seq: x2('C5:1 E5:1 G5:1 E5:1 F5:1 A5:1 G5:2 E5:1 C5:1 D5:1 B4:1 C5:4') },
       { inst: 'pizz', seq: x2('C3:1 G2:1 C3:1 G2:1 F2:1 C3:1 G2:2 C3:1 A2:1 G2:1 G2:1 C3:4') },
@@ -161,6 +213,7 @@ const Sound = (() => {
     }
     return { ev, len: b };
   }
+  const PAN = { harp: -0.35, organ: 0.3, clar: 0.22, bell: -0.25, arp: 0.32, pizz: -0.18, bassoon: 0.15, strings: -0.12, brass: 0.2, epiano: -0.22, pluck: -0.32, fiddle: 0.26 };
   function scheduleLoop(t0) {
     const th = THEMES[cur]; if (!th) return;
     const spb = 60 / th.bpm;
@@ -171,7 +224,9 @@ const Sound = (() => {
       const p = tr._p || (tr._p = parse(tr.seq));
       maxLen = Math.max(maxLen, p.len);
       if (tr.lvl && intensity < (tr.lvl === 1 ? 0.25 : 0.6)) continue;
-      for (const e of p.ev) inst(tr.inst, e.n, t0 + e.b * spb, e.len * spb, lg);
+      let out = lg; const pv = tr.pan != null ? tr.pan : PAN[tr.inst];
+      if (pv && ac.createStereoPanner) { out = ac.createStereoPanner(); out.pan.value = pv; out.connect(lg); }
+      for (const e of p.ev) inst(tr.inst, e.n, t0 + e.b * spb, e.len * spb, out);
     }
     loopEnd = t0 + maxLen * spb;
     loops.push({ g: lg, end: loopEnd + 1.5 });
@@ -266,7 +321,12 @@ const Sound = (() => {
     ding: t => { osc('sine', 1760, t, 1.2, 0.15, sfxBus, { decay: true }); osc('sine', 2637, t, 0.8, 0.06, sfxBus, { decay: true }); },
     pop: t => { osc('sine', 500, t, 0.15, 0.25, sfxBus, { f2: 160, decay: true }); osc('sine', 1568, t + 0.12, 0.6, 0.12, sfxBus, { decay: true }); },
     hum: t => { osc('sawtooth', 55, t, 1.8, 0.08, sfxBus, { lp: 300, attack: 0.2 }); osc('square', 110, t, 1.8, 0.03, sfxBus, { lp: 500, attack: 0.3 }); },
-    door: t => { nz(t, 0.25, 0.4, sfxBus, { type: 'lowpass', f: 300 }); osc('sine', 90, t, 0.2, 0.2, sfxBus, { f2: 50, decay: true }); },
+    door: t => {
+      osc('sawtooth', 200, t, 0.42, 0.022, sfxBus, { f2: 340, lp: 900, q: 9, vib: 16, attack: 0.05 });   // Knarren
+      nz(t + 0.38, 0.25, 0.4, sfxBus, { type: 'lowpass', f: 300 }); osc('sine', 90, t + 0.38, 0.2, 0.2, sfxBus, { f2: 50, decay: true });
+    },
+    page: t => { nz(t, 0.16, 0.12, sfxBus, { type: 'bandpass', f: 2600, f2: 900, q: 1.2 }); nz(t + 0.12, 0.12, 0.08, sfxBus, { type: 'bandpass', f: 2000, f2: 700, q: 1.2 }); },
+    menu: t => nz(t, 0.28, 0.05, sfxBus, { type: 'bandpass', f: 500, f2: 1700, q: 2, attack: 0.08 }),
     fanfare: t => ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => osc('square', freq(n), t + i * 0.12, i === 3 ? 0.6 : 0.12, 0.06, sfxBus, { lp: 2500 })),
     solve: t => {
       ['G4', 'C5', 'E5', 'G5'].forEach((n, i) => osc('square', freq(n), t + i * 0.09, 0.12, 0.05, sfxBus, { lp: 2600, decay: true }));
@@ -322,10 +382,13 @@ const Sound = (() => {
   }
   // Schritte je nach Untergrund
   const STEP = { wood: { f: 900, q: 1.2, v: 0.1 }, tile: { f: 2400, q: 2, v: 0.07 }, grass: { f: 3800, q: 0.7, v: 0.045, type: 'highpass' }, marble: { f: 3000, q: 3, v: 0.06 }, carpet: { f: 380, q: 0.8, v: 0.06 } };
-  function step(kind, pan) {
+  function step(kind, pan, weight = 1) {
     if (!ac) return;
-    const s = STEP[kind] || STEP.wood;
-    panned(pan, () => nz(ac.currentTime + 0.005, 0.06, s.v, sfxBus, { type: s.type || 'bandpass', f: s.f * (0.9 + Math.random() * 0.2), q: s.q }));
+    const s = STEP[kind] || STEP.wood, k = Math.max(0.7, Math.min(1.5, weight));
+    panned(pan, () => {
+      nz(ac.currentTime + 0.005, 0.06, s.v * (0.75 + 0.3 * k), sfxBus, { type: s.type || 'bandpass', f: s.f * (0.9 + Math.random() * 0.2) / k, q: s.q });
+      if (k > 1.15) osc('sine', 70, ac.currentTime + 0.005, 0.08, 0.05 * k, sfxBus, { f2: 45, decay: true });   // schwere Schritte wummern
+    });
   }
 
   // Kurzes Erkennungsmotiv, wenn ein Gespräch mit einer Figur beginnt
@@ -363,7 +426,7 @@ const Sound = (() => {
   // Für Trailer-Aufnahmen: Klang in einen OfflineAudioContext rendern, getaktet über tick()
   function initOffline(ctx) { init(ctx); }
 
-  return { init, initOffline, tick, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get ctx() { return ac; }, get out() { return master; } };
+  return { init, initOffline, tick, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------

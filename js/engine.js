@@ -112,9 +112,9 @@ function drawRipples() {
 // ---------- Raum-Atmosphäre: Hall, Licht auf Figuren, Bloom, Wetter, Schwebeteilchen ----------
 // light: [Seite der Hauptlichtquelle (-1 links, 1 rechts), Führungslicht, Schattenfarbe]
 const ROOM_FX = {
-  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets'], motes: 'dust' },
+  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets'], motes: 'dust', music: 'lounge' },
   labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
-  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire' },
+  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire', music: 'tavern' },
   garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars' },
   vorraum: { verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
@@ -542,7 +542,7 @@ function updateActors(dt) {
       const before = Math.floor((a.phase || 0) / Math.PI);
       a.phase = (a.phase || 0) + dt * (a.run ? 0.02 : 0.011);
       if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
-        Sound.step(room.floor, panX(a.x));
+        Sound.step(room.floor, panX(a.x), (a.bw || 50) / 55);
         puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
       }
     }
@@ -601,7 +601,7 @@ function irisAt(a) { const room = ROOMS[a.room]; G.irisX = a.x; G.irisY = a.y - 
 function music() {
   if (G.screen === 'title' || G.screen === 'end') { Sound.ambience([]); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
   const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
-  Sound.play(r.theme || ERA[r.era].theme);
+  Sound.play(fx.music || r.theme || ERA[r.era].theme);
   Sound.ambience([...new Set([...(r.amb || []), ...(fx.amb || [])])]);
   if (fx.verb) Sound.setReverb(fx.verb[0], fx.verb[1]);
   Sound.setIntensity(progress() / MILESTONES.length);
@@ -1040,11 +1040,12 @@ function pollPad(dt) {
 }
 
 // ---------- Menü ----------
-function openMenu() { G.menu = 'main'; if (G.pointer === 'pad') { G.mouse.x = W / 2; G.mouse.y = 0; snapNav(0, 1); } }
+function openMenu() { G.menu = 'main'; Sound.sfx('menu'); if (G.pointer === 'pad') { G.mouse.x = W / 2; G.mouse.y = 0; snapNav(0, 1); } }
 function menuItems() {
   const back = { id: G.screen === 'game' ? 'main' : 'close', label: 'Zurück' };
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
+  if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
     const auto = loadSave();
@@ -1061,6 +1062,7 @@ function menuItems() {
   return [
     { id: 'close', label: 'Weiterspielen' },
     { id: 'notes', label: 'Notizbuch' },
+    { id: 'jukebox', label: 'Musikbox' },
     { id: 'save', label: 'Spiel speichern' },
     { id: 'load', label: 'Spiel laden' },
     { id: 'settings', label: 'Einstellungen' },
@@ -1083,7 +1085,11 @@ function menuClick(x, y) {
   else if (b.id === 'auto') { if (!b.off) loadFrom(loadSave()); }
   else if (b.id === 'export') exportSave();
   else if (b.id === 'import') importSave();
-  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings'].includes(b.id)) G.menu = b.id;
+  else if (b.id.startsWith('jb_')) { G.jbOn = true; Sound.play(b.id.slice(3)); }
+  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox'].includes(b.id)) {
+    if (b.id === 'notes') Sound.sfx('page');
+    G.menu = b.id;
+  }
   else if (b.id === 'new') G.menu = 'confirm';
   else if (b.id === 'yes') { G.menu = null; startNew(); }
 }
@@ -1421,9 +1427,20 @@ function button(r, label, hot, active) {
   R(cx, r.x, r.y, r.w, r.h, hot ? '#3a2758' : '#24173a', 2, 8, active ? '#ffe066' : '#4a3672');
   txt(cx, label, r.x + r.w / 2, r.y + r.h / 2 + 5, '700 14px "Baloo 2", sans-serif', hot || active ? '#ffe066' : '#d7c6ff');
 }
+function drawUIBack() {
+  if (cx.isPix) { cx.fillStyle = '#150c20'; cx.fillRect(0, SH, W, H - SH); cx.fillStyle = '#2c1c44'; cx.fillRect(0, SH, W, 2); return; }
+  cx.fillStyle = grad(cx, 0, SH, 0, H, [[0, '#26153c'], [0.35, '#180c28'], [1, '#0d0617']]); cx.fillRect(0, SH, W, H - SH);
+  const pat = cx.createPattern(paperCanvas(), 'repeat'); if (pat.setTransform) pat.setTransform(new DOMMatrix().scale(0.6));
+  cx.save(); cx.globalCompositeOperation = 'overlay'; cx.globalAlpha = 0.2; cx.fillStyle = pat; cx.fillRect(0, SH, W, H - SH); cx.restore();
+  cx.fillStyle = grad(cx, 0, SH, W, SH, [[0, '#3a2458'], [0.5, '#9a7ad8'], [1, '#3a2458']]); cx.fillRect(0, SH, W, 3);
+  cx.fillStyle = 'rgba(0,0,0,0.45)'; cx.fillRect(0, SH + 3, W, 4);
+  for (const [x, w] of [[6, 312], [322, 452]]) {
+    R(cx, x, 468, w, 129, 'rgba(8,3,18,0.5)', 2, 12, '#3d2c5e');
+    L(cx, [x + 10, 596, x + w - 10, 596], 1.5, 'rgba(180,150,255,0.14)');
+  }
+}
 function drawUI() {
-  cx.fillStyle = '#150c20'; cx.fillRect(0, SH, W, H - SH);
-  cx.fillStyle = '#2c1c44'; cx.fillRect(0, SH, W, 2);
+  drawUIBack();
   const mx = G.mouse.x, my = G.mouse.y;
   txt(cx, G.busy || G.dialog ? '' : sentence(), 366, 462, '600 19px "Baloo 2", sans-serif', '#d7c6ff');
   button(UI.klo, 'Klo-Post', inRect(mx, my, UI.klo), G.verb === 'give' && !G.first);
@@ -1443,12 +1460,15 @@ function drawUI() {
     for (const v of UI.verbs) {
       const hot = inRect(mx, my, v), sel = G.verb === v.id, d = dv === v.id;
       if (hot || sel) R(cx, v.x, v.y, v.w, v.h, sel ? '#2a1b46' : '#22163a', 0, 8);
+      if ((hot || sel) && !cx.isPix) { cx.save(); cx.shadowColor = sel ? 'rgba(255,224,102,0.7)' : 'rgba(200,180,255,0.6)'; cx.shadowBlur = 12 * VS * DPR; }
       txt(cx, v.label, v.x + v.w / 2, v.y + 27, '800 22px "Baloo 2", sans-serif', sel ? '#ffe066' : hot ? '#ffffff' : d ? '#f6efff' : '#9a82d0');
+      if ((hot || sel) && !cx.isPix) cx.restore();
     }
     const items = inv();
     for (const s of UI.inv) {
       const id = items[s.i], hot = inRect(mx, my, s) && id, selected = id && G.first === 'i:' + id;
       R(cx, s.x, s.y, s.w, s.h, hot ? '#2c1d46' : '#1d1330', 2, 8, selected ? '#ffe066' : '#33224d');
+      if (!cx.isPix) { L(cx, [s.x + 7, s.y + 4, s.x + s.w - 7, s.y + 4], 2.5, 'rgba(0,0,0,0.4)'); L(cx, [s.x + 7, s.y + s.h - 3, s.x + s.w - 7, s.y + s.h - 3], 1.5, 'rgba(190,160,255,0.16)'); }
       if (id && !G.fly.some(f => f.id === id)) { cx.save(); cx.translate(s.x + s.w / 2, s.y + s.h / 2 + 1); ICON[id](cx); cx.restore(); }
     }
     cx.globalAlpha = 1;
@@ -1471,6 +1491,7 @@ function drawFly() {
     cx.save(); cx.translate(x, y); cx.scale(1.6 - 0.6 * e, 1.6 - 0.6 * e); cx.rotate(Math.sin(k * Math.PI * 2) * 0.3); ICON[f.id](cx); cx.restore();
   }
 }
+const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['palace', 'Lilas Palast'], ['ending', 'Abspann']];
 const HELP = [
   'Maus: Verb anklicken, dann Gegenstand oder Person', 'Rechtsklick: Standard-Aktion · ohne Verb: hinlaufen',
   'Doppelklick/-tipp: rennen · Ausgänge sofort benutzen', 'Touch: tippen · lange drücken = Standard-Aktion',
@@ -1485,7 +1506,7 @@ function drawMenu() {
   const extra = G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 31 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
   const bw = G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
-  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen' }[G.menu] || 'Pause';
+  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
   let y = by + 74;
   if (G.menu === 'main' && G.state) { txt(cx, `Fortschritt: ${progress()} von ${MILESTONES.length} Rätseln`, W / 2, y - 2, '600 13px "Baloo 2", sans-serif', '#a99ad0'); y += 10; }
@@ -1763,7 +1784,8 @@ function update(dt) {
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
   updateParts(dt); updateMotes(dt); updateWeather(); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
-  Sound.muffle(!!G.menu && G.screen === 'game');
+  Sound.muffle(!!G.menu && G.menu !== 'jukebox' && G.screen === 'game');
+  if (G.jbOn && G.menu !== 'jukebox') { G.jbOn = false; music(); }
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();
   if (G.fadeRes) {
     const k = G.skipAll ? 1 : Math.min(1, (G.t - G.fadeStart) / G.fadeDur);

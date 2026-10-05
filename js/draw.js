@@ -194,7 +194,11 @@ function arm(c, px, py, ang, sleeve, sleeveLen, skin, len, w, hand = 5.5) {
 function mouthOpen(a, t) { return !!a.talking && Math.floor(t / 115) % 2 === 0; }
 function blinking(a, t) { return ((t + (a.seed || 0) * 1777) % 3900) < 130; }
 // Pupille – oder ein geschlossenes Lid, wenn die Figur gerade blinzelt
-function pupil(c, a, t, x, y, r) { if (blinking(a, t)) L(c, [x - r * 2.2, y, x + r * 2.2, y], 2.2); else E(c, x, y, r, r * 1.15, OUT, 0); }
+function pupil(c, a, t, x, y, r) {
+  if (blinking(a, t)) { L(c, [x - r * 2.2, y, x + r * 2.2, y], 2.2); return; }
+  E(c, x, y, r, r * 1.15, OUT, 0);
+  if (!c.isPix && r > 1.2) { E(c, x - r * 0.38, y - r * 0.45, r * 0.42, r * 0.42, 'rgba(255,255,255,0.92)', 0); E(c, x + r * 0.4, y + r * 0.45, r * 0.18, r * 0.18, 'rgba(255,255,255,0.6)', 0); }
+}
 function swing(a) { return a.walking ? Math.sin(a.phase) : 0; }
 function bobY(a, t) { return a.walking ? -Math.abs(Math.cos(a.phase)) * 3 : Math.sin(t * 0.002 + (a.seed || 0)) * 0.7; }
 
