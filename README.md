@@ -54,6 +54,11 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Einstellung **Hotspot-Hilfe**: dezente, pulsierende Markierungen an allem Benutzbaren; das gewählte Verb leuchtet in der Satzzeile
 - **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, drei Schwierigkeitsgrade mit Bestenliste, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
 - **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
+- **Umgebungslicht:** Die Ränder neben dem Spielbild (Handy quer, breite Monitore) leuchten weich in den Farben der aktuellen Szene
+- **Nebenfiguren mit Geräuschen:** Gertrude summt und wischt hörbar, John Hancocks Feder kratzt, der Grüne Tentakel singt „la la la“, Lila kichert fies, Dr. Freds Geistesblitz macht „Ding!“
+- **Musik mit Fills:** Am Ende jedes Durchgangs ein Schlagzeug-Fill, beim Neustart ein Becken – die Stücke wirken weniger wie eine Schleife
+- **Eigene Figur anklicken:** löst sofort eine kleine Aktion aus (Brille, Grübeln, Luftgitarre, Bauch-Trommel, Gähnen, Fliege)
+- **Schmusekatze:** Steht Bernard eine Weile still, kommt Mozzarella angetrabt und schmiegt sich schnurrend an seine Beine
 - **Lippen im Takt der Silben:** Jede Plapper-Silbe öffnet den Mund in der Form ihres Vokals – weit beim a, breit bei e und i, rund bei o und u
 - **Musikbox zeigt die Leitstimme:** kleines Porträt der aktiven Figur und welches Instrument die Melodie gerade mitspielt
 - **Neuer Erfolg „Geduldsprobe“:** alle fünf Leerlauf-Ticks der Helden entdecken (17 Erfolge insgesamt)

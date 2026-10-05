@@ -329,6 +329,7 @@ function pose(a, t) {
     case 'think': return { front: -1.95, fb: 2.6, mix: Math.min(1, s * 2.5) };
     case 'airguitar': return { front: -1.95, fb: 0.3, back: -0.7 + Math.sin((t - p.t0) * 0.034) * 0.28, bb: 0.9, knee: 0.35, lean: -0.09, bang: Math.abs(Math.sin((t - p.t0) * 0.017)), mix: Math.min(1, s * 3) };
     case 'yawn': return { front: -3.35, fb: 0.35, back: -3.45, bb: 0.3, lean: -0.07, mix: s };
+    case 'belly': return { front: -0.5 + Math.sin((t - p.t0) * 0.03) * 0.28, fb: 1.6, back: -0.45 - Math.sin((t - p.t0) * 0.03) * 0.28, bb: 1.5, mix: Math.min(1, s * 3) };
     case 'fly': return k < 0.8 ? null : { front: -2.6 + (k - 0.8) / 0.2 * 2.0, fb: 0.4, mix: 1 };   // am Ende: zuschlagen
   }
   return null;
@@ -439,6 +440,23 @@ function brows(c, a, t, x1, x2, y, w, col, lw) {
 const CRITTER_DRAW = {
   cat(c, cr, t) {
     const walk = cr.mode === 'walk' || cr.mode === 'flee', ph = cr.phase || 0, fur = '#e89a4a', dark = '#b8682a';
+    if (cr.mode === 'rub') {   // schmiegt sich an die Beine: Rücken hoch, Schwanz senkrecht mit Knick, Augen zu, Herzchen
+      const sw = Math.sin(t * 0.006) * 3;
+      c.save(); c.translate(sw, 0);
+      S(c, null, 5, () => { c.moveTo(-15, -16); c.quadraticCurveTo(-22, -34, -18, -46); c.quadraticCurveTo(-15, -52, -10, -48); }, OUT);
+      S(c, null, 3, () => { c.moveTo(-15, -16); c.quadraticCurveTo(-22, -34, -18, -46); c.quadraticCurveTo(-15, -52, -10, -48); }, fur);
+      for (const [x, s] of [[-10, 1], [8, -1], [-6, -1], [12, 1]]) R(c, x - 2.2, -9, 4.4, 9, x < 0 ? dark : fur, 2, 2);
+      shape(c, fur, [-17, -30, 18, -6], () => { c.moveTo(-16, -10); c.quadraticCurveTo(-18, -27, -2, -28); c.quadraticCurveTo(14, -29, 17, -14); c.quadraticCurveTo(10, -6, -16, -10); c.closePath(); });
+      for (const x of [-9, -3, 3]) L(c, [x, -27, x + 2, -21], 2, dark);
+      const hx = 16, hy = -22;
+      E(c, hx, hy, 9, 8, fur, 3);
+      P(c, [hx - 6, hy - 4, hx - 4, hy - 12, hx, hy - 6], fur, 2.5); P(c, [hx + 1, hy - 6, hx + 5, hy - 12, hx + 6, hy - 3], fur, 2.5);
+      S(c, null, 1.6, () => { c.moveTo(hx, hy - 1); c.quadraticCurveTo(hx + 2, hy - 3, hx + 4, hy - 1); c.moveTo(hx + 5.5, hy - 1); c.quadraticCurveTo(hx + 7, hy - 3, hx + 9, hy - 1); });   // Augen zu
+      E(c, hx + 8, hy + 3, 1.6, 1.2, '#ff8aa0', 0);
+      c.restore();
+      if (cr.x != null) floaters(c, cr, t, 16, -36, 2, (x, y, s) => heart(c, x, y, 5 * s, '#ff6fae', 1.6));
+      return;
+    }
     if (cr.mode === 'sleep') {   // eingerollt, Schwanz um den Körper, Zzz
       S(c, dark, 2.5, () => { c.moveTo(-16, -3); c.quadraticCurveTo(-24, -10, -10, -14); }, OUT);
       E(c, 0, -10, 18, 10, fur, 3); for (const x of [-8, -1, 6]) L(c, [x, -19, x + 2, -12], 2, dark);

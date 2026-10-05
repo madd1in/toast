@@ -1046,6 +1046,7 @@ function sceneClick(x, y, right) {
   const h = hitScene(x, y);
   G.ripples.push({ x, y, t: G.t });
   if (right) { if (h) { const dv = defaultVerb(h); G.verb = null; G.first = null; runSentence(dv || 'look', h); } return; }
+  if ((!h || h[0] === 'o') && !G.first && !G.verb && selfHit(x, y)) return emote();
   if (!h) { G.first = null; G.verb = null; ++actToken; walkTo(me(), x, y); return; }
   if (G.first) { const v = G.verb, a = G.first; G.first = null; G.verb = null; return runSentence(v, a, h); }
   const v = G.verb || 'walk'; G.verb = null;
@@ -1968,6 +1969,7 @@ const HELP = [
   'Klo-Post: Gegenstand wählen → Gesicht unten rechts (geht überall) · O Foto',
   'Menü → Extras: Minispiele, Fotoalbum, Figuren-Steckbriefe, Musikbox, Erfolge',
   'M: Zeitreise-Karte – besuchte Orte deiner Zeit per Schnellreise erreichen',
+  'Eigene Figur anklicken: kleine Aktion – Brille, Luftgitarre, Bauch-Trommel, Gähnen …',
 ];
 function drawMenu() {
   // Pixel-Modus: Texte werden erst am Ende über die Pixel gelegt – alles darunter würde durch das Menü scheinen
@@ -3076,6 +3078,7 @@ function modernClick(x, y, right) {
     if (h) openCoin(x, y, h);
     return;
   }
+  if ((!h || h[0] === 'o') && !G.first && !G.verb && selfHit(sx, sy)) return emote();   // die Figur steht vor Gegenständen im Hintergrund
   const lc = G.lastClick, dbl = lc && G.t - lc.t < 380 && Math.hypot(sx - lc.x, sy - lc.y) < 30;
   G.lastClick = dbl ? null : { x: sx, y: sy, t: G.t };
   G.ripples.push({ x: sx, y: sy, t: G.t });
@@ -3256,13 +3259,58 @@ function drawRays(room) {
 
 // ---------- Leerlauf-Ticks ----------
 // Steht die Spielfigur eine Weile still, rückt Bernard die Brille oder grübelt, Hoagie spielt Luftgitarre, Laverne gähnt oder jagt eine Fliege
-const FIDGET = { bernard: [['glasses', 1700, 'squeak'], ['think', 2800, 'hmm']], hoagie: [['airguitar', 3300, 'airguitar']], laverne: [['yawn', 2600, 'yawn'], ['fly', 3800, 'buzz']] };
+const FIDGET = { bernard: [['glasses', 1700, 'specs'], ['think', 2800, 'hmm']], hoagie: [['airguitar', 3300, 'airguitar'], ['belly', 2200, 'bellydrum']], laverne: [['yawn', 2600, 'yawn'], ['fly', 3800, 'buzz']] };
 function fidget(p, kind) {
   const f = FIDGET[p.id] && (kind ? FIDGET[p.id].find(q => q[0] === kind) : pick(FIDGET[p.id])); if (!f) return;
   p.pose = { kind: f[0], t0: G.t, dur: f[1], puff: 0, fidget: true };
   if (G.state) { const seen = G.state.fidgets || (G.state.fidgets = {}); seen[f[0]] = 1; if (Object.values(FIDGET).every(l => l.every(q => seen[q[0]]))) unlock('geduld'); }
   G.stillSince = G.t + f[1] + 5000 + Math.random() * 7000;
   if (f[2]) Sound.sfx(f[2], panX(p.x));
+}
+// Eigene Figur anklicken: sofort eine kleine Aktion (jedes Mal eine andere)
+function selfHit(x, y) {
+  const p = me(), room = ROOMS[p.room]; if (!p.visible || p.room !== viewRoomId()) return false;
+  const sc = roomScale(room, p.y) * (p.scaleMul || 1), w = p.bw * sc, h = p.h * sc;
+  return x >= p.x - w / 2 && x <= p.x + w / 2 && y >= p.y - h && y <= p.y + 4;
+}
+function emote() {
+  const p = me(), list = FIDGET[p.id]; if (!list || p.walking || G.busy) return;
+  const was = p.pose && p.pose.fidget ? p.pose.kind : G.lastEmote, opts = list.filter(f => f[0] !== was);
+  const k = pick(opts.length ? opts : list)[0]; G.lastEmote = k; fidget(p, k);
+}
+// Geräusche zu den Mini-Aktionen der Nebenfiguren – nur im sichtbaren Raum, genau zum Start der Aktion
+const NPC_FOLEY = [
+  ['gertrude', a => idleAct(a, G.t, 13000, 3800, 6000), 'hummel'], ['gertrude', a => idleAct(a, G.t, 11000, 2600), 'wipe'],
+  ['hancock', a => idleAct(a, G.t, 8000, 1700), 'quill'], ['green', a => idleAct(a, G.t, 9000, 3400, 2500), 'lala'],
+  ['lila', a => a.nice ? -1 : idleAct(a, G.t, 10000, 2400, 4000), 'scheme'], ['drfred', a => gesture(a, G.t) > 0.15 ? 1 : -1, 'bulb'],
+];
+function updateNpcFoley() {
+  if (G.screen !== 'game' || !G.state || G.fast) return;
+  const view = viewRoomId(), st = G.foley || (G.foley = {});
+  for (const [id, fn, snd] of NPC_FOLEY) {
+    const a = ACT[id], k = id + snd;
+    if (!a || a.room !== view || !a.visible) { st[k] = true; continue; }   // erst beim nächsten echten Start klingen, nicht mitten in der Aktion
+    const on = fn(a) >= 0;
+    if (on && !st[k] && !G.menu && !G.dialog) Sound.sfx(snd, panX(a.x));
+    st[k] = on;
+  }
+}
+// Die Katze kommt zu Bernard, wenn er eine Weile stillsteht, und schmiegt sich schnurrend an
+function updateSnuggle() {
+  const c = CRIT.katze, p = G.state && me(); if (!c || !p || c.x == null) return;
+  const still = p.room === c.room && p.visible && !p.walking && !G.busy && !G.dialog;
+  if (!still) { c.stillT = G.t; if (c.mode === 'rub') { c.mode = 'sit'; c.until = G.t + 1500; } return; }
+  if (c.mode === 'rub') { if (G.t > c.rubEnd) { c.mode = 'sit'; c.until = G.t + 4000; c.calm = G.t + 3000; c.nextSnuggle = G.t + 40000; } return; }
+  if (c.snuggle && c.mode !== 'walk') {   // angekommen
+    c.snuggle = false; c.mode = 'rub'; c.rubEnd = G.t + 5200; c.calm = G.t + 8000; c.dir = p.x > c.x ? 1 : -1;
+    if (c.room === viewRoomId()) Sound.sfx('purr', panX(c.x));
+    return;
+  }
+  if (!c.snuggle && c.mode !== 'sleep' && c.mode !== 'flee' && G.t - (c.stillT || G.t) > 4500 && G.t > (c.nextSnuggle || 0)) {
+    const side = c.x < p.x ? -1 : 1;
+    [c.tx, c.ty] = clampWalk(ROOMS[c.room], p.x + side * 30, p.y + 2);
+    c.mode = 'walk'; c.dir = c.tx > c.x ? 1 : -1; c.snuggle = true; c.calm = G.t + 15000;
+  }
 }
 function updateFidget() {
   if (G.screen !== 'game' || !G.state || G.fast) return;
@@ -3354,7 +3402,7 @@ function update(dt) {
   updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt); updateCritters(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
-  updateParts(dt); updateMotes(dt); updateFidget(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
+  updateParts(dt); updateMotes(dt); updateFidget(); updateNpcFoley(); updateSnuggle(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
   Sound.muffle(!!G.menu && G.menu !== 'jukebox' && G.screen === 'game');
   if (G.jbOn && G.menu !== 'jukebox') { G.jbOn = false; music(); }
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();
@@ -3422,6 +3470,18 @@ function render() {
   cx.clearRect(0, 0, W, H);
   drawScreen();
 }
+// Umgebungslicht: die Ränder neben dem Spielbild (Handy quer, breite Monitore) leuchten weich in den Farben der Szene
+const ambCv = document.getElementById('amb'), ambG = ambCv && ambCv.getContext('2d');
+function updateAmbilight() {
+  if (!ambG || document.hidden || G.t - (G.ambT || 0) < (G.quality < 1 ? 260 : 140)) return;
+  G.ambT = G.t;
+  const r = cv.getBoundingClientRect(), gap = Math.max(window.innerWidth - r.width, window.innerHeight - r.height);
+  ambCv.style.opacity = gap > 24 ? '1' : '0';
+  if (gap <= 24) return;
+  ambG.globalCompositeOperation = 'source-over'; ambG.filter = 'blur(1.2px)';
+  ambG.drawImage(cv, -3, -3, ambCv.width + 6, ambCv.height + 6); ambG.filter = 'none';
+  ambG.fillStyle = 'rgba(10,5,18,0.42)'; ambG.fillRect(0, 0, ambCv.width, ambCv.height);
+}
 function frame(ts) {
   const dt = Math.min(50, ts - (G.last || ts)); G.last = ts; G.t += dt;
   // adaptive Qualität: bei anhaltendem Ruckeln DPR und Partikeldichte drosseln, später wieder hoch
@@ -3430,7 +3490,7 @@ function frame(ts) {
     if (G.fpsAvg > 24 && G.quality > 0.5) { G.quality = 0.5; G.fpsGate = G.t; resize(); }
     else if (G.fpsAvg < 17 && G.quality < 1) { G.quality = 1; G.fpsGate = G.t; resize(); }
   }
-  try { update(dt); render(); } catch (e) { console.error(e); }
+  try { update(dt); render(); updateAmbilight(); } catch (e) { console.error(e); }
   requestAnimationFrame(frame);
 }
 async function boot() {

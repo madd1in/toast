@@ -134,6 +134,9 @@ const Sound = (() => {
     if (n === 'O') return nz(t, 0.3, 0.06, bus, { type: 'highpass', f: 7000 });
     if (n === 'C') { [0, 0.011, 0.023].forEach(d => nz(t + d, 0.03, 0.14, bus, { type: 'bandpass', f: 1500, q: 1 })); return nz(t + 0.03, 0.16, 0.08, bus, { type: 'bandpass', f: 1300, q: 0.9 }); }
     if (n === 'T') { nz(t, 0.05, 0.18, bus, { type: 'lowpass', f: 420 }); return osc('sine', 125, t, 0.28, 0.34, bus, { f2: 68, decay: true }); }
+    if (n === 'X') { nz(t, 1.7, 0.06, bus, { type: 'highpass', f: 5200 }); return nz(t, 0.7, 0.045, bus, { type: 'bandpass', f: 8800, q: 0.7 }); }   // Becken
+    if (n === 'U') { nz(t, 0.04, 0.12, bus, { type: 'lowpass', f: 900 }); return osc('sine', 230, t, 0.22, 0.3, bus, { f2: 130, decay: true }); }   // hohes Tom
+    if (n === 'M') { nz(t, 0.04, 0.12, bus, { type: 'lowpass', f: 700 }); return osc('sine', 170, t, 0.26, 0.32, bus, { f2: 92, decay: true }); }   // mittleres Tom
     if (n === 'R') { nz(t, 0.02, 0.1, bus, { type: 'bandpass', f: 2600, q: 2 }); return osc('square', 1700, t, 0.02, 0.05, bus, { decay: true }); }
     for (const part of n.split('+')) {
       const f = freq(part) * (tr ? Math.pow(2, tr / 12) : 1);
@@ -207,7 +210,7 @@ const Sound = (() => {
       { inst: 'drum', lvl: 2, seq: Array(16).fill('K:1 H:1 H:1').join(' ') },
     ] },
     // Zeitalter-Themen jetzt mit A- und B-Teil (16 Takte), damit der Loop nicht so schnell ermüdet
-    present: { bpm: 116, tracks: [
+    present: { fill: true, bpm: 116, tracks: [
       { inst: 'pizz', seq: x2('D2:1 A2:1 D3:1 A2:1 D2:1 A2:1 D3:1 A2:1 Bb1:1 F2:1 Bb2:1 F2:1 A1:1 E2:1 A2:1 C#3:1') + ' ' + x2('G2:1 D3:1 G3:1 D3:1 F2:1 C3:1 F3:1 C3:1 Bb1:1 F2:1 Bb2:1 F2:1 A1:1 E2:1 A2:1 E2:1') },
       { inst: 'bassoon', seq: 'D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 G4:0.5 F4:0.5 E4:1 F4:0.5 E4:0.5 D4:2 Bb4:0.5 -:0.5 A4:0.5 -:0.5 G4:1 F4:1 E4:1 C#4:1 A3:2 D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 D5:1 C5:0.5 Bb4:0.5 A4:0.5 G4:0.5 A4:2 Bb4:1 G4:1 E4:1 C#4:1 D4:2 -:2 G4:1 Bb4:0.5 A4:0.5 G4:1 D4:1 F4:1 A4:0.5 G4:0.5 F4:2 D5:1 C5:0.5 Bb4:0.5 A4:1 F4:1 E4:2 C#4:2 G4:0.5 A4:0.5 Bb4:1 D5:1 Bb4:1 A4:0.5 G4:0.5 F4:1 A4:2 Bb4:1 A4:1 G4:1 E4:1 D4:4' },
       { inst: 'pad', seq: x2('D3+F3+A3:4 D3+F3+A3:4 Bb2+D3+F3:4 A2+C#3+E3:4') + ' ' + x2('G2+Bb2+D3:4 F2+A2+C3:4 Bb2+D3+F3:4 A2+C#3+E3:4') },
@@ -215,7 +218,7 @@ const Sound = (() => {
       { inst: 'bell', lvl: 1, seq: x2('A5:1 -:1 F5:1 -:1 D5:1 -:1 A4:1 -:1 F5:1 -:1 D5:1 -:1 E5:1 -:1 C#5:1 -:1') + ' ' + x2('G5:1 -:1 D5:1 -:1 F5:1 -:1 C5:1 -:1 F5:1 -:1 D5:1 -:1 E5:1 -:1 A4:1 -:1') },
       { inst: 'drum', lvl: 2, seq: Array(64).fill('-:0.5 H:0.5').join(' ') },
     ] },
-    future: { bpm: 124, tracks: [
+    future: { fill: true, bpm: 124, tracks: [
       { inst: 'arp', seq: x2('A3:0.5 C4:0.5 E4:0.5 A4:0.5 E4:0.5 C4:0.5 A3:0.5 C4:0.5 F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 C4:0.5 E4:0.5 G4:0.5 C5:0.5 G4:0.5 E4:0.5 C4:0.5 E4:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5 B3:0.5') + ' ' + x2('D4:0.5 F4:0.5 A4:0.5 D5:0.5 A4:0.5 F4:0.5 D4:0.5 F4:0.5 F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5 B3:0.5 A3:0.5 C4:0.5 E4:0.5 A4:0.5 E4:0.5 C4:0.5 A3:0.5 C4:0.5') },
       { inst: 'synbass', seq: x2('A1:2 A2:2 F1:2 F2:2 C2:2 C3:2 G1:2 G2:2') + ' ' + x2('D2:2 D3:2 F1:2 F2:2 G1:2 G2:2 A1:2 A2:2') },
       { inst: 'bell', seq: 'E5:2 D5:1 C5:1 A4:4 G4:2 C5:1 E5:1 D5:4 E5:2 G5:1 E5:1 F5:2 E5:1 C5:1 D5:2 B4:2 A4:4 A5:2 G5:1 F5:1 D5:4 F5:2 E5:1 D5:1 B4:4 C5:1 D5:1 E5:2 F5:2 E5:1 D5:1 E5:2 G#4:2 A4:4' },
@@ -224,7 +227,7 @@ const Sound = (() => {
       { inst: 'harp', lvl: 1, seq: x2('A4:1.5 E5:1.5 A5:1 F4:1.5 C5:1.5 F5:1 C5:1.5 G5:1.5 C6:1 G4:1.5 D5:1.5 G5:1') + ' ' + x2('D5:1.5 A5:1.5 D6:1 F4:1.5 C5:1.5 F5:1 G4:1.5 D5:1.5 G5:1 A4:1.5 E5:1.5 A5:1') },
       { inst: 'drum', lvl: 2, seq: Array(32).fill('-:0.5 H:0.25 H:0.25 -:0.5 H:0.5').join(' ') },
     ] },
-    palace: { bpm: 96, tracks: [
+    palace: { fill: true, bpm: 96, tracks: [
       { inst: 'tuba', seq: x2('C2:1 G2:1 C2:1 G2:1 Ab1:1 Eb2:1 Ab1:1 Eb2:1 F1:1 C2:1 F1:1 C2:1 G1:1 D2:1 G1:1 B1:1') },
       { inst: 'clar', seq: 'C4:1 Eb4:0.5 F4:0.5 G4:1 G4:1 Ab4:1 G4:0.5 F4:0.5 Eb4:2 F4:1 Ab4:0.5 G4:0.5 F4:1 Eb4:1 D4:1 B3:1 G3:2 C4:1 Eb4:0.5 F4:0.5 G4:1 C5:1 Bb4:0.5 Ab4:0.5 G4:1 F4:2 Eb4:1 D4:1 F4:1 B3:1 C4:2 -:2' },
       { inst: 'pad', seq: x2('C3+Eb3+G3:4 Ab2+C3+Eb3:4 F2+Ab2+C3:4 G2+B2+D3:4') },
@@ -232,7 +235,7 @@ const Sound = (() => {
       { inst: 'organ', lvl: 1, seq: x2('C5+G5:4 C5+Eb5:4 C5+F5:4 B4+D5:4') },
       { inst: 'drum', lvl: 2, seq: Array(16).fill('K:0.5 K:0.5 -:1').join(' ') },
     ] },
-    tavern: { bpm: 150, tracks: [
+    tavern: { fill: true, bpm: 150, tracks: [
       { inst: 'fiddle', seq: 'A4:0.5 F#4:0.5 A4:0.5 D5:0.5 A4:0.5 F#4:0.5 B4:0.5 G4:0.5 B4:0.5 D5:0.5 B4:0.5 G4:0.5 A4:0.5 F#4:0.5 A4:0.5 F#5:0.5 E5:0.5 D5:0.5 E5:0.5 C#5:0.5 A4:0.5 E4:0.5 F#4:0.5 G4:0.5 A4:0.5 F#4:0.5 A4:0.5 D5:0.5 A4:0.5 F#4:0.5 B4:0.5 D5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:0.5 C#5:0.5 E5:0.5 A5:0.5 G5:0.5 E5:0.5 C#5:0.5 D5:1.5 A4:0.5 B4:0.5 C#5:0.5 ' +
         'F#5:0.5 D5:0.5 B4:0.5 F#5:0.5 D5:0.5 B4:0.5 G5:0.5 D5:0.5 B4:0.5 G5:0.5 D5:0.5 B4:0.5 F#5:0.5 E5:0.5 D5:0.5 A4:0.5 F#4:0.5 A4:0.5 E5:0.5 F#5:0.5 E5:0.5 C#5:0.5 B4:0.5 A4:0.5 B4:0.5 D5:0.5 F#5:0.5 B5:0.5 A5:0.5 F#5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:0.5 B4:0.5 G4:0.5 A4:0.5 C#5:0.5 E5:0.5 A5:0.5 G5:0.5 E5:0.5 D5:1.5 D4:1.5' },
       { inst: 'pluck', seq: CHORDS('D G D A D G A D Bm G D A Bm G A D', 'jig') },
@@ -241,7 +244,7 @@ const Sound = (() => {
       { inst: 'clar', lvl: 1, seq: 'D5:3 D5:3 F#5:3 E5:3 D5:3 D5:3 C#5:3 D5:3 B4:3 B4:3 A4:3 C#5:3 D5:3 B4:3 C#5:3 D5:3' },
       { inst: 'drum', lvl: 2, seq: Array(16).fill('-:0.5 H:0.5 H:0.5 -:0.5 H:0.5 H:0.5').join(' ') },
     ] },
-    lounge: { bpm: 112, tracks: [
+    lounge: { fill: true, bpm: 112, tracks: [
       { inst: 'epiano', seq: CHORDS('A3+C4+E4+G4 D3+F3+A3+C4 G3+B3+D4+F4 C4+E4+G4+B4 F3+A3+C4+E4 B3+D4+F4+A4 E3+G#3+B3+D4 A3+C4+E4+G4', 'bossa') },
       { inst: 'pizz', seq: 'A2:1.5 E2:0.5 A2:1.5 E2:0.5 D2:1.5 A2:0.5 D2:1.5 A2:0.5 G2:1.5 D2:0.5 G2:1.5 D2:0.5 C2:1.5 G2:0.5 C2:1.5 G2:0.5 F2:1.5 C2:0.5 F2:1.5 C2:0.5 B1:1.5 F2:0.5 B1:1.5 F2:0.5 E2:1.5 B1:0.5 E2:1.5 B1:0.5 A2:1.5 E2:0.5 A2:1.5 E2:0.5' },
       { inst: 'clar', seq: 'E5:1.5 D5:0.5 C5:1 B4:1 A4:2 C5:1 D5:1 F5:1.5 E5:0.5 D5:1 B4:1 E5:3 -:1 A5:1.5 G5:0.5 E5:1 C5:1 D5:1.5 C5:0.5 A4:1 F4:1 G#4:1 B4:1 D5:1 F5:1 E5:2 -:2' },
@@ -249,7 +252,7 @@ const Sound = (() => {
       { inst: 'strings', lvl: 1, seq: 'E4:4 F4:4 F4:4 E4:4 E4:4 D4:4 D4:4 C4:4' },
       { inst: 'drum', lvl: 2, seq: Array(16).fill('-:1.5 O:0.5').join(' ') },
     ] },
-    ending: { bpm: 126, tracks: [
+    ending: { fill: true, bpm: 126, tracks: [
       { inst: 'bell', seq: x2('C5:1 E5:1 G5:1 E5:1 F5:1 A5:1 G5:2 E5:1 C5:1 D5:1 B4:1 C5:4') },
       { inst: 'pizz', seq: x2('C3:1 G2:1 C3:1 G2:1 F2:1 C3:1 G2:2 C3:1 A2:1 G2:1 G2:1 C3:4') },
       { inst: 'pad', seq: x2('C4+E4+G4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4') },
@@ -260,7 +263,7 @@ const Sound = (() => {
       { inst: 'drum', seq: Array(64).fill('H:0.5').join(' ') },
     ] },
     // Wachparade: komischer Marsch für den Palast-Vorraum
-    march: { bpm: 112, tracks: [
+    march: { fill: true, bpm: 112, tracks: [
       { inst: 'tuba', seq: x2('Bb1:1 F2:1 Bb1:1 F2:1 Eb2:1 Bb1:1 Eb2:1 Bb1:1 F2:1 C2:1 F2:1 C2:1 Bb1:1 F2:1 Bb1:2') },
       { inst: 'brass', seq: 'F4:1 Bb4:0.5 C5:0.5 D5:1 Bb4:1 Eb5:1 D5:0.5 C5:0.5 Bb4:1 G4:1 A4:1 C5:0.5 Bb4:0.5 A4:1 F4:1 Bb4:2 F4:1 -:1 D5:1 C5:0.5 Bb4:0.5 F4:1 Bb4:1 G4:1 Bb4:0.5 C5:0.5 Eb5:1 G5:1 F5:1 Eb5:0.5 D5:0.5 C5:1 A4:1 Bb4:3 -:1' },
       { inst: 'drum', seq: Array(16).fill('S:0.5 S:0.25 S:0.25 S:1').join(' ') },
@@ -303,7 +306,7 @@ const Sound = (() => {
   // auf der E-Gitarre, Laverne eine Oktave höher auf Glocken – beim Figurenwechsel wechselt die Klangfarbe sofort
   const LEAD = { title: 1, past: 0, present: 1, future: 2, palace: 1, tavern: 0, lounge: 2, ending: 0, march: 1 };
   const HERO_INST = { bernard: ['epiano', 0, 0.85], hoagie: ['guitar', -12, 0.55], laverne: ['bell', 12, 0.65] };
-  let hero = null, heroLayers = [], loopT0 = 0;
+  let hero = null, heroLayers = [], loopT0 = 0, loopN = 0;
   function scheduleHero(t0, from) {
     const th = THEMES[cur], hi = HERO_INST[hero], tr = th && LEAD[cur] != null ? th.tracks[LEAD[cur]] : null;
     if (!hi || !tr || retro) return;
@@ -341,6 +344,14 @@ const Sound = (() => {
       if (pv && ac.createStereoPanner) { out = ac.createStereoPanner(); out.pan.value = pv; out.connect(lg); }
       for (const e of p.ev) queueNote(t0 + e.b * spb, tr.inst, e.n, e.len * spb, out);
     }
+    // Schlagzeug-Fill im letzten Schlag und ein Becken, wenn der Loop von vorn beginnt – die Stücke wirken weniger wie eine Schleife
+    if (th.fill && maxLen >= 8) {
+      const fg = ac.createGain(); fg.gain.value = 0.7; fg.connect(lg);
+      if (loopN > 0) queueNote(t0, 'drum', 'X', 1, fg);
+      const e = t0 + (maxLen - 1) * spb;
+      [['S', 0], ['S', 0.25], ['U', 0.5], ['M', 0.75]].forEach(([n, b]) => queueNote(e + b * spb, 'drum', n, 0.2, fg));
+    }
+    loopN++;
     if (partyOn && cur !== 'rock' && maxLen > 0) {   // Party-Modus: Disco-Beat über dem laufenden Stück
       const pg = ac.createGain(); pg.gain.value = 0.55; pg.connect(lg);
       for (let b = 0; b < maxLen; b += 1) {
@@ -435,7 +446,7 @@ const Sound = (() => {
     if (!ac) { wanted = name; return; }
     if (cur === name) return;
     const had = !!cur;
-    stopMusic(); cur = name; fadeNext = had;
+    stopMusic(); cur = name; fadeNext = had; loopN = 0;
     if (name) { songT0 = ac.currentTime + (had ? 0.12 : 0.05); scheduleLoop(songT0); }
   }
   // Musikbox: Spektrum des Musik-Busses und Besetzung eines Stücks
@@ -556,7 +567,15 @@ const Sound = (() => {
       s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); l.start(t); s.stop(t + 3.4); l.stop(t + 3.4);
       nz(t + 3.27, 0.05, 0.16, sfxBus, { type: 'bandpass', f: 1500, q: 1 }); nz(t + 3.3, 0.12, 0.06, sfxBus, { type: 'bandpass', f: 1100, q: 0.9 });
     },
-    squeak: t => { osc('sine', 2500, t + 0.45, 0.08, 0.014, sfxBus, { f2: 3300, decay: true }); nz(t + 0.42, 0.05, 0.02, sfxBus, { type: 'bandpass', f: 3000, q: 2 }); },
+    // Nebenfiguren: Gertrude summt und wischt, Hancocks Feder kratzt, der Grüne Tentakel singt, Lila kichert, Dr. Freds Geistesblitz
+    hummel: t => { [['G4', 0.5], ['A4', 0.4], ['B4', 0.6], ['A4', 0.4], ['G4', 0.5], ['E4', 0.8]].reduce((at, [n, d]) => { osc('sawtooth', freq(n), at, d, 0.028, sfxBus, { lp: 650, q: 1.2, attack: 0.06, release: 0.12, vib: 4 }); return at + d; }, t + 0.1); },
+    wipe: t => { for (let i = 0; i < 5; i++) nz(t + i * 0.42, 0.34, 0.022, sfxBus, { type: 'bandpass', f: 1700 + (i % 2) * 700, q: 0.9, attack: 0.12 }); },
+    quill: t => { for (let i = 0; i < 7; i++) nz(t + 0.15 + i * 0.17 + Math.random() * 0.04, 0.09, 0.03, sfxBus, { type: 'bandpass', f: 4200 + Math.random() * 2500, f2: 2600 + Math.random() * 1500, q: 4 }); osc('sine', 2637, t + 1.45, 0.5, 0.016, sfxBus, { decay: true }); },
+    lala: t => { [['E4', 0.38], ['G4', 0.38], ['A4', 0.5], ['G4', 0.38], ['E4', 0.38], ['D4', 0.38], ['E4', 0.7]].reduce((at, [n, d]) => { const f = freq(n); vowel(at, d * 0.9, f, f * 0.97, [[420, 1100], [820, 1250]], 0.07); return at + d; }, t + 0.1); },
+    scheme: t => { for (let i = 0; i < 4; i++) vowel(t + 0.1 + i * 0.19, 0.13, 175 - i * 14, 160 - i * 14, [[480, 1850], [430, 1750]], 0.09); },
+    bulb: t => { osc('sawtooth', 120, t, 0.22, 0.012, sfxBus, { lp: 900 }); osc('sine', 1568, t + 0.12, 0.7, 0.04, sfxBus, { decay: true }); osc('sine', 3136, t + 0.12, 0.35, 0.014, sfxBus, { decay: true }); },
+    bellydrum: t => { [0, 0.22, 0.44, 0.55, 0.77, 0.99, 1.21, 1.32, 1.6].forEach((d, i) => { osc('sine', i % 3 === 2 ? 105 : 145, t + 0.2 + d, 0.2, 0.09, sfxBus, { f2: i % 3 === 2 ? 70 : 95, decay: true }); nz(t + 0.2 + d, 0.05, 0.05, sfxBus, { type: 'lowpass', f: 600 }); }); },
+    specs: t => { osc('sine', 2500, t + 0.45, 0.08, 0.014, sfxBus, { f2: 3300, decay: true }); nz(t + 0.42, 0.05, 0.02, sfxBus, { type: 'bandpass', f: 3000, q: 2 }); },
     hmm: t => { osc('sawtooth', 205, t + 0.35, 1.0, 0.05, sfxBus, { f2: 180, lp: 430, q: 2, attack: 0.1, vib: 3 }); osc('sawtooth', 236, t + 1.45, 0.4, 0.04, sfxBus, { f2: 262, lp: 520, q: 2, attack: 0.05 }); },
   };
   // gesungener Vokal: Sägezahn durch zwei wandernde Formant-Filter (Gähnen)

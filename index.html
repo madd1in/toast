@@ -29,7 +29,10 @@
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
     box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
   }
-  canvas { display: block; touch-action: none; cursor: none; outline: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; touch-action: none; cursor: none; outline: none; -webkit-tap-highlight-color: transparent; position: relative; z-index: 1; }
+  /* Umgebungslicht hinter dem Spielbild: winziges Abbild der Szene, vom Browser weich hochskaliert */
+  #amb { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s; }
+  #drehen { position: relative; z-index: 1; }
   @media (hover: none) { canvas { cursor: default; } }
   #drehen { display: none; }
   @media (orientation: portrait) and (pointer: coarse) {
@@ -45,6 +48,7 @@
 </style>
 </head>
 <body>
+<canvas id="amb" width="40" height="25" aria-hidden="true"></canvas>
 <canvas id="game" width="960" height="600" aria-label="Spielfläche: Tentakel-Toast, ein Point-and-Click-Abenteuer"></canvas>
 <div id="drehen" role="note">
   <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="9" y="3" width="16" height="28" rx="3" fill="none" stroke="#ffd23a" stroke-width="2.5"/><path d="M4 22 A13 13 0 0 1 8 8" fill="none" stroke="#b9a8dc" stroke-width="2.5"/><path d="M4 8 L8 8 L8 12" fill="none" stroke="#b9a8dc" stroke-width="2.5"/></svg>
