@@ -626,6 +626,28 @@ function drawBark(scr) {
 // ---------- Vollbild ----------
 const fsAvailable = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
 function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+// verfügbare Fläche: sichtbarer Viewport minus Safe-Area-Ränder (Notch), die der body als Innenabstand hat
+function viewSize() {
+  const vv = window.visualViewport;
+  let vw = vv && vv.width ? vv.width : window.innerWidth, vh = vv && vv.height ? vv.height : window.innerHeight;
+  try { const cs = getComputedStyle(document.body); vw -= (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0); vh -= (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0); } catch (e) { /* ok */ }
+  return [Math.max(120, vw), Math.max(120, vh)];
+}
+// Drehen am Handy: die neuen Maße kommen oft verspätet – sofort und mehrmals kurz danach nachmessen
+let resizeTimers = [];
+function resizeSoon() {
+  resize();
+  for (const t of resizeTimers) clearTimeout(t);
+  resizeTimers = [120, 350, 800].map(ms => setTimeout(resize, ms));
+}
+function onOrient() { G.orientT = performance.now(); resizeSoon(); if (isFullscreen()) lockLandscape(); }
+function onFsChange() {
+  resizeSoon();
+  if (isFullscreen()) { lockLandscape(); return; }
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { /* ok */ }
+  // hat das Drehen (nicht der Spieler) das Vollbild beendet, kehrt es beim nächsten Tippen zurück
+  if (G.settings.fullscreen && performance.now() - (G.orientT || -1e9) < 1500) G.fsTried = false;
+}
 function lockLandscape() { try { if (G.pointer === 'touch' && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* nicht unterstützt */ } }
 function enterFullscreen() {
   const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -642,12 +664,15 @@ function firstInteraction() {
 // ---------- Größe & Skalierung ----------
 const bgCache = {};
 function resize() {
-  const vw = window.innerWidth, vh = window.innerHeight;
-  VS = Math.max(0.2, Math.min(vw / W, vh / H));
-  DPR = Math.min(window.devicePixelRatio || 1, G.quality < 1 ? 1.3 : 2);
-  cv.style.width = Math.floor(W * VS) + 'px'; cv.style.height = Math.floor(H * VS) + 'px';
-  cv.width = Math.round(W * VS * DPR); cv.height = Math.round(H * VS * DPR);
-  for (const k in bgCache) delete bgCache[k];
+  const [vw, vh] = viewSize();
+  const vs = Math.max(0.2, Math.min(vw / W, vh / H)), dpr = Math.min(window.devicePixelRatio || 1, G.quality < 1 ? 1.3 : 2);
+  const cw = Math.round(W * vs * dpr), ch = Math.round(H * vs * dpr);
+  if (vs !== VS || dpr !== DPR || cw !== cv.width || ch !== cv.height) {   // nur bei echter Änderung neu anlegen (Puffer bleiben sonst erhalten)
+    VS = vs; DPR = dpr;
+    cv.style.width = Math.floor(W * VS) + 'px'; cv.style.height = Math.floor(H * VS) + 'px';
+    cv.width = cw; cv.height = ch;
+    for (const k in bgCache) delete bgCache[k];
+  }
   UIS = Math.max(COARSE || G.pointer === 'touch' ? 1.25 : 1, Math.min(1.45, 0.8 / VS));
   if (typeof layoutHud === 'function') layoutHud();
 }
@@ -1292,6 +1317,7 @@ function menuItems() {
     { id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') },
     { id: 'babble', label: 'Plapperstimmen: ' + (G.settings.babble ? 'an' : 'aus') },
     { id: 'tspeed', label: 'Textgeschwindigkeit: ' + (G.settings.textSpeed || 'normal') },
+    { id: 'alite', label: 'Klang: ' + (G.settings.audioLite == null ? `automatisch (${Sound.lite ? 'sparsam' : 'voll'})` : G.settings.audioLite ? 'sparsam (Handy)' : 'voll') },
     { id: 'ui', label: 'Bedienung: ' + (G.settings.ui === 'classic' ? 'Klassisch (Verben)' : 'Modern (minimal)') },
     { id: 'hotspots', label: 'Hotspot-Hilfe: ' + (G.settings.hotspots ? 'an' : 'aus') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
@@ -1318,6 +1344,7 @@ function menuClick(x, y) {
   else if (b.id === 'music') toggleMusic();
   else if (b.id === 'voice') toggleVoice();
   else if (b.id === 'babble') { G.settings.babble = !G.settings.babble; saveSettings(); }
+  else if (b.id === 'alite') { const v = G.settings.audioLite; G.settings.audioLite = v == null ? !Sound.lite : v === Sound.mobile ? null : !v; Sound.setLite(G.settings.audioLite); saveSettings(); }
   else if (b.id === 'hotspots') { G.settings.hotspots = !G.settings.hotspots; saveSettings(); }
   else if (b.id === 'ui') { G.settings.ui = G.settings.ui === 'classic' ? 'modern' : 'classic'; G.coin = null; G.viewRoomLast = null; saveSettings(); }
   else if (b.id === 'tspeed') { const o = ['langsam', 'normal', 'schnell']; G.settings.textSpeed = o[(o.indexOf(G.settings.textSpeed || 'normal') + 1) % 3]; saveSettings(); }
@@ -1417,7 +1444,7 @@ function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /*
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(G.settings)); } catch (e) { /* ok */ } }
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(SET_KEY) || 'null'); if (s) Object.assign(G.settings, s); } catch (e) { /* ok */ }
-  Sound.setMusic(G.settings.music); Sound.setRetro(!!G.settings.retro); Sound.setParty(!!G.settings.party); Voice.on = G.settings.voice;
+  Sound.setMusic(G.settings.music); Sound.setRetro(!!G.settings.retro); Sound.setParty(!!G.settings.party); Sound.setLite(G.settings.audioLite); Voice.on = G.settings.voice;
 }
 function applyActors(map) {
   for (const [id, s] of Object.entries(map)) {
@@ -1950,7 +1977,7 @@ function drawMenu() {
   const items = menuItems();
   const jb = G.menu === 'jukebox';
   const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 26 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
-  const bw = jb ? 820 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = jb ? 566 : 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
+  const bw = jb ? 820 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, mst = items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
   const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
@@ -1999,7 +2026,7 @@ function drawMenu() {
     y += ACH.length * 26 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
-  G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 }));
+  G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: 38 }));
   G.menuBtns.filter(b => !b.id.startsWith('ph_')).forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
   if (G.menu === 'album' && G.albumView != null && !cx.isPix) {
     const ph = albumList()[G.albumView];
@@ -3407,8 +3434,11 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 async function boot() {
-  resize(); window.addEventListener('resize', resize);
-  document.addEventListener('fullscreenchange', resize); document.addEventListener('webkitfullscreenchange', resize);
+  resize(); window.addEventListener('resize', resizeSoon);
+  window.addEventListener('orientationchange', onOrient);
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', onOrient);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeSoon);
+  document.addEventListener('fullscreenchange', onFsChange); document.addEventListener('webkitfullscreenchange', onFsChange);
   buildIndex();
   requestAnimationFrame(frame);
   try {

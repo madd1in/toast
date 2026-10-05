@@ -22,6 +22,7 @@
 <style>
   :root { --bg: #120a1c; --ink: #f3eaff; --muted: #b9a8dc; color-scheme: dark; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); }
+  @supports (height: 100dvh) { html, body { height: 100dvh; } }
   body {
     display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
     font-family: "Baloo 2", system-ui, sans-serif;

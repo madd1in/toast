@@ -13,14 +13,33 @@ const Sound = (() => {
   let cur = null, wanted = null, loopEnd = 0, loops = [];
   let ambList = [], ambWanted = [], ambCount = 0, offline = false;
   const pending = [];
+  // Handys und Tablets: sparsamer Klang (weniger Oszillatoren pro Ton, kein Vibrato-LFO, kürzerer Hall)
+  const MOBILE = (() => { try { return matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent); } catch (e) { return false; } })();
+  let lite = MOBILE;
+  // Musik wird nicht mehr als ganzer Loop auf einmal angelegt, sondern kurz vor dem Erklingen (Lookahead):
+  // so warten nie Hunderte Klangknoten gleichzeitig, und der Hauptthread bekommt keine Lastspitzen
+  let noteQ = [];
+  const AHEAD = 1.2;
+  function queueNote(t, i, n, d, out, tr = 0, layer = false) { noteQ.push({ t, i, n, d, out, tr, layer }); }
+  function flushNotes() {
+    if (!ac || !noteQ.length) return;
+    const now = ac.currentTime; let k = 0;
+    while (k < noteQ.length && noteQ[k].t < now + AHEAD) {
+      const e = noteQ[k++];
+      if (e.t > now - 0.04) inst(e.i, e.n, Math.max(e.t, now + 0.004), e.d, e.out, e.tr);
+    }
+    if (k) noteQ.splice(0, k);
+  }
   // Aufräumen nach Ablauf von Audio-Zeit (offline läuft die Audio-Zeit nicht in Echtzeit)
   function later(fn, sec) { if (offline) pending.push({ at: ac.currentTime + sec, fn }); else setTimeout(fn, sec * 1000); }
 
   function init(useCtx) {
-    if (ac) { if (!offline && ac.state === 'suspended') ac.resume(); return; }
+    if (ac) { if (!offline && ac.state !== 'running' && !document.hidden) ac.resume().catch(() => {}); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC && !useCtx) return;
-    ac = useCtx || new AC(); offline = !!useCtx;
+    if (useCtx) ac = useCtx;
+    else { try { ac = new AC(MOBILE ? { latencyHint: 'balanced' } : undefined); } catch (e) { ac = new AC(); } }
+    offline = !!useCtx;
     // Tiefpass hinter dem Master: dämpft alles, solange das Pausenmenü offen ist
     muffleF = ac.createBiquadFilter(); muffleF.type = 'lowpass'; muffleF.frequency.value = muffled ? 650 : 20000; muffleF.Q.value = 0.7; muffleF.connect(ac.destination);
     // Kompressor hält die Mischung zusammen und macht sie lauter, ohne dass Spitzen übersteuern
@@ -40,7 +59,11 @@ const Sound = (() => {
     musicSend = ac.createGain(); musicSend.gain.value = retro ? 0 : 0.06; musicSend.connect(verb);
     sfxBus.connect(verbSend); ambBus.connect(verbSend); musicBus.connect(musicSend);
     setReverb(verbWanted[0], verbWanted[1]);
-    if (!offline) setInterval(tick, 100);
+    if (!offline) {
+      setInterval(tick, 100);
+      // im Hintergrund (App gewechselt, Bildschirm aus) anhalten statt weiterzuspielen und zu stottern
+      document.addEventListener('visibilitychange', () => { if (document.hidden) ac.suspend().catch(() => {}); else ac.resume().catch(() => {}); });
+    }
     if (wanted) { const w = wanted; wanted = null; play(w); }
     ambience(ambWanted);
   }
@@ -58,7 +81,7 @@ const Sound = (() => {
     const s = ac.createOscillator(); s.type = type; s.frequency.setValueAtTime(f, t);
     if (f2) s.frequency.exponentialRampToValueAtTime(f2, t + dur);
     if (detune) s.detune.value = detune;
-    if (vib) { const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 5.5; lg.gain.value = vib; l.connect(lg); lg.connect(s.frequency); l.start(t); l.stop(t + dur + 0.05); }
+    if (vib && !lite) { const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 5.5; lg.gain.value = vib; l.connect(lg); lg.connect(s.frequency); l.start(t); l.stop(t + dur + 0.05); }
     const g = ac.createGain();
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack);
     if (decay) g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -86,7 +109,7 @@ const Sound = (() => {
     if (!distCurve) { distCurve = new Float32Array(1024); for (let i = 0; i < 1024; i++) distCurve[i] = Math.tanh((i / 512 - 1) * 5); }
     const pre = ac.createGain(), sh = ac.createWaveShaper(), fl = ac.createBiquadFilter(), g = ac.createGain();
     pre.gain.value = 2.2; sh.curve = distCurve; fl.type = 'lowpass'; fl.frequency.value = mute ? 1400 : 3200; fl.Q.value = 1.2;
-    for (const dt of [-6, 6]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = dt; o.connect(pre); o.start(t); o.stop(t + dur + 0.08); }
+    for (const dt of lite ? [0] : [-6, 6]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = dt; o.connect(pre); o.start(t); o.stop(t + dur + 0.08); }
     pre.connect(sh); sh.connect(fl); fl.connect(g); g.connect(bus);
     const d = mute ? Math.min(dur, 0.16) : dur;
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
@@ -121,6 +144,7 @@ const Sound = (() => {
         else osc('square', f, t, Math.min(d * 0.85, 0.55), 0.04, bus, { attack: 0.003, release: 0.02, decay: name === 'harp' || name === 'bell' || name === 'arp' });
         continue;
       }
+      if (lite && LITE_INST[name]) { LITE_INST[name](f, t, d, bus); continue; }
       switch (name) {
         case 'harp': osc('sawtooth', f, t, 0.5, 0.08, bus, { lp: 2800, decay: true, attack: 0.003 }); osc('square', f * 2, t, 0.25, 0.02, bus, { lp: 3500, decay: true, attack: 0.003 }); break;
         case 'bassoon': osc('square', f, t, d * 0.85, 0.06, bus, { lp: 1000, q: 2, attack: 0.02, release: 0.06 }); break;
@@ -144,6 +168,20 @@ const Sound = (() => {
     }
   }
 
+  // sparsame Fassungen der aufwendigen Instrumente: ein Oszillator statt zwei oder drei
+  const LITE_INST = {
+    harp: (f, t, d, bus) => osc('sawtooth', f, t, 0.5, 0.09, bus, { lp: 2800, decay: true, attack: 0.003 }),
+    arp: (f, t, d, bus) => osc('sawtooth', f, t, 0.2, 0.06, bus, { lp: 2000, decay: true }),
+    bell: (f, t, d, bus) => osc('sine', f, t, 0.9, 0.09, bus, { decay: true }),
+    clar: (f, t, d, bus) => osc('square', f, t, d * 0.9, 0.055, bus, { lp: 1500, attack: 0.03, release: 0.08 }),
+    pad: (f, t, d, bus) => osc('sawtooth', f, t, d, 0.034, bus, { lp: 900, attack: 0.25, release: 0.3 }),
+    strings: (f, t, d, bus) => osc('sawtooth', f, t, d, 0.034, bus, { lp: 2400, attack: 0.18, release: 0.25 }),
+    brass: (f, t, d, bus) => osc('sawtooth', f, t, d * 0.9, 0.06, bus, { lp: 480, lp2: 2600, lpT: 0.09, attack: 0.03, release: 0.08 }),
+    epiano: (f, t, d, bus) => fm(f, t, Math.max(d, 0.5) * 1.3, 0.06, bus, 1, 1.6),
+    pluck: (f, t, d, bus) => osc('triangle', f, t, 0.6, 0.12, bus, { decay: true, attack: 0.002 }),
+    fiddle: (f, t, d, bus) => osc('sawtooth', f, t, d * 0.95, 0.05, bus, { lp: 2800, attack: 0.04, release: 0.06 }),
+    organ: (f, t, d, bus) => osc('triangle', f, t, d * 0.95, 0.045, bus, { attack: 0.06, release: 0.15 }),
+  };
   // ---------- Musikstücke (eigene Kompositionen, je 8 Takte als Loop) ----------
   const x2 = s => s + ' ' + s;
   // Begleitung aus Akkordsymbolen erzeugen: 'jig' = 6/8-Zupfmuster, 'bossa' = synkopierte Bossa-Akkorde
@@ -274,13 +312,14 @@ const Sound = (() => {
     let out = g;
     if (ac.createStereoPanner) { out = ac.createStereoPanner(); out.pan.value = -(PAN[tr.inst] || 0) || 0.18; out.connect(g); }
     g.connect(musicBus);
-    for (const e of p.ev) { const t = t0 + e.b * spb; if (!from || t >= from) inst(hi[0], e.n, t, e.len * spb, out, hi[1]); }
+    for (const e of p.ev) { const t = t0 + e.b * spb; if (!from || t >= from) queueNote(t, hi[0], e.n, e.len * spb, out, hi[1], true); }
+    noteQ.sort((a, b) => a.t - b.t); flushNotes();
     heroLayers.push({ g, end: t0 + p.len * spb + 2 });
     heroLayers = heroLayers.filter(h => { if (h.end < ac.currentTime) { try { h.g.disconnect(); } catch (e) { /* ok */ } return false; } return true; });
   }
   function dropHero() {
     for (const h of heroLayers) { h.g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.12); const g = h.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 1.2); }
-    heroLayers = [];
+    heroLayers = []; noteQ = noteQ.filter(e => !e.layer);
   }
   function setHero(id) {
     id = id || null; if (hero === id) return; hero = id;
@@ -297,21 +336,23 @@ const Sound = (() => {
     for (const tr of th.tracks) {
       const p = tr._p || (tr._p = parse(tr.seq));
       maxLen = Math.max(maxLen, p.len);
-      if (tr.lvl && intensity < (tr.lvl === 1 ? 0.25 : 0.6)) continue;
+      if (tr.lvl && (intensity < (tr.lvl === 1 ? 0.25 : 0.6) || (lite && tr.lvl === 2))) continue;
       let out = lg; const pv = tr.pan != null ? tr.pan : PAN[tr.inst];
       if (pv && ac.createStereoPanner) { out = ac.createStereoPanner(); out.pan.value = pv; out.connect(lg); }
-      for (const e of p.ev) inst(tr.inst, e.n, t0 + e.b * spb, e.len * spb, out);
+      for (const e of p.ev) queueNote(t0 + e.b * spb, tr.inst, e.n, e.len * spb, out);
     }
     if (partyOn && cur !== 'rock' && maxLen > 0) {   // Party-Modus: Disco-Beat über dem laufenden Stück
       const pg = ac.createGain(); pg.gain.value = 0.55; pg.connect(lg);
       for (let b = 0; b < maxLen; b += 1) {
-        inst('drum', 'K', t0 + b * spb, 0.2, pg);
-        inst('drum', 'O', t0 + (b + 0.5) * spb, 0.2, pg);
-        if (b % 2 === 1) inst('drum', 'C', t0 + b * spb, 0.2, pg);
+        queueNote(t0 + b * spb, 'drum', 'K', 0.2, pg);
+        queueNote(t0 + (b + 0.5) * spb, 'drum', 'O', 0.2, pg);
+        if (b % 2 === 1) queueNote(t0 + b * spb, 'drum', 'C', 0.2, pg);
       }
     }
     loopEnd = t0 + maxLen * spb; loopT0 = t0;
+    noteQ.sort((a, b) => a.t - b.t);
     if (hero) scheduleHero(t0, 0);
+    flushNotes();
     loops.push({ g: lg, end: loopEnd + 1.5 });
     loops = loops.filter(l => { if (l.end < ac.currentTime) { try { l.g.disconnect(); } catch (e) { /* schon getrennt */ } return false; } return true; });
   }
@@ -340,6 +381,7 @@ const Sound = (() => {
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt
   function setReverb(sec, wet) {
     verbWanted = [sec, wet];
+    if (lite) sec = Math.min(sec, 1.1);
     if (!ac) return;
     const key = sec.toFixed(2);
     let buf = verbCache[key];
@@ -368,6 +410,7 @@ const Sound = (() => {
     const now = ac.currentTime;
     for (let i = pending.length - 1; i >= 0; i--) if (pending[i].at <= now) { const f = pending[i].fn; pending.splice(i, 1); f(); }
     if (cur && now > loopEnd - 0.8) scheduleLoop(Math.max(loopEnd, now + 0.05));
+    flushNotes();
     for (const a of ambList) {
       if (a.next < now) a.next = now + 0.05;
       let guard = 0;
@@ -377,7 +420,7 @@ const Sound = (() => {
   function stopMusic() {
     // alter Loop blendet kurz aus; der neue startet fast sofort darüber
     if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.22); const g = l.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 1.0); }
-    loops = []; cur = null;
+    loops = []; cur = null; noteQ = [];
     if (ac) dropHero();
   }
   function play(name) {
@@ -617,7 +660,8 @@ const Sound = (() => {
   function initOffline(ctx) { init(ctx); }
 
   function setParty(on) { partyOn = !!on; }
-  return { init, initOffline, tick, play, sfx, setParty, setHero, spectrum, info, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
+  function setLite(on) { lite = on == null ? MOBILE : !!on; if (ac) setReverb(verbWanted[0], verbWanted[1]); }
+  return { init, initOffline, tick, play, sfx, setParty, setLite, get lite() { return lite; }, get mobile() { return MOBILE; }, setHero, spectrum, info, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------

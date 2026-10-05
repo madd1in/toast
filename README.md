@@ -32,7 +32,8 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Zeitreise-Rätsel: Was du 1776 tust, verändert die Zukunft
 - Dialogbäume mit Dr. Fred, Grünem Tentakel, Oma Gertrude, John Hancock, der Tentakel-Wache und Lila Tentakel
 - **Steuerung mit Maus, Touch, Tastatur oder Xbox-Controller** (auch in Edge auf der Xbox), mit Vibration
-- **Vollbild** startet automatisch, auf dem Handy mit Querformat-Sperre
+- **Vollbild** startet automatisch, auf dem Handy mit Querformat-Sperre; beim Drehen misst das Spiel mehrfach nach, berücksichtigt Notch-Ränder (Safe Area) und holt ein durchs Drehen beendetes Vollbild beim nächsten Tippen zurück
+- **Flüssiger Klang auf dem Handy:** Musik wird kurz vor dem Erklingen geplant statt als ganzer Loop, im Hintergrund pausiert der Ton, und ein sparsamer Klangmodus (automatisch auf Handy und Tablet, umschaltbar unter Einstellungen → Klang) spart Oszillatoren, Vibrato und Hall
 - 17 Erfolge, Fortschrittsanzeige, Statistik am Ende, Hotspot-Anzeige, Tipp-System
 - Prozedurale Grafik (Canvas 2D) und Musik (WebAudio-Synthesizer) mit eigenen Themen pro Zeitalter, Umgebungsgeräuschen, Schritten je nach Boden und Plapperstimmen pro Figur
 - Lebendige Szene: Laufstaub je nach Untergrund, weiche Schatten unter Möbeln, Lichtstimmung pro Raum und sanftes Klick-Feedback
