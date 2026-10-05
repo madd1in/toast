@@ -16,46 +16,140 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
+if (typeof Path2D !== 'undefined' && !Path2D.prototype.roundRect) Path2D.prototype.roundRect = CanvasRenderingContext2D.prototype.roundRect;
+
 function pth(c, p) { c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); c.closePath(); }
 // HD-Feinschliff: einfarbige Flächen bekommen einen Licht-Verlauf (oben hell, unten dunkler),
 // Konturen die abgedunkelte Flächenfarbe statt Schwarz – weg vom flachen Malprogramm-Look.
+// Für Raum-Grafik (HDS.deco) zusätzlich: leicht handgezeichnete Kanten, Fasen, Holzmaserung
+// und – beim einmaligen Zeichnen der Hintergründe (HDS.shadow) – weiche Schlagschatten.
 // Der Pixel-Modus (c.isPix) schattiert selbst und bleibt unberührt.
-const HDS = { on: true };
+const HDS = { on: true, deco: false, shadow: false, scale: 2 };
 const shadeMemo = new Map();
 function shadeOf(col) {
   let s = shadeMemo.get(col);
   if (!s) {
     const h = col.length === 4 ? '#' + col[1] + col[1] + col[2] + col[2] + col[3] + col[3] : col;
+    const [r, g, b] = hexToRgb(h).map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    let hue = 0;
+    if (d) hue = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    hue = (hue * 60 + 360) % 360;
     s = [mix(h, '#fff6e6', 0.17), h, mix(h, '#160a1e', 0.24), mix(h, '#160a1e', 0.64)];
+    s.wood = hue >= 12 && hue <= 46 && sat >= 0.2 && sat <= 0.9 && l >= 0.12 && l <= 0.56;
     shadeMemo.set(col, s);
   }
   return s;
 }
 const isHex = f => typeof f === 'string' && f[0] === '#' && (f.length === 7 || f.length === 4);
+function shadeFill(c, fill, box) {
+  if (box && (box[3] - box[1] > 5 || box[2] - box[0] > 5)) {
+    const s = shadeOf(fill), g = c.createLinearGradient(box[0], box[1], box[0] + (box[2] - box[0]) * 0.25, box[3]);
+    g.addColorStop(0, s[0]); g.addColorStop(0.45, s[1]); g.addColorStop(1, s[2]);
+    return g;
+  }
+  return fill;
+}
 function fs(c, fill, lw, stroke, box) {
   const hd = HDS.on && !c.isPix && isHex(fill);
-  if (fill) {
-    if (hd && box && (box[3] - box[1] > 5 || box[2] - box[0] > 5)) {
-      const s = shadeOf(fill), g = c.createLinearGradient(box[0], box[1], box[0] + (box[2] - box[0]) * 0.25, box[3]);
-      g.addColorStop(0, s[0]); g.addColorStop(0.45, s[1]); g.addColorStop(1, s[2]);
-      c.fillStyle = g;
-    } else c.fillStyle = fill;
-    c.fill();
-  }
+  if (fill) { c.fillStyle = hd ? shadeFill(c, fill, box) : fill; c.fill(); }
   if (lw) {
     c.lineWidth = hd && !stroke ? lw * 0.82 : lw;
     c.strokeStyle = stroke || (hd ? shadeOf(fill)[3] : OUT);
     c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke();
   }
 }
+// Holzmaserung als kachelbares Graustufen-Muster (wird per multiply aufgetragen)
+let woodTex = null;
+function woodCanvas() {
+  if (woodTex) return woodTex;
+  const n = 256, c = document.createElement('canvas'); c.width = c.height = n;
+  const g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, n, n);
+  for (let i = 0; i < 54; i++) {
+    const y0 = Math.random() * n, amp = 1.5 + Math.random() * 5, k = 1 + Math.floor(Math.random() * 3), ph = Math.random() * 6.3;
+    const v = 140 + Math.floor(Math.random() * 100);
+    g.strokeStyle = `rgb(${v},${v - 8},${v - 18})`; g.lineWidth = 0.6 + Math.random() * 2;
+    for (const oy of [-n, 0, n]) {
+      g.beginPath();
+      for (let x = 0; x <= n; x += 4) { const y = y0 + oy + Math.sin(x / n * Math.PI * 2 * k + ph) * amp + Math.sin(x / n * Math.PI * 2 * (k + 2) + ph * 2) * amp * 0.3; if (x) g.lineTo(x, y); else g.moveTo(x, y); }
+      g.stroke();
+    }
+  }
+  for (let i = 0; i < 3; i++) {   // Astlöcher
+    const x = 30 + Math.random() * 196, y = 30 + Math.random() * 196;
+    for (let r = 2; r < 12; r += 2.5) { g.strokeStyle = `rgba(110,90,70,${0.5 - r / 30})`; g.lineWidth = 1; g.beginPath(); g.ellipse(x, y, r * 2.2, r * 0.8, 0, 0, Math.PI * 2); g.stroke(); }
+  }
+  return (woodTex = c);
+}
+// handgezeichnete Kante: Zwischenpunkte leicht versetzt, Ecken bleiben, damit Formen sauber aneinanderstoßen
+function wobblePoly(t, pts) {
+  const n = pts.length / 2;
+  t.moveTo(pts[0], pts[1]);
+  for (let i = 0; i < n; i++) {
+    const x0 = pts[i * 2], y0 = pts[i * 2 + 1], x1 = pts[((i + 1) % n) * 2], y1 = pts[((i + 1) % n) * 2 + 1];
+    const len = Math.hypot(x1 - x0, y1 - y0), segs = Math.max(1, Math.min(8, Math.round(len / 34)));
+    const nx = -(y1 - y0) / (len || 1), ny = (x1 - x0) / (len || 1), amp = Math.min(0.75, len * 0.009);
+    for (let j = 1; j <= segs; j++) {
+      const k = j / segs, off = j === segs ? 0 : Math.sin(len * 0.37 + j * 2.399) * amp;
+      t.lineTo(x0 + (x1 - x0) * k + nx * off, y0 + (y1 - y0) * k + ny * off);
+    }
+  }
+  t.closePath();
+}
+const woodPats = new WeakMap();
+function woodPat(c) { let p = woodPats.get(c); if (!p) { p = c.createPattern(woodCanvas(), 'repeat'); woodPats.set(c, p); } return p; }
+function deco(c) { return HDS.on && HDS.deco && !c.isPix && typeof Path2D !== 'undefined'; }
+function fsDeco(c, path, fill, lw, stroke, box) {
+  const hex = isHex(fill), w = box[2] - box[0], h = box[3] - box[1];
+  if (fill) {
+    c.fillStyle = hex ? shadeFill(c, fill, box) : fill;
+    if (HDS.shadow && hex && (w > 6 || h > 6)) {
+      c.save(); const k = HDS.scale;
+      c.shadowColor = 'rgba(12,2,24,0.32)'; c.shadowBlur = 7 * k; c.shadowOffsetX = 1.4 * k; c.shadowOffsetY = 2.8 * k;
+      c.fill(path); c.restore();
+    } else c.fill(path);
+    if (hex && w > 14 && h > 14) {
+      c.save(); c.clip(path);
+      if (shadeOf(fill).wood) {
+        const pat = woodPat(c), tall = h > w * 1.2;
+        if (pat.setTransform) pat.setTransform(new DOMMatrix().translate(box[0] + (box[1] * 7) % 97, box[1]).rotate(tall ? 90 : 0).scale(tall ? 0.55 : 0.5, 0.5));
+        c.globalCompositeOperation = 'multiply'; c.globalAlpha = 0.55; c.fillStyle = pat; c.fillRect(box[0] - 2, box[1] - 2, w + 4, h + 4);
+        c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+      }
+      // Fase: dunkle Kante unten rechts, helle oben links
+      const bw = Math.min(5, Math.min(w, h) * 0.18);
+      c.lineWidth = bw; c.lineJoin = 'round';
+      c.translate(-bw * 0.45, -bw * 0.55); c.strokeStyle = 'rgba(16,4,26,0.26)'; c.stroke(path);
+      c.translate(bw * 0.9, bw * 1.1); c.strokeStyle = 'rgba(255,248,232,0.22)'; c.stroke(path);
+      c.restore();
+    }
+  }
+  if (lw) {
+    c.lineWidth = hex && !stroke ? lw * 0.82 : lw;
+    c.strokeStyle = stroke || (hex ? shadeOf(fill)[3] : OUT);
+    c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(path);
+  }
+}
 function P(c, pts, fill, lw = 3, stroke) {
-  pth(c, pts);
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (let i = 0; i < pts.length; i += 2) { const x = pts[i], y = pts[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (deco(c)) { const p = new Path2D(); wobblePoly(p, pts); return fsDeco(c, p, fill, lw, stroke, [x0, y0, x1, y1]); }
+  pth(c, pts);
   fs(c, fill, lw, stroke, [x0, y0, x1, y1]);
 }
-function R(c, x, y, w, h, fill, lw = 3, r = 0, stroke) { c.beginPath(); if (r) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); fs(c, fill, lw, stroke, [x, y, x + w, y + h]); }
-function E(c, x, y, rx, ry, fill, lw = 3, rot = 0, stroke) { rx = Math.abs(rx); ry = Math.abs(ry); c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); fs(c, fill, lw, stroke, [x - rx, y - ry, x + rx, y + ry]); }
+function R(c, x, y, w, h, fill, lw = 3, r = 0, stroke) {
+  if (deco(c)) {
+    const p = new Path2D();
+    if (r) p.roundRect(x, y, w, h, r); else wobblePoly(p, [x, y, x + w, y, x + w, y + h, x, y + h]);
+    return fsDeco(c, p, fill, lw, stroke, [x, y, x + w, y + h]);
+  }
+  c.beginPath(); if (r) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); fs(c, fill, lw, stroke, [x, y, x + w, y + h]);
+}
+function E(c, x, y, rx, ry, fill, lw = 3, rot = 0, stroke) {
+  rx = Math.abs(rx); ry = Math.abs(ry);
+  if (deco(c)) { const p = new Path2D(); p.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); return fsDeco(c, p, fill, lw, stroke, [x - rx, y - ry, x + rx, y + ry]); }
+  c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); fs(c, fill, lw, stroke, [x - rx, y - ry, x + rx, y + ry]);
+}
 function L(c, pts, lw = 3, stroke) {
   c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]);
   c.lineWidth = lw; c.strokeStyle = stroke || OUT; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke();

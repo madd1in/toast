@@ -1124,7 +1124,10 @@ function drawBg(room) {
   let c = bgCache[key];
   if (!c || c._s !== s) {
     c = document.createElement('canvas'); c.width = Math.ceil(W * s); c.height = Math.ceil(SH * s); c._s = s;
-    const g = c.getContext('2d'); g.setTransform(s, 0, 0, s, 0, 0); room.draw(g); finishBg(g, c, room); bgCache[key] = c;
+    const g = c.getContext('2d'); g.setTransform(s, 0, 0, s, 0, 0);
+    HDS.deco = HDS.shadow = true; HDS.scale = s;
+    try { room.draw(g); } finally { HDS.deco = HDS.shadow = false; }
+    finishBg(g, c, room); bgCache[key] = c;
   }
   cx.drawImage(c, 0, 0, W, SH);
 }
@@ -1280,13 +1283,17 @@ function drawScene() {
   if (G.t < G.shake.until) cx.translate((Math.random() - 0.5) * G.shake.mag * 2, (Math.random() - 0.5) * G.shake.mag * 2);
   camApply();
   drawBg(room);
-  if (room.dyn) room.dyn(cx, G.t);
-  for (const o of room.objs) if (o.draw && !o.fg && isVisible(o)) o.draw(cx, G.t);
+  HDS.deco = true;   // Raum-Grafik: handgezeichnete Kanten, Fasen, Holzmaserung
+  try {
+    if (room.dyn) room.dyn(cx, G.t);
+    for (const o of room.objs) if (o.draw && !o.fg && isVisible(o)) o.draw(cx, G.t);
+  } finally { HDS.deco = false; }
   drawCrystal(room);
   if (cx.isPix) cx.layer(1);   // Pixel-Modus: Figuren auf eigene Ebene, damit Schilder-Texte dahinter bleiben
   const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible).sort((p, q) => p.y - q.y);
   for (const a of acts) drawActor(a, room);
-  for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t);
+  HDS.deco = true;
+  try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
   if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg) drawForeground(fg); }
   drawParts(); drawRipples();
   cx.restore();
