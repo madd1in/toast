@@ -9,7 +9,7 @@ const Sound = (() => {
   let ac = null, master = null, musicBus = null, sfxBus = null, ambBus = null, noiseBuf = null;
   let verb = null, verbSend = null, musicSend = null, verbWanted = [0.6, 0.18], muffleF = null, muffled = false, intensity = 0;
   const verbCache = {};
-  let musicOn = true, ducked = false, retro = false;
+  let musicOn = true, ducked = false, retro = false, fadeNext = false;
   let cur = null, wanted = null, loopEnd = 0, loops = [];
   let ambList = [], ambWanted = [], ambCount = 0, offline = false;
   const pending = [];
@@ -164,7 +164,8 @@ const Sound = (() => {
   function scheduleLoop(t0) {
     const th = THEMES[cur]; if (!th) return;
     const spb = 60 / th.bpm;
-    const lg = ac.createGain(); lg.gain.value = 1; lg.connect(musicBus);
+    const lg = ac.createGain(); lg.connect(musicBus);
+    if (fadeNext) { lg.gain.setValueAtTime(0.0001, t0); lg.gain.exponentialRampToValueAtTime(1, t0 + 0.9); fadeNext = false; } else lg.gain.value = 1;
     let maxLen = 0;
     for (const tr of th.tracks) {
       const p = tr._p || (tr._p = parse(tr.seq));
@@ -229,14 +230,16 @@ const Sound = (() => {
     }
   }
   function stopMusic() {
-    if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.08); const g = l.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 0.7); }
+    // weicher Übergang: alter Loop blendet über gut eine Sekunde aus
+    if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.3); const g = l.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 1.8); }
     loops = []; cur = null;
   }
   function play(name) {
     if (!ac) { wanted = name; return; }
     if (cur === name) return;
-    stopMusic(); cur = name;
-    if (name) scheduleLoop(ac.currentTime + 0.15);
+    const had = !!cur;
+    stopMusic(); cur = name; fadeNext = had;
+    if (name) scheduleLoop(ac.currentTime + (had ? 0.35 : 0.15));
   }
   function musicLevel() { return musicOn ? (ducked ? 0.1 : 0.2) : 0; }
   function setMusic(on) { musicOn = on; if (musicBus) musicBus.gain.setTargetAtTime(musicLevel(), ac.currentTime, 0.1); }
@@ -290,6 +293,8 @@ const Sound = (() => {
     click2: t => osc('triangle', 1200, t, 0.05, 0.08, sfxBus, { decay: true }),
     thunder: t => { nz(t, 0.25, 0.4, sfxBus, { type: 'lowpass', f: 900, f2: 300 }); nz(t + 0.15, 3.2, 0.32, sfxBus, { type: 'lowpass', f: 260, f2: 60, attack: 0.3 }); osc('sine', 48, t + 0.1, 2.6, 0.16, sfxBus, { f2: 32, attack: 0.25, release: 1.6 }); },
     open: t => { nz(t, 0.18, 0.18, sfxBus, { type: 'bandpass', f: 600, q: 2 }); osc('triangle', 220, t, 0.25, 0.06, sfxBus, { f2: 330, decay: true }); },
+    whoosh: t => { nz(t, 1.1, 0.12, sfxBus, { type: 'bandpass', f: 400, f2: 2600, q: 2.5, attack: 0.35 }); osc('sawtooth', 90, t + 0.1, 0.9, 0.02, sfxBus, { f2: 220, lp: 600, attack: 0.3 }); },
+    hover: t => osc('sine', 1900, t, 0.025, 0.012, sfxBus, { decay: true }),
     photo: t => { nz(t, 0.05, 0.3, sfxBus, { type: 'highpass', f: 3000 }); nz(t + 0.09, 0.08, 0.22, sfxBus, { type: 'bandpass', f: 1500, q: 2 }); },
     crystal: t => { ['E6', 'B5', 'G#6', 'E7'].forEach((n, i) => osc('sine', freq(n), t + i * 0.07, 0.5, 0.05, sfxBus, { decay: true })); osc('triangle', freq('E5'), t, 0.8, 0.04, sfxBus, { decay: true }); },
     sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },

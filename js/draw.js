@@ -108,9 +108,11 @@ function fsDeco(c, path, fill, lw, stroke, box) {
       c.shadowColor = 'rgba(12,2,24,0.32)'; c.shadowBlur = 7 * k; c.shadowOffsetX = 1.4 * k; c.shadowOffsetY = 2.8 * k;
       c.fill(path); c.restore();
     } else c.fill(path);
-    if (hex && w > 14 && h > 14) {
+    // im laufenden Bild (nicht im Hintergrund-Cache) nur größere Flächen veredeln – spart Zeit
+    const minSz = HDS.shadow ? 14 : 26;
+    if (hex && w > minSz && h > minSz) {
       c.save(); c.clip(path);
-      if (shadeOf(fill).wood) {
+      if (shadeOf(fill).wood && (HDS.shadow || w * h > 2600)) {
         const pat = woodPat(c), tall = h > w * 1.2;
         if (pat.setTransform) pat.setTransform(new DOMMatrix().translate(box[0] + (box[1] * 7) % 97, box[1]).rotate(tall ? 90 : 0).scale(tall ? 0.55 : 0.5, 0.5));
         c.globalCompositeOperation = 'multiply'; c.globalAlpha = 0.55; c.fillStyle = pat; c.fillRect(box[0] - 2, box[1] - 2, w + 4, h + 4);

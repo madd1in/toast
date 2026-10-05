@@ -115,8 +115,8 @@ const ROOM_FX = {
   lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets'], motes: 'dust' },
   labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
   gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire' },
-  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'] },
-  fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, motes: 'firefly', fg: ['#2a0f3e', '#45206a'] },
+  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
+  fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars' },
   vorraum: { verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
   thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
 };
@@ -250,6 +250,12 @@ function drawActorLit(a, sc, lt, refl) {
     r.globalCompositeOperation = 'source-in'; r.fillStyle = key; r.fillRect(0, 0, pw, ph);
     r.globalCompositeOperation = 'destination-out'; r.drawImage(actBuf, 0, 0, pw, ph, -side * d, d * 0.7, pw, ph);
     g.globalAlpha = 0.42; g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
+    // Maltextur auf die Figur (auf die Silhouette begrenzt)
+    r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, ph);
+    const pat = r.createPattern(paperCanvas(), 'repeat'); if (pat.setTransform) pat.setTransform(new DOMMatrix().scale(0.7 * bs));
+    r.fillStyle = pat; r.fillRect(0, 0, pw, ph);
+    r.globalCompositeOperation = 'destination-in'; r.drawImage(actBuf, 0, 0, pw, ph, 0, 0, pw, ph);
+    g.globalCompositeOperation = 'overlay'; g.globalAlpha = 0.28; g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
   }
   g.globalCompositeOperation = 'source-over';
   if (refl) {
@@ -263,6 +269,81 @@ function drawActorLit(a, sc, lt, refl) {
     cx.save(); cx.globalAlpha = refl; cx.drawImage(rimBuf, 0, oy, pw, fh, a.x - ox / bs, a.y + 1, pw / bs, fh / bs); cx.restore();
   }
   cx.drawImage(actBuf, 0, 0, pw, ph, a.x - ox / bs, a.y - oy / bs, pw / bs, ph / bs);
+}
+
+// Leben am Himmel: Vogelschwärme über dem Garten 1776, Schwebeautos über dem Zukunftsgarten
+const sky = { list: [], next: 0, room: null };
+function updateSky(dt) {
+  const kind = G.screen === 'game' && G.state ? roomFx().sky : null, vr = G.state ? viewRoomId() : null;
+  if (sky.room !== vr) { sky.room = vr; sky.list = []; sky.next = G.t + 1500; }
+  if (!kind) return;
+  if (G.t >= sky.next) {
+    const dir = Math.random() < 0.5 ? 1 : -1, y = 26 + Math.random() * 70;
+    if (kind === 'birds') {
+      const n = 3 + Math.floor(Math.random() * 4);
+      sky.list.push({ kind, dir, x: dir > 0 ? -60 : W + 60, y, v: 55 + Math.random() * 25, n, seed: Math.random() * 9 });
+      sky.next = G.t + 9000 + Math.random() * 9000;
+    } else {
+      const col = pick(['#ffd23a', '#7fe8ff', '#ff7ad9', '#a6ff8f']);
+      sky.list.push({ kind, dir, x: dir > 0 ? -50 : W + 50, y, v: 260 + Math.random() * 180, col, seed: Math.random() * 9 });
+      Sound.sfx('whoosh', dir > 0 ? -0.6 : 0.6);
+      sky.next = G.t + 4500 + Math.random() * 6000;
+    }
+  }
+  for (let i = sky.list.length - 1; i >= 0; i--) { const o = sky.list[i]; o.x += o.dir * o.v * dt / 1000; if (o.x < -120 || o.x > W + 120) sky.list.splice(i, 1); }
+}
+function drawSky() {
+  for (const o of sky.list) {
+    if (o.kind === 'birds') {
+      for (let i = 0; i < o.n; i++) {
+        const bx = o.x - o.dir * (Math.abs(i - (o.n - 1) / 2) * 16 + i * 2), by = o.y + Math.abs(i - (o.n - 1) / 2) * 9 + Math.sin(G.t * 0.004 + i) * 2;
+        const f = Math.sin(G.t * 0.018 + i * 1.3 + o.seed) * 4;
+        L(cx, [bx - 7, by - f, bx - 2, by, bx, by - 1, bx + 2, by, bx + 7, by - f], 2, '#3a2a3a');
+      }
+    } else {
+      const x = o.x, y = o.y + Math.sin(G.t * 0.003 + o.seed) * 3;
+      if (!cx.isPix) {   // Lichtspur
+        const tg = cx.createLinearGradient(x - o.dir * 90, y, x, y); tg.addColorStop(0, hexA(o.col, 0)); tg.addColorStop(1, hexA(o.col, 0.55));
+        cx.save(); cx.globalCompositeOperation = 'lighter'; cx.strokeStyle = tg; cx.lineWidth = 3; cx.lineCap = 'round';
+        cx.beginPath(); cx.moveTo(x - o.dir * 90, y + 3); cx.lineTo(x - o.dir * 10, y + 3); cx.stroke(); cx.restore();
+      }
+      R(cx, x - 16, y - 5, 32, 11, '#4a2a7a', 2, 5); E(cx, x + o.dir * 3, y - 6, 9, 6, '#bfe8ff', 1.5);
+      E(cx, x + o.dir * 15, y + 1, 3, 2.5, o.col, 0); E(cx, x - 10, y + 7, 4, 1.5, hexA(o.col, 0.8), 0);
+    }
+  }
+}
+// Hotspot-Funkeln: ab und zu blitzt etwas auf, das man noch nicht angeschaut hat
+const glint = { next: 0, at: null, t0: 0 };
+function updateGlint() {
+  if (G.screen !== 'game' || !G.state || G.busy || G.dialog || G.menu || G.inIntro) return;
+  if (G.t < glint.next) return;
+  glint.next = G.t + 4500 + Math.random() * 3500;
+  const room = ROOMS[viewRoomId()];
+  const cand = room.objs.filter(o => isVisible(o) && !o.exit && !G.state.looked['o:' + o.id] && o.rect[2] < 400);
+  if (!cand.length) { glint.at = null; return; }
+  const o = pick(cand), [x, y, w, h] = o.rect;
+  glint.at = [x + w * (0.2 + Math.random() * 0.6), y + Math.min(h, 120) * (0.15 + Math.random() * 0.4)]; glint.t0 = G.t;
+}
+function drawGlint() {
+  if (!glint.at) return;
+  const k = (G.t - glint.t0) / 700; if (k < 0 || k > 1) return;
+  const [x, y] = glint.at, a = Math.sin(k * Math.PI), r = 3 + a * 9;
+  cx.save(); cx.globalAlpha = a * 0.9;
+  if (!cx.isPix) { const g = cx.createRadialGradient(x, y, 0, x, y, r * 1.6); g.addColorStop(0, 'rgba(255,250,220,0.55)'); g.addColorStop(1, 'rgba(255,250,220,0)'); cx.fillStyle = g; cx.fillRect(x - r * 2, y - r * 2, r * 4, r * 4); }
+  cx.translate(x, y); cx.rotate(k * 1.2);
+  L(cx, [-r, 0, r, 0], 2, '#fffbe6'); L(cx, [0, -r, 0, r], 2, '#fffbe6'); L(cx, [-r * 0.45, -r * 0.45, r * 0.45, r * 0.45], 1.2, '#fffbe6'); L(cx, [-r * 0.45, r * 0.45, r * 0.45, -r * 0.45], 1.2, '#fffbe6');
+  cx.restore();
+}
+// kleines Verb-Symbol am Zeiger: zeigt, was ein Rechtsklick tun würde
+function verbBadge(x, y, v) {
+  const bx = x + 16, by = y + 16;
+  E(cx, bx, by, 11, 11, '#241539', 2, 0, '#ffe066');
+  cx.save(); cx.translate(bx, by);
+  if (v === 'look') { E(cx, 0, 0, 7, 4.5, '#ffffff', 1.5, 0, '#ffe066'); E(cx, 0, 0, 2.5, 2.5, '#241539', 0); }
+  else if (v === 'talk') { R(cx, -6.5, -5, 13, 8, '#ffffff', 1.5, 3, '#ffe066'); P(cx, [-2, 3, -4.5, 7, 2, 3], '#ffffff', 0); }
+  else if (v === 'walk') { L(cx, [-5, 0, 5, 0], 2.2, '#ffe066'); L(cx, [1, -4, 5, 0, 1, 4], 2.2, '#ffe066'); }
+  else { E(cx, 0, 1.5, 4.5, 4, '#ffd8b0', 1.5, 0, '#ffe066'); R(cx, -4, -6, 2.4, 6, '#ffd8b0', 1, 1, '#ffe066'); R(cx, -1.2, -7, 2.4, 7, '#ffd8b0', 1, 1, '#ffe066'); R(cx, 1.6, -6, 2.4, 6, '#ffd8b0', 1, 1, '#ffe066'); }
+  cx.restore();
 }
 
 // Vordergrund-Gräser an den Bildrändern (Tiefenwirkung im Freien), wiegen sich im Wind
@@ -1208,11 +1289,15 @@ function drawSpeech() {
   x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, x));
   y = Math.max(lines.length * lh + 4, y);
   cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round';
+  const pk = Math.min(1, (G.t - sp.start) / 140), pop = pk < 1 ? 0.82 + 0.18 * (1 - Math.pow(1 - pk, 3)) + Math.sin(pk * Math.PI) * 0.06 : 1;
+  cx.save(); cx.translate(x, y); cx.scale(pop, pop); cx.translate(-x, -y);
   lines.forEach((l, i) => {
     const ly = y - (lines.length - 1 - i) * lh;
+    if (!cx.isPix) { cx.fillStyle = 'rgba(8,2,16,0.45)'; cx.fillText(l, x + 2, ly + 3); }
     cx.lineWidth = 5; cx.strokeStyle = '#0b0610'; cx.strokeText(l, x, ly);
     cx.fillStyle = col; cx.fillText(l, x, ly);
   });
+  cx.restore();
 }
 function drawVignette() {
   const g = cx.createRadialGradient(W / 2, SH * 0.55, 260, W / 2, SH * 0.55, 640);
@@ -1283,6 +1368,7 @@ function drawScene() {
   if (G.t < G.shake.until) cx.translate((Math.random() - 0.5) * G.shake.mag * 2, (Math.random() - 0.5) * G.shake.mag * 2);
   camApply();
   drawBg(room);
+  drawSky();
   HDS.deco = true;   // Raum-Grafik: handgezeichnete Kanten, Fasen, Holzmaserung
   try {
     if (room.dyn) room.dyn(cx, G.t);
@@ -1295,7 +1381,7 @@ function drawScene() {
   HDS.deco = true;
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
   if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg) drawForeground(fg); }
-  drawParts(); drawRipples();
+  drawParts(); drawRipples(); drawGlint();
   cx.restore();
   drawLightFx(!cx.isPix);
   if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
@@ -1447,6 +1533,7 @@ function drawCursor() {
     if (pad) { cx.beginPath(); cx.arc(x, y, 15, 0, Math.PI * 2); cx.stroke(); }
   }
   if (pad && G.screen === 'game' && G.hover && y < SH && !G.busy) txt(cx, nameOf(G.hover), x, y - 24, '800 15px "Baloo 2", sans-serif', '#ffe066', 'center', 4, '#0b0610');
+  if (G.screen === 'game' && G.hover && y < SH && !G.busy && !G.verb && !G.first && !G.dialog && !G.menu) { const v = defaultVerb(G.hover); if (v) verbBadge(x, y, v); }
 }
 
 // ---------- Titel & Ende ----------
@@ -1675,7 +1762,7 @@ function update(dt) {
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
-  updateParts(dt); updateMotes(dt); updateWeather(); updateBarks(); updateCam(dt); updateCrystals();
+  updateParts(dt); updateMotes(dt); updateWeather(); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
   Sound.muffle(!!G.menu && G.screen === 'game');
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();
   if (G.fadeRes) {
@@ -1685,6 +1772,11 @@ function update(dt) {
   }
   if (G.screen === 'game' && G.state && !G.menu) G.state.stats.ms += dt;
   G.hover = null;
+  if (G.screen === 'game' && G.pointer === 'mouse' && !G.busy) {
+    const u = G.mouse.y >= SH ? hitUI(G.mouse.x, G.mouse.y) : null, key = u && u.type === 'verb' ? u.id : null;
+    if (key && key !== G.lastVerbHover) Sound.sfx('hover');
+    G.lastVerbHover = key;
+  }
   if (G.screen === 'game' && !G.dialog && !G.menu && G.state) {
     const { x, y } = G.mouse;
     if (y < SH) G.hover = hitScene(x, y);
