@@ -343,7 +343,14 @@ function lean(c, a, hipY) {
 function squat(a, t) { const po = pose(a, t); return po && po.knee ? po.knee * po.mix : 0; }
 function crouch(a, t, len) { return len * (1 - Math.cos(squat(a, t) / 2)); }
 function poseKnee(a, t, side) { const po = pose(a, t); return knee(a, side) + (po && po.knee ? po.knee * po.mix : 0); }
-function mouthOpen(a, t) { return !!a.talking && Math.floor(t / 115) % 2 === 0; }
+// Lippen zur Plapperstimme: jede Silbe öffnet den Mund in der Form ihres Vokals (a weit, e/i breit, o/u rund)
+const MOUTH = [[1.05, 1.3], [1.2, 0.75], [1.3, 0.55], [0.78, 1.15], [0.66, 1.0]];
+function syllables(a) { return a.vowelT != null && typeof G !== 'undefined' && G.settings && G.settings.babble && !(typeof Voice !== 'undefined' && Voice.on); }
+function mouthOpen(a, t) {
+  if (syllables(a)) return !!a.talking && t - a.vowelT >= 0 && t - a.vowelT < 68;
+  return !!a.talking && Math.floor(t / 115) % 2 === 0;
+}
+function mouthK(a, t) { return syllables(a) && t - a.vowelT < 68 ? MOUTH[a.vowel] || MOUTH[0] : MOUTH[0].map(() => 1); }
 function blinking(a, t) { return ((t + (a.seed || 0) * 1777) % 3900) < 130; }
 // Pupille – oder ein geschlossenes Lid, wenn die Figur gerade blinzelt
 function pupil(c, a, t, x, y, r) {
@@ -525,7 +532,7 @@ CHAR.bernard = (c, a, t) => {
   // Knollennase
   shape(c, '#efb48c', [21, -184, 38, -166], () => { c.moveTo(22, -180); c.quadraticCurveTo(31, -184, 35, -176); c.quadraticCurveTo(38, -168, 30, -167); c.quadraticCurveTo(24, -167, 22, -172); c.closePath(); });
   if (hd(c)) E(c, 30, -170.5, 1.7, 1.1, 'rgba(90,40,30,0.55)', 0);
-  if (mo || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 18, -164, 5, 4, '#7a2222', 2); else S(c, null, 2.5, () => { c.moveTo(11, -165); c.quadraticCurveTo(17, -161, 23, -166); }, OUT);
+  if (mo || (po && po.chew && Math.floor(t / 140) % 2)) { const k = mouthK(a, t); E(c, 18, -164, 5 * k[0], 4 * k[1], '#7a2222', 2); } else S(c, null, 2.5, () => { c.moveTo(11, -165); c.quadraticCurveTo(17, -161, 23, -166); }, OUT);
   const gB = po ? 0 : gesture(a, t);
   arm(c, 7, -144, poseAng((-0.12 + sw * 0.45 + talkArm(a, t)) * (1 - gB) - 2.75 * gB, po, 'front'), shirt, 18, skin, 50, 9, 5.5, poseAng(elbow(a, 1) * (1 - gB), po, 'fb'));
   c.restore();
@@ -573,7 +580,7 @@ CHAR.hoagie = (c, a, t) => {
   if (!blinking(a, t)) for (const [x, r] of [[18, 4.2], [27, 4]]) S(c, skin, 1.5, () => { c.moveTo(x - r - 0.6, -154); c.quadraticCurveTo(x, -161.5, x + r + 0.6, -154); c.quadraticCurveTo(x, -156.2, x - r - 0.6, -154); c.closePath(); }, '#7a4a3a');   // schwere, entspannte Lider
   brows(c, a, t, 17, 27.5, -161, 8, OUT, 3);
   shape(c, '#df9a72', [24, -155, 38, -140], () => { c.moveTo(25, -152); c.quadraticCurveTo(34, -155, 37, -148); c.quadraticCurveTo(38, -141, 31, -141); c.quadraticCurveTo(26, -141, 25, -145); c.closePath(); });   // breite Nase
-  if (mo || ag || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 20, -136, 7, ag ? 6 : 5, '#6e1f1f', 2.5);
+  if (mo || ag || (po && po.chew && Math.floor(t / 140) % 2)) { const k = ag ? [1, 1] : mouthK(a, t); E(c, 20, -136, 7 * k[0], (ag ? 6 : 5) * k[1], '#6e1f1f', 2.5); }
   else S(c, null, 2.5, () => { c.moveTo(12, -139); c.quadraticCurveTo(20, -132, 28, -139); });
   P(c, [17, -131.5, 24, -131.5, 20.5, -124], hair, 1.5);   // Kinnbart
   if (po && po.chew) E(c, 22, -136, 5, 4.5, '#d8343a', 1.5);   // der Apfel in der Hand vorm Mund
@@ -647,7 +654,7 @@ CHAR.laverne = (c, a, t) => {
   }
   if (hd(c)) for (const [x, y] of [[16, -162], [19, -160.5], [22, -162], [28, -161.5]]) E(c, x, y, 0.8, 0.8, 'rgba(170,110,80,0.6)', 0);   // Sommersprossen
   shape(c, '#efc4ac', [22, -165, 29, -155], () => { c.moveTo(23, -164); c.quadraticCurveTo(28.5, -160, 28, -157); c.quadraticCurveTo(25, -155, 23, -158); c.closePath(); }, 2);   // Stupsnase
-  if (yw) E(c, 18, -151, 4.4, 6, '#7a2222', 2); else if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else S(c, null, 2.4, () => { c.moveTo(13, -151); c.quadraticCurveTo(17, -148.5, 21.5, -153); }, OUT);   // schiefes Grinsen
+  if (yw) E(c, 18, -151, 4.4, 6, '#7a2222', 2); else if (mo) { const k = mouthK(a, t); E(c, 18, -151, 4 * k[0], 3.5 * k[1], '#7a2222', 2); } else S(c, null, 2.4, () => { c.moveTo(13, -151); c.quadraticCurveTo(17, -148.5, 21.5, -153); }, OUT);   // schiefes Grinsen
   const gL = gesture(a, t);
   if (a.climb) arm(c, 6, -138, -2.55 - cl * 0.45, dress, 36, skin, 48, 8, 5.5, 0.35);
   else arm(c, 6, -138, poseAng((-0.15 + sw * 0.45 + talkArm(a, t)) * (1 - gL) + (-2.9 + Math.sin(t * 0.02) * 0.35) * gL, po, 'front'), dress, 36, skin, 48, 8, 5.5, poseAng(elbow(a, 1) * (1 - gL), po, 'fb'));
@@ -692,7 +699,7 @@ CHAR.drfred = (c, a, t) => {
   // Hakennase
   shape(c, '#e9a888', [28, -148, 45, -128], () => { c.moveTo(30, -146); c.quadraticCurveTo(40, -147, 43, -137); c.quadraticCurveTo(45, -129, 37, -130); c.quadraticCurveTo(31, -130, 30, -135); c.closePath(); });
   if (hd(c)) E(c, 37, -132, 1.8, 1.2, 'rgba(90,40,30,0.55)', 0);
-  if (mo) { E(c, 25, -125, 6.5, 4.8, '#6a1a1a', 2); R(c, 20.5, -129, 9, 2.4, '#fffaf0', 0, 1); }
+  if (mo) { const k = mouthK(a, t); E(c, 25, -125, 6.5 * k[0], 4.8 * k[1], '#6a1a1a', 2); R(c, 25 - 4.5 * k[0], -125 - 4 * k[1], 9 * k[0], 2.4, '#fffaf0', 0, 1); }
   else { S(c, null, 2.5, () => { c.moveTo(18, -127); c.quadraticCurveTo(24, -122, 31, -128); }, OUT); if (hd(c)) L(c, [31, -129.5, 32.5, -126.5], 1.4); }   // schiefes Grinsen
   const gF = gesture(a, t);
   if (gF > 0.15) {   // Geistesblitz: Glühbirne über dem Kopf
@@ -745,7 +752,7 @@ CHAR.gertrude = (c, a, t) => {
   brows(c, a, t, 11.5, 21.5, -170, 6, '#7a5a40', 1.8);
   if (hd(c)) { L(c, [14.8, -165.5, 16.6, -167.5], 1.2); L(c, [24.6, -165.5, 26.4, -167.5], 1.2); }   // Wimpern
   shape(c, '#eeb090', [21, -160, 30, -151], () => { c.moveTo(22, -159); c.quadraticCurveTo(29, -159, 29.5, -155); c.quadraticCurveTo(29, -151, 24, -151.5); c.quadraticCurveTo(21, -153, 22, -159); c.closePath(); }, 2);   // Knubbelnase
-  if (mo) E(c, 17, -147, 5, 4, '#7a2222', 2);
+  if (mo) { const k = mouthK(a, t); E(c, 17, -147, 5 * k[0], 4 * k[1], '#7a2222', 2); }
   else if (hk >= 0) E(c, 17, -147, 2.6, 2.8, '#7a2222', 1.5);   // summt vor sich hin
   else S(c, null, 2.5, () => { c.moveTo(12, -149); c.quadraticCurveTo(17, -145, 22, -149); });
   arm(c, 10, -134, (-0.3 + talkArm(a, t)) * (1 - we) + (-0.55 - rub) * we, '#f6f2e6', 16, skin, 44, 9, 5.5, 0.15 + (a.talking ? 0.6 : 0) + 0.8 * we);
@@ -787,7 +794,7 @@ CHAR.hancock = (c, a, t) => {
   brows(c, a, t, 11.5, 21.5, -170.5, 7, '#6a5040', 2.4);
   // Adlernase
   shape(c, '#e9aa88', [20, -166, 31, -150], () => { c.moveTo(21, -165); c.quadraticCurveTo(27, -162, 30, -153); c.quadraticCurveTo(28, -150, 23, -151.5); c.quadraticCurveTo(21, -153, 21, -165); c.closePath(); }, 2.2);
-  if (mo) E(c, 16.5, -146, 5, 4, '#7a2222', 2); else S(c, null, 2.5, () => { c.moveTo(11, -147.5); c.quadraticCurveTo(16, -145, 21, -148.5); }, OUT);   // selbstgefälliges Lächeln
+  if (mo) { const k = mouthK(a, t); E(c, 16.5, -146, 5 * k[0], 4 * k[1], '#7a2222', 2); } else S(c, null, 2.5, () => { c.moveTo(11, -147.5); c.quadraticCurveTo(16, -145, 21, -148.5); }, OUT);   // selbstgefälliges Lächeln
   const sk = idleAct(a, t, 8000, 1700), se = actEnv(sk);
   c.save(); c.translate(12, -138);
   c.rotate(-0.5 + (a.talking ? Math.sin(t * 0.01) * 0.15 : Math.sin(t * 0.004) * 0.08) + se * (-0.35 + Math.sin(t * 0.045) * 0.14));
@@ -837,8 +844,8 @@ function tentacleBody(c, a, t, col, dark, lite, o = {}) {
     E(c, x, y, 2 - i * 0.15, 1.6, dark, 0);
   }
   const u = 0.78, mx = 30 + (22 + sway - 30) * u + 6, my = -10 + (-h + 20) * u;
-  const open = (a.talking && Math.floor(t / 110) % 2 === 0) || (o.sing > 0.3 && Math.floor(t / 240) % 2 === 0);
-  E(c, mx, my, 12, open ? 10.5 : 7.5, dark, 3);
+  const open = mouthOpen(a, t) || (o.sing > 0.3 && Math.floor(t / 240) % 2 === 0), mk = a.talking ? mouthK(a, t) : [1, 1];
+  E(c, mx, my, 12, open ? 10.5 * Math.min(1.15, mk[1]) : 7.5, dark, 3);
   E(c, mx + 2, my, 6.5, open ? 6.5 : 2.2, OUT, 0);
   E(c, mx - 4, my - 4, 4, 1.8, 'rgba(255,255,255,0.35)', 0);
   if (o.front) o.front(sway, h);

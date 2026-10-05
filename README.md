@@ -33,7 +33,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Dialogbäume mit Dr. Fred, Grünem Tentakel, Oma Gertrude, John Hancock, der Tentakel-Wache und Lila Tentakel
 - **Steuerung mit Maus, Touch, Tastatur oder Xbox-Controller** (auch in Edge auf der Xbox), mit Vibration
 - **Vollbild** startet automatisch, auf dem Handy mit Querformat-Sperre
-- 10 Erfolge, Fortschrittsanzeige, Statistik am Ende, Hotspot-Anzeige, Tipp-System
+- 17 Erfolge, Fortschrittsanzeige, Statistik am Ende, Hotspot-Anzeige, Tipp-System
 - Prozedurale Grafik (Canvas 2D) und Musik (WebAudio-Synthesizer) mit eigenen Themen pro Zeitalter, Umgebungsgeräuschen, Schritten je nach Boden und Plapperstimmen pro Figur
 - Lebendige Szene: Laufstaub je nach Untergrund, weiche Schatten unter Möbeln, Lichtstimmung pro Raum und sanftes Klick-Feedback
 - **Gemalter HD-Look:** Jede Fläche bekommt automatisch einen Licht-Verlauf, Konturen sind fein und farbig statt schwarz, Raumhintergründe bekommen weiches Leuchten, Licht-Verlauf und Maltextur
@@ -53,6 +53,9 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Einstellung **Hotspot-Hilfe**: dezente, pulsierende Markierungen an allem Benutzbaren; das gewählte Verb leuchtet in der Satzzeile
 - **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, drei Schwierigkeitsgrade mit Bestenliste, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
 - **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
+- **Lippen im Takt der Silben:** Jede Plapper-Silbe öffnet den Mund in der Form ihres Vokals – weit beim a, breit bei e und i, rund bei o und u
+- **Musikbox zeigt die Leitstimme:** kleines Porträt der aktiven Figur und welches Instrument die Melodie gerade mitspielt
+- **Neuer Erfolg „Geduldsprobe“:** alle fünf Leerlauf-Ticks der Helden entdecken (17 Erfolge insgesamt)
 - **Großes Finale:** Feuerwerk, Konfetti, alle Figuren auf dem Hügel, Abspann und eine größere Abspannmusik
 - Lebendige Porträts und Figuren (blinzeln, reden mit, die Pupillen folgen dem Zeiger) und versteckte Gags auf dem Titelbildschirm
 - **Adaptive Musik:** Mit jedem gelösten Rätsel kommen neue Instrumente dazu; jede Figur hat ein kurzes Erkennungsmotiv beim Gesprächsbeginn; im Pausenmenü klingt alles gedämpft

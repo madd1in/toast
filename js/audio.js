@@ -394,7 +394,7 @@ const Sound = (() => {
     if (!an) { an = ac.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.75; an.minDecibels = -96; an.maxDecibels = -36; musicBus.connect(an); anData = new Uint8Array(an.frequencyBinCount); }
     an.getByteFrequencyData(anData); return anData;
   }
-  function info(id) { const th = THEMES[id]; return th ? { bpm: th.bpm, inst: [...new Set(th.tracks.map(t => t.inst))] } : null; }
+  function info(id) { const th = THEMES[id]; return th ? { bpm: th.bpm, inst: [...new Set(th.tracks.map(t => t.inst))], lead: LEAD[id] != null } : null; }
   // einzelner Ton auf dem Musik-Bus (z. B. die selbst gespielte Lead-Gitarre)
   function note(instName, n, sec) { if (ac) inst(instName, n, ac.currentTime + 0.005, sec || 0.3, musicBus); }
   function musicLevel() { return musicOn ? (ducked ? 0.1 : 0.2) : 0; }
@@ -533,13 +533,14 @@ const Sound = (() => {
   // Silbe = Sägezahn in Stimmlage durch zwei Bandpässe auf den Formanten eines zufälligen Vokals (a, e, i, o, u)
   const VOWELS = [[800, 1250], [450, 1900], [320, 2300], [520, 920], [360, 780]];
   function blip(v, pan) {
-    if (!ac || !v) return;
+    const vi = Math.floor(Math.random() * VOWELS.length);   // der Vokal steuert auch die Mundform (engine.js)
+    if (!ac || !v) return vi;
     const t = ac.currentTime + 0.005, f = (v.blip || 220) * (0.88 + Math.random() * 0.28);
     if (retro) {   // Klassik-Modus: altes Soundkarten-Piepsen
       panned(pan, () => { osc(v.wave || 'square', f, t, 0.065, 0.032, sfxBus, { lp: 1900, decay: true, attack: 0.004 }); });
-      return;
+      return vi;
     }
-    const dur = 0.075 + Math.random() * 0.05, [f1, f2] = VOWELS[Math.floor(Math.random() * VOWELS.length)], k = v.formant || 1;
+    const dur = 0.075 + Math.random() * 0.05, [f1, f2] = VOWELS[vi], k = v.formant || 1;
     panned(pan, () => {
       const src = ac.createOscillator(), g = ac.createGain();
       src.type = 'sawtooth'; src.frequency.setValueAtTime(f, t); src.frequency.linearRampToValueAtTime(f * (0.9 + Math.random() * 0.2), t + dur);
@@ -550,6 +551,7 @@ const Sound = (() => {
       }
       g.connect(sfxBus); src.start(t); src.stop(t + dur + 0.02);
     });
+    return vi;
   }
   // Schritte je nach Untergrund
   const STEP = { wood: { f: 900, q: 1.2, v: 0.1 }, tile: { f: 2400, q: 2, v: 0.07 }, grass: { f: 3800, q: 0.7, v: 0.045, type: 'highpass' }, marble: { f: 3000, q: 3, v: 0.06 }, carpet: { f: 380, q: 0.8, v: 0.06 } };

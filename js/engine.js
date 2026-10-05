@@ -598,7 +598,7 @@ function updateBarks() {
   if (G.screen !== 'game' || !G.state || G.fast) { endBark(); return; }
   const b = G.bark;
   if (b && (G.t >= b.until || G.speech || G.busy || G.dialog || b.a.room !== viewRoomId())) endBark();
-  else if (b && G.settings.babble && !Voice.on && G.t < b.babbleEnd && G.t >= G.nextBlip) { Sound.blip(b.a.voice, panOf(b.a)); G.nextBlip = G.t + 90 + Math.random() * 70; }
+  else if (b && G.settings.babble && !Voice.on && G.t < b.babbleEnd && G.t >= G.nextBlip) { b.a.vowel = Sound.blip(b.a.voice, panOf(b.a)); b.a.vowelT = G.t; G.nextBlip = G.t + 90 + Math.random() * 70; }
   if (G.mouse.x !== G.lastMx || G.mouse.y !== G.lastMy || G.busy || G.speech || G.dialog || G.menu) { G.lastMx = G.mouse.x; G.lastMy = G.mouse.y; G.idleSince = G.t; }
   const calm = !G.busy && !G.speech && !G.dialog && !G.menu && !G.inIntro && G.fade === 0 && !G.bark && !me().walking;
   if (!calm) { G.barkNext = Math.max(G.barkNext, G.t + 5000); return; }
@@ -1921,6 +1921,13 @@ function drawJukebox(bx, by, bw) {
   const sub = !Sound.musicOn ? 'Musik ist in den Einstellungen ausgeschaltet' : inf ? `${inf.bpm} BPM · ${insts.slice(0, 4).join(', ')}${inf.inst.includes('drum') ? ' · Schlagzeug' : ''}` : 'Wähle links ein Stück';
   txt(cx, sub, px, base + 70, '600 13px "Baloo 2", sans-serif', '#c3b2ff');
   if (on) for (let i = 0; i < 4; i++) E(cx, px - 27 + i * 18, base + 88, 4, 4, Math.floor(beat) % 4 === i ? col : '#3d2c5e', 0);
+  const hero = G.state && G.screen === 'game' ? curId() : null;
+  if (on && hero && inf.lead && !G.settings.retro) {   // die aktive Figur spielt die Melodie mit
+    const lbl = `Melodie mit ${{ bernard: 'E-Piano', hoagie: 'E-Gitarre', laverne: 'Glocken' }[hero]} – gefärbt von ${ACT[hero].name}`;
+    cx.font = '700 13px "Baloo 2", sans-serif'; const tw = cx.measureText(lbl).width;
+    drawPortrait(cx, hero, px - tw / 2 - 6, base + 120, 13, '#3d2c5e', now, pulse > 0.5);
+    txt(cx, lbl, px - tw / 2 + 14, base + 125, '700 13px "Baloo 2", sans-serif', '#ffe066', 'left');
+  }
 }
 const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
 const HELP = [
@@ -1942,7 +1949,7 @@ function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
   const jb = G.menu === 'jukebox';
-  const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 28 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 26 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
   const bw = jb ? 820 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = jb ? 566 : 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
   const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe' }[G.menu] || 'Pause';
@@ -1984,12 +1991,12 @@ function drawMenu() {
   }
   if (G.menu === 'ach') {
     ACH.forEach((a, i) => {
-      const got = !!G.ach[a.id], yy = y + 10 + i * 28;
+      const got = !!G.ach[a.id], yy = y + 10 + i * 26;
       cx.globalAlpha = got ? 1 : 0.4; trophy(cx, bx + 34, yy, 0.8); cx.globalAlpha = 1;
       txt(cx, !got && a.secret ? 'Geheimer Erfolg' : a.name, bx + 56, yy + 2, '800 15px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
       txt(cx, got ? a.desc : '???', bx + 230, yy + 2, '600 13px "Baloo 2", sans-serif', got ? '#e6dcff' : '#6a5a88', 'left');
     });
-    y += ACH.length * 28 + 10;
+    y += ACH.length * 26 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
   G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 }));
@@ -3226,6 +3233,7 @@ const FIDGET = { bernard: [['glasses', 1700, 'squeak'], ['think', 2800, 'hmm']],
 function fidget(p, kind) {
   const f = FIDGET[p.id] && (kind ? FIDGET[p.id].find(q => q[0] === kind) : pick(FIDGET[p.id])); if (!f) return;
   p.pose = { kind: f[0], t0: G.t, dur: f[1], puff: 0, fidget: true };
+  if (G.state) { const seen = G.state.fidgets || (G.state.fidgets = {}); seen[f[0]] = 1; if (Object.values(FIDGET).every(l => l.every(q => seen[q[0]]))) unlock('geduld'); }
   G.stillSince = G.t + f[1] + 5000 + Math.random() * 7000;
   if (f[2]) Sound.sfx(f[2], panX(p.x));
 }
@@ -3314,7 +3322,7 @@ function update(dt) {
   if (G.screen === 'game') updateActors(dt);
   const sp = G.speech;
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
-  else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
+  else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { sp.a.vowel = Sound.blip(sp.a.voice, panOf(sp.a)); sp.a.vowelT = G.t; G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
   updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt); updateCritters(dt);
   const tb = G.titleBark;

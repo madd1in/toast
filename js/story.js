@@ -134,6 +134,7 @@ const ACH = [
   { id: 'reise', name: 'Weltenbummler', desc: 'Alle sieben Orte in drei Zeiten besucht.' },
   { id: 'party', name: 'Partytier', desc: 'Den geheimen Code gefunden. Hütchen auf!', secret: true },
   { id: 'tierfreund', name: 'Tierfreund', desc: 'Katze, Huhn und Saugroboter gestreichelt.' },
+  { id: 'geduld', name: 'Geduldsprobe', desc: 'Alle fünf Leerlauf-Ticks der Helden gesehen.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
 // Figuren-Steckbriefe (Menü → Extras); NPCs erscheinen erst, wenn man sie angeschaut oder angesprochen hat
