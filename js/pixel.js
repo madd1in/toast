@@ -340,17 +340,20 @@ class PixCtx {
 
   // ---------- Raum-Hintergründe: einmal als Pixel-Art gerendert, dann kopiert ----------
   blitRoom(room) {
-    if (!room._pix) {
-      const pc = new PixCtx(PW, Math.ceil(SH * PSCALE));
+    // je Maßstab einmal gerendert: klassisch 1:3, mit der Kamera der minimalen Bedienung etwas größer
+    const k = Math.round(this.m[0] / PSCALE * 1000) / 1000, cache = room._pix || (room._pix = {});
+    if (!cache[k]) {
+      const sw = Math.ceil(W * PSCALE * k), sh = Math.ceil(SH * PSCALE * k), pc = new PixCtx(sw, sh);
       pc.isStatic = true;   // Hintergründe werden einmal "gemalt": volle VGA-Schattierung und Textur
+      pc.scale(k, k);
       room.draw(pc);
-      room._pix = { buf: pc.bufs[0], texts: pc.texts, h: pc.h };
+      cache[k] = { buf: pc.bufs[0], texts: pc.texts, w: sw, h: sh };
     }
-    const src = room._pix, dx = Math.round(this.m[4]), dy = Math.round(this.m[5]);
-    if (!dx && !dy) this.buf.set(src.buf);
+    const src = cache[k], dx = Math.round(this.m[4]), dy = Math.round(this.m[5]);
+    if (!dx && !dy && src.w === this.w && src.h <= this.h) this.buf.set(src.buf);
     else for (let y = 0; y < src.h; y++) {
       const ty = y + dy; if (ty < 0 || ty >= this.h) continue;
-      for (let x = 0; x < PW; x++) { const tx = x + dx; if (tx >= 0 && tx < PW) this.buf[ty * PW + tx] = src.buf[y * PW + x]; }
+      for (let x = 0; x < src.w; x++) { const tx = x + dx; if (tx >= 0 && tx < this.w) this.buf[ty * this.w + tx] = src.buf[y * src.w + x]; }
     }
     for (const q of src.texts) { const m = q.m.slice(); m[4] += dx; m[5] += dy; this.texts.push({ ...q, m, layer: this.layerIdx }); }
   }

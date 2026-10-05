@@ -54,6 +54,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Einstellung **Hotspot-Hilfe**: dezente, pulsierende Markierungen an allem Benutzbaren; das gewählte Verb leuchtet in der Satzzeile
 - **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, drei Schwierigkeitsgrade mit Bestenliste, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
 - **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
+- **Pixel-Look mit minimaler Bedienung:** Auch im VGA-Pixel-Stil füllt die Szene den ganzen Bildschirm, die Kamera fährt pixelgenau mit, Tasche, Symbolleiste und Gesichter bleiben an ihrem Platz – die klassische Verbleiste gibt es weiter unter Einstellungen → Bedienung
 - **Umgebungslicht:** Die Ränder neben dem Spielbild (Handy quer, breite Monitore) leuchten weich in den Farben der aktuellen Szene
 - **Nebenfiguren mit Geräuschen:** Gertrude summt und wischt hörbar, John Hancocks Feder kratzt, der Grüne Tentakel singt „la la la“, Lila kichert fies, Dr. Freds Geistesblitz macht „Ding!“
 - **Musik mit Fills:** Am Ende jedes Durchgangs ein Schlagzeug-Fill, beim Neustart ein Becken – die Stücke wirken weniger wie eine Schleife

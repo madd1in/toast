@@ -479,7 +479,7 @@ function drawForeground(fg) {
 // Dialog-Kamera: bei Gesprächen zoomt die Szene sanft auf die Gesprächspartner
 function updateCam(dt) {
   const c = G.cam; let z = 1, fx = c.x, fy = c.y;
-  if (G.dialog && G.screen === 'game' && G.state && !G.menu) {
+  if (G.dialog && G.screen === 'game' && G.state && !G.menu && !G.settings.retro) {
     const p = me(), room = ROOMS[viewRoomId()];
     if (p.room === room.id) {
       const npc = Object.values(ACT).filter(a => a.room === room.id && a.visible && a.id !== p.id).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
@@ -2842,7 +2842,7 @@ function partyHat(a, sc) {
 // Aktion, Rechtsklick = Aktionsmenü, eine einblendbare Inventarleiste und kleine Symbol-Knöpfe.
 const MK = H / SH, VW = W / MK;
 const sceneCv = document.createElement('canvas'), sceneCx = sceneCv.getContext('2d');
-function modernUI() { return !G.settings.retro && G.settings.ui !== 'classic'; }
+function modernUI() { return G.settings.ui !== 'classic'; }   // die minimale Bedienung gilt auch im Pixel-Look
 function toScreen(x, y) { return [(x - G.view.x) * MK, y * MK]; }
 function toScene(x, y) { return [G.view.x + x / MK, y / MK]; }
 function scrPt(x, y) { const c = G.cam; if (c.z > 1.001) { x = c.x + (x - c.x) * c.z; y = c.y + (y - c.y) * c.z; } return toScreen(x, y); }
@@ -2861,7 +2861,17 @@ function updateView(dt) {
   if (G.viewRoomLast !== r) { G.view.x = t; G.viewRoomLast = r; return; }
   G.view.x += (t - G.view.x) * Math.min(1, dt * 0.0032);
 }
+// Pixel-Look mit minimaler Bedienung: Szene mit Kamera direkt in den 320×200-Puffer – der Schwenk rastet auf ganze Pixel
+function drawSceneModernPix() {
+  const off = Math.round(G.view.x * MK * PSCALE);
+  G.modernPass = true; SSK = MK;
+  try { cx.save(); cx.setTransform(MK, 0, 0, MK, -off / PSCALE, 0); drawScene(); cx.restore(); }
+  finally { SSK = 1; G.modernPass = false; }
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+  drawSceneOverlays();
+}
 function drawSceneModern() {
+  if (cx.isPix) return drawSceneModernPix();
   const s = VS * DPR * MK, w = Math.ceil(W * s), h = Math.ceil(SH * s);
   if (sceneCv.width !== w || sceneCv.height !== h) { sceneCv.width = w; sceneCv.height = h; }
   const keep = cx; cx = sceneCx; SSK = MK; G.modernPass = true;
