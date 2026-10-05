@@ -485,10 +485,15 @@ const Sound = (() => {
   }
   // Schritte je nach Untergrund
   const STEP = { wood: { f: 900, q: 1.2, v: 0.1 }, tile: { f: 2400, q: 2, v: 0.07 }, grass: { f: 3800, q: 0.7, v: 0.045, type: 'highpass' }, marble: { f: 3000, q: 3, v: 0.06 }, carpet: { f: 380, q: 0.8, v: 0.06 } };
-  function step(kind, pan, weight = 1, wet) {
+  // Schritt je nach Boden, Gewicht und Gangart: thud = schwere Stiefel, click = Absätze, scuff = Schlurfen, squish = Tentakel
+  function step(kind, pan, weight = 1, wet, style) {
     if (!ac) return;
-    const s = STEP[kind] || STEP.wood, k = Math.max(0.7, Math.min(1.5, weight));
+    const s = STEP[kind] || STEP.wood, k = Math.max(0.6, Math.min(1.6, weight)), t = ac.currentTime + 0.005, hard = kind !== 'grass' && kind !== 'carpet';
     panned(pan, () => {
+      if (style === 'thud') { osc('sine', 62, t, 0.13, 0.08 * k, sfxBus, { f2: 36, decay: true }); nz(t, 0.09, s.v * 0.8, sfxBus, { type: 'lowpass', f: 420 }); if (Math.random() < 0.3) osc('sawtooth', 160 + Math.random() * 60, t + 0.04, 0.09, 0.008, sfxBus, { lp: 700, q: 6, decay: true }); }
+      else if (style === 'click' && hard) { osc('triangle', 2500 + Math.random() * 400, t, 0.025, 0.035, sfxBus, { decay: true }); nz(t, 0.02, s.v * 0.6, sfxBus, { type: 'highpass', f: 4000 }); }
+      else if (style === 'scuff') nz(t + 0.045, 0.1, s.v * 0.35, sfxBus, { type: 'bandpass', f: s.f * 1.5, q: 0.6, attack: 0.03 });
+      else if (style === 'squish') { nz(t, 0.12, 0.07, sfxBus, { type: 'lowpass', f: 700, f2: 300 }); osc('sine', 180, t, 0.08, 0.03, sfxBus, { f2: 90, decay: true }); return; }
       nz(ac.currentTime + 0.005, 0.06, s.v * (0.75 + 0.3 * k), sfxBus, { type: s.type || 'bandpass', f: s.f * (0.9 + Math.random() * 0.2) / k, q: s.q });
       if (k > 1.15) osc('sine', 70, ac.currentTime + 0.005, 0.08, 0.05 * k, sfxBus, { f2: 45, decay: true });   // schwere Schritte wummern
       if (wet) nz(ac.currentTime + 0.012, 0.1, s.v * 0.7, sfxBus, { type: 'highpass', f: 2400 + Math.random() * 1000 });   // nasse Schritte platschen

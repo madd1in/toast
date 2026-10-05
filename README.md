@@ -55,6 +55,10 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
 - **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG und legt es im **Fotoalbum** (Menü → Extras) ab
 - **Bessere Figuren-Animation:** Knie und Ellbogen beugen sich im Gangzyklus, der Oberkörper neigt sich beim Laufen, Figuren gestikulieren und nicken beim Reden, Richtungswechsel mit kurzer Drehung; Laverne klettert im Zukunftsgarten in echter Kletterpose (Arme und Beine greifen abwechselnd, Blätter rascheln und rieseln)
+- **Neu gezeichnete Hauptfiguren:** Bernard mit Eierkopf, Seitenscheitel samt Wirbel, Knollennase, Hemdkragen und Adamsapfel; Hoagie mit Birnen-Bauch, Hängebacken, schweren Lidern, breiter Nase, Kinnbart, langen Haaren und Portemonnaie-Kette; Laverne mit spitzem Kinn, Lidschatten, Wimpern, Sommersprossen, Stupsnase, schiefem Grinsen und Bubikragen
+- **Kaminlicht:** Im Gasthaus fällt flackerndes, warmes Licht samt Randlicht von der Feuerseite auf die Figuren – je näher am Kamin, desto stärker; der Schatten zuckt vom Feuer weg
+- **Vordergrund-Parallaxe:** Beim Kameraschwenk ziehen unscharfe Silhouetten im Vordergrund (Pflanze, Stehlampe, Kisten, Rohr, Stuhl, Fass, Zaunpfahl, Alien-Busch, Palastvorhänge) und das Gras in den Gärten schneller vorbei als die Szene
+- **Schritte mit Charakter:** Hoagie stampft in schweren Stiefeln, Laverne klackert mit Absätzen, Bernard schlurft, Tentakel schmatzen
 - **Tierische Mitbewohner:** Katze Mozzarella schläft, putzt sich und streunt durch die Lobby, Huhn Henriette pickt im Garten 1776, Saugroboter Staubi 3000 zieht im Palast seine Bahnen – sie weichen den Figuren aus, lassen sich anschauen, ansprechen und streicheln (Rechtsklick → Streicheln), mit eigenen Geräuschen und Sprüchen; Erfolg „Tierfreund“
 - **Mimik:** Augenbrauen heben sich bei Ausrufen, ziehen sich bei Fragen schräg und schauen besorgt bei „...“ – und vor Überraschung, wenn Klo-Post ankommt
 - **Party-Remix:** Im Party-Modus legt sich ein Disco-Beat über jedes Musikstück

@@ -62,6 +62,7 @@ function fs(c, fill, lw, stroke, box) {
   const hd = HDS.on && !c.isPix && isHex(fill);
   if (HDS.ink && !c.isPix) {   // Figur: weiche Innenlinie in abgedunkelter Flächenfarbe
     if (fill) { c.fillStyle = hd ? toonFill(c, fill, box) : fill; c.fill(); }
+    if (lw && !fill) { c.lineWidth = lw * 0.85; c.strokeStyle = stroke || OUT; c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(); return; }   // Mund, Falten: Linie bleibt Linie
     if (lw) {
       c.lineWidth = stroke ? lw * 0.8 : Math.max(0.8, lw * 0.4); c.strokeStyle = stroke || (hd ? shadeOf(fill)[3] : 'rgba(27,16,32,0.6)');
       c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke();
@@ -469,13 +470,14 @@ CHAR.bernard = (c, a, t) => {
   R(c, 5, -137, 9, 13, '#5aa0e6', 2, 2);
   L(c, [7.5, -139, 7.5, -133], 2, '#d33'); L(c, [11, -140, 11, -133], 2, '#223');
   R(c, -3, -165, 9, 18, skin, 3, 3);
-  P(c, [-8, -151, 2, -143, 11, -151, 2, -155], '#fff', 2);
-  E(c, 5, -185, 20, 25, skin);
+  if (hd(c)) E(c, 6.5, -156.5, 2, 2.6, skin, 1.4);   // Adamsapfel
+  P(c, [-9, -151, -1, -143, 2, -150], '#ffffff', 2); P(c, [2, -150, 5, -143, 12, -151], '#ffffff', 2);   // Hemdkragen
+  // Eierkopf: großer Hinterkopf, schmales Kinn
+  shape(c, skin, [-16, -213, 26, -158], () => { c.moveTo(-14, -178); c.quadraticCurveTo(-17, -201, -5, -208); c.quadraticCurveTo(7, -214, 18, -206); c.quadraticCurveTo(26, -198, 25, -184); c.quadraticCurveTo(24, -170, 19, -164); c.quadraticCurveTo(12, -157, 4, -159); c.quadraticCurveTo(-6, -162, -11, -168); c.quadraticCurveTo(-15, -172, -14, -178); c.closePath(); });
   E(c, -10, -183, 5, 7, skin, 2.5);
-  S(c, '#6b3f1f', 3, () => {
-    c.moveTo(-15, -186); c.quadraticCurveTo(-19, -214, 3, -213); c.quadraticCurveTo(25, -213, 25, -196);
-    c.quadraticCurveTo(14, -205, 7, -198); c.quadraticCurveTo(-3, -206, -9, -190); c.closePath();
-  });
+  // Seitenscheitel mit Wirbel
+  shape(c, '#6b3f1f', [-21, -221, 26, -182], () => { c.moveTo(-15, -182); c.quadraticCurveTo(-21, -211, 0, -214); c.quadraticCurveTo(21, -216, 26, -199); c.quadraticCurveTo(19, -204, 11, -201); c.quadraticCurveTo(2, -209, -6, -199); c.quadraticCurveTo(-10, -192, -15, -182); c.closePath(); });
+  S(c, null, 2.6, () => { c.moveTo(0, -213); c.quadraticCurveTo(-5, -222, 4, -221); }, '#6b3f1f');
   if (hd(c)) {
     for (const [x0, y0, x1, y1] of [[-8, -205, -2, -197], [2, -210, 7, -201], [13, -209, 17, -201], [-13, -196, -10, -189]]) L(c, [x0, y0, x1, y1], 1.6, '#4a2a10');
     L(c, [-8, -208, 4, -211, 15, -209], 2.4, 'rgba(255,214,170,0.35)');
@@ -487,8 +489,10 @@ CHAR.bernard = (c, a, t) => {
   brows(c, a, t, 12, 27, -198.5, 10, '#3a2010', 2.8);
   pupil(c, a, t, 14, -188, 2); pupil(c, a, t, 29, -188, 2);
   if (hd(c)) { lensGlint(c, 8, -192); lensGlint(c, 23, -192); }   // Brillenglas-Reflex
-  E(c, 29, -177, 8, 6.5, '#efb48c');
-  if (mo || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 18, -165, 5, 4, '#7a2222', 2); else L(c, [12, -165, 22, -166], 2.5);
+  // Knollennase
+  shape(c, '#efb48c', [21, -184, 38, -166], () => { c.moveTo(22, -180); c.quadraticCurveTo(31, -184, 35, -176); c.quadraticCurveTo(38, -168, 30, -167); c.quadraticCurveTo(24, -167, 22, -172); c.closePath(); });
+  if (hd(c)) E(c, 30, -170.5, 1.7, 1.1, 'rgba(90,40,30,0.55)', 0);
+  if (mo || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 18, -164, 5, 4, '#7a2222', 2); else S(c, null, 2.5, () => { c.moveTo(11, -165); c.quadraticCurveTo(17, -161, 23, -166); }, OUT);
   const gB = po ? 0 : gesture(a, t);
   arm(c, 7, -144, poseAng((-0.12 + sw * 0.45 + talkArm(a, t)) * (1 - gB) - 2.75 * gB, po, 'front'), shirt, 18, skin, 50, 9, 5.5, poseAng(elbow(a, 1) * (1 - gB), po, 'fb'));
   c.restore();
@@ -505,15 +509,20 @@ CHAR.hoagie = (c, a, t) => {
   c.save(); c.translate(0, b + cr + nod(a, t)); lean(c, a, -70);
   R(c, -24, -82, 50, 18, jeans, 3, 7);
   if (hd(c)) { L(c, [-16, -80, -16, -66], 1.3, 'rgba(255,230,160,0.35)'); L(c, [18, -80, 18, -66], 1.3, 'rgba(255,230,160,0.35)'); R(c, -6, -80, 6, 5, '#6a6a7a', 1, 1); }
-  S(c, hair, 3, () => { c.moveTo(-14, -168); c.quadraticCurveTo(-36, -150, -30, -110); c.lineTo(-8, -114); c.quadraticCurveTo(-10, -140, 2, -150); c.closePath(); });
-  E(c, 4, -106, 38, 42, shirt);
+  // lange Haare hinten, unten in Strähnen auslaufend
+  shape(c, hair, [-40, -170, 2, -100], () => { c.moveTo(-14, -168); c.quadraticCurveTo(-40, -152, -34, -112); c.quadraticCurveTo(-31, -101, -25, -108); c.quadraticCurveTo(-20, -100, -15, -108); c.quadraticCurveTo(-9, -104, -6, -114); c.quadraticCurveTo(-10, -140, 2, -150); c.closePath(); });
+  if (hd(c)) for (const [x0, y0, x1, y1] of [[-22, -150, -28, -116], [-15, -152, -19, -112], [-27, -140, -31, -114]]) L(c, [x0, y0, x1, y1], 1.2, 'rgba(140,130,160,0.35)');
+  // Birnen-Bauch: schmalere Schultern, Bauch hängt über den Hosenbund
+  shape(c, shirt, [-38, -150, 46, -62], () => { c.moveTo(-20, -142); c.quadraticCurveTo(-34, -132, -36, -108); c.quadraticCurveTo(-38, -80, -24, -68); c.quadraticCurveTo(4, -60, 34, -70); c.quadraticCurveTo(48, -84, 44, -106); c.quadraticCurveTo(40, -134, 26, -144); c.quadraticCurveTo(4, -150, -20, -142); c.closePath(); });
   if (hd(c)) {
     for (const k of [0, 1, 2]) S(c, null, 1.5, () => { c.moveTo(-20 + k * 4, -92 + k * 10); c.quadraticCurveTo(-4 + k * 4, -86 + k * 10, 12 + k * 3, -94 + k * 10); }, 'rgba(255,255,255,0.09)');
     L(c, [-24, -140, -27, -118], 1.5, 'rgba(255,255,255,0.12)'); L(c, [-18, -150, -22, -126], 1.5, 'rgba(255,255,255,0.1)');
   }
   E(c, 10, -66, 15, 4.5, skin, 2);
+  if (hd(c)) for (let i = 0; i <= 8; i++) { const u = i / 8; E(c, 24 + u * 12, -64 + Math.sin(u * Math.PI) * 7, 1.4, 1.1, '#d0d0dc', 0.9, u, '#6a6a7a'); }   // Portemonnaie-Kette
   P(c, [-2, -126, 14, -126, 5, -110, 16, -110, -6, -86, 1, -104, -10, -104], '#f2f2f2', 2);
-  E(c, 8, -151, 22, 22, skin);
+  // Kopf mit Hängebacken
+  shape(c, skin, [-14, -175, 32, -126], () => { c.moveTo(-12, -150); c.quadraticCurveTo(-14, -173, 7, -174); c.quadraticCurveTo(29, -174, 31, -152); c.quadraticCurveTo(32, -134, 19, -129); c.quadraticCurveTo(3, -126, -6, -133); c.quadraticCurveTo(-12, -139, -12, -150); c.closePath(); });
   E(c, 15, -140, 15, 9, 'rgba(70,45,45,0.22)', 0);
   S(c, '#c8322e', 3, () => { c.moveTo(-15, -158); c.quadraticCurveTo(-12, -184, 10, -183); c.quadraticCurveTo(30, -182, 29, -160); c.closePath(); });
   P(c, [-13, -162, -36, -157, -34, -150, -11, -155], '#9e2420');
@@ -523,11 +532,14 @@ CHAR.hoagie = (c, a, t) => {
     L(c, [-8, -175, 4, -180, 18, -178], 2.6, 'rgba(255,255,255,0.22)');
     for (const [x, y] of [[15, -137], [19, -135], [24, -135], [28, -137], [17, -132], [22, -131], [27, -133]]) E(c, x, y, 0.7, 0.7, 'rgba(60,35,35,0.45)', 0);   // Bartstoppeln
   }
+  E(c, 18, -154, 4.2, 4.6, '#fffaf2', 1.6); E(c, 27, -154, 4, 4.4, '#fffaf2', 1.6);
   pupil(c, a, t, 18, -154, 2.3); pupil(c, a, t, 27, -154, 2.3);
-  brows(c, a, t, 17, 27.5, -160.5, 8, OUT, 3);
-  E(c, 30, -147, 6.5, 5, '#df9a72');
+  if (!blinking(a, t)) for (const [x, r] of [[18, 4.2], [27, 4]]) S(c, skin, 1.5, () => { c.moveTo(x - r - 0.6, -154); c.quadraticCurveTo(x, -161.5, x + r + 0.6, -154); c.quadraticCurveTo(x, -156.2, x - r - 0.6, -154); c.closePath(); }, '#7a4a3a');   // schwere, entspannte Lider
+  brows(c, a, t, 17, 27.5, -161, 8, OUT, 3);
+  shape(c, '#df9a72', [24, -155, 38, -140], () => { c.moveTo(25, -152); c.quadraticCurveTo(34, -155, 37, -148); c.quadraticCurveTo(38, -141, 31, -141); c.quadraticCurveTo(26, -141, 25, -145); c.closePath(); });   // breite Nase
   if (mo || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 20, -136, 7, 5, '#6e1f1f', 2.5);
   else S(c, null, 2.5, () => { c.moveTo(12, -139); c.quadraticCurveTo(20, -132, 28, -139); });
+  P(c, [17, -131.5, 24, -131.5, 20.5, -124], hair, 1.5);   // Kinnbart
   if (po && po.chew) E(c, 22, -136, 5, 4.5, '#d8343a', 1.5);   // der Apfel in der Hand vorm Mund
   arm(c, 24, -126, poseAng(-0.1 + sw * 0.4 - gH * 0.9 - drum + talkArm(a, t), po, 'front'), shirt, 16, skin, 44, 15, 8, poseAng(elbow(a, 1) + gH * 0.8, po, 'fb'));
   c.restore();
@@ -571,20 +583,28 @@ CHAR.laverne = (c, a, t) => {
   S(c, null, 2, () => { c.moveTo(-21, -84); c.quadraticCurveTo(-10, -88, 1, -84); c.quadraticCurveTo(12, -80, 23, -85); }, '#2f7a48');
   if (hd(c)) { L(c, [-5, -134, -12, -86], 1.5, 'rgba(0,0,0,0.18)'); L(c, [6, -134, 11, -86], 1.5, 'rgba(0,0,0,0.18)'); L(c, [-1, -138, 0, -90], 1.2, 'rgba(255,255,255,0.12)'); }
   R(c, -2, -158, 8, 16, skin, 3, 3);
-  E(c, 6, -168, 17, 20, skin);
+  E(c, -3, -142, 7, 3.6, '#f6f0f0', 2); E(c, 9, -142, 7, 3.6, '#f6f0f0', 2);   // Bubikragen
+  for (const y of [-130, -118, -106]) E(c, 2, y, 1.7, 1.7, '#2f7a48', 1);   // Knöpfe
+  // Gesicht mit spitzem Kinn
+  shape(c, skin, [-11, -189, 24, -146], () => { c.moveTo(-10, -170); c.quadraticCurveTo(-10, -188, 6, -189); c.quadraticCurveTo(23, -189, 23, -171); c.quadraticCurveTo(22, -157, 13, -150); c.quadraticCurveTo(7, -146, 2, -150); c.quadraticCurveTo(-9, -157, -10, -170); c.closePath(); });
   P(c, [-12, -176, -14, -196, -2, -188, 2, -208, 10, -190, 20, -204, 22, -186, 32, -190, 24, -176, 14, -182, 4, -178], hair);
   if (blinking(a, t)) { E(c, 13, -170, 5.5, 6.5, skin, 2.5); E(c, 25, -170, 5, 6.5, skin, 2.5); L(c, [8, -170, 18, -170], 2.2); L(c, [21, -170, 30, -170], 2.2); }
   else {
     E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5); pupil(c, a, t, 15, -169, 2); pupil(c, a, t, 27, -169, 2);
     brows(c, a, t, 13, 25, -179.5, 8, '#18141d', 2.2);
-    if (hd(c)) { E(c, 14.2, -170, 0.85, 0.85, '#fff', 0); E(c, 26.2, -170, 0.85, 0.85, '#fff', 0); }
+    if (hd(c)) {
+      E(c, 14.2, -170, 0.85, 0.85, '#fff', 0); E(c, 26.2, -170, 0.85, 0.85, '#fff', 0);
+      S(c, null, 1.5, () => { c.moveTo(7.5, -175.5); c.quadraticCurveTo(13, -179.5, 18.5, -175.5); c.moveTo(20, -175.5); c.quadraticCurveTo(25, -179.5, 30, -175.5); }, 'rgba(110,60,130,0.55)');   // Lidschatten
+      L(c, [18.3, -174.5, 21, -177.5], 1.4); L(c, [29.8, -174.5, 32.5, -177.5], 1.4);   // Wimpern
+    }
   }
   if (hd(c)) {
     for (const [x0, y0, x1, y1] of [[1, -202, 5, -191], [13, -199, 15, -189], [24, -186, 20, -182], [-10, -190, -6, -180]]) L(c, [x0, y0, x1, y1], 2, 'rgba(170,150,255,0.35)');
     E(c, 20, -160, 4, 2.4, 'rgba(240,120,130,0.22)', 0);
   }
-  E(c, 26, -159, 3.5, 3, '#efc4ac', 2);
-  if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else L(c, [14, -151, 21, -152], 2.5);
+  if (hd(c)) for (const [x, y] of [[16, -162], [19, -160.5], [22, -162], [28, -161.5]]) E(c, x, y, 0.8, 0.8, 'rgba(170,110,80,0.6)', 0);   // Sommersprossen
+  shape(c, '#efc4ac', [22, -165, 29, -155], () => { c.moveTo(23, -164); c.quadraticCurveTo(28.5, -160, 28, -157); c.quadraticCurveTo(25, -155, 23, -158); c.closePath(); }, 2);   // Stupsnase
+  if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else S(c, null, 2.4, () => { c.moveTo(13, -152); c.quadraticCurveTo(17, -150, 22, -154.5); }, OUT);   // schiefes Grinsen
   const gL = gesture(a, t);
   if (a.climb) arm(c, 6, -138, -2.55 - cl * 0.45, dress, 36, skin, 48, 8, 5.5, 0.35);
   else arm(c, 6, -138, poseAng((-0.15 + sw * 0.45 + talkArm(a, t)) * (1 - gL) + (-2.9 + Math.sin(t * 0.02) * 0.35) * gL, po, 'front'), dress, 36, skin, 48, 8, 5.5, poseAng(elbow(a, 1) * (1 - gL), po, 'fb'));

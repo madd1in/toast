@@ -338,6 +338,12 @@ function drawActorLit(a, sc, lt, refl) {
   const half = (a.bw || 50) * 1.4 * k, hg = g.createLinearGradient(ox + side * half, 0, ox - side * half, 0);
   hg.addColorStop(0, hexA(key, 0.26)); hg.addColorStop(0.42, hexA(key, 0)); hg.addColorStop(0.58, hexA(fill, 0)); hg.addColorStop(1, hexA(fill, 0.42));
   g.fillStyle = hg; g.fillRect(0, 0, pw, ph);
+  const fire = fireLight(a);
+  if (fire) {   // flackerndes Kaminlicht von der Feuerseite
+    const fg = g.createLinearGradient(ox + fire.side * half, 0, ox - fire.side * half * 0.35, 0);
+    fg.addColorStop(0, `rgba(255,140,50,${Math.min(0.62, 0.8 * fire.k).toFixed(3)})`); fg.addColorStop(1, 'rgba(255,150,60,0)');
+    g.fillStyle = fg; g.fillRect(0, 0, pw, ph);
+  }
   const vg = g.createLinearGradient(0, oy - a.h * k, 0, oy);
   vg.addColorStop(0, hexA(key, 0.12)); vg.addColorStop(0.3, hexA(key, 0)); vg.addColorStop(0.8, 'rgba(10,0,24,0)'); vg.addColorStop(1, 'rgba(10,0,24,0.28)');
   g.fillStyle = vg; g.fillRect(0, 0, pw, ph);
@@ -349,6 +355,13 @@ function drawActorLit(a, sc, lt, refl) {
     r.globalCompositeOperation = 'source-in'; r.fillStyle = key; r.fillRect(0, 0, pw, ph);
     r.globalCompositeOperation = 'destination-out'; r.drawImage(actBuf, 0, 0, pw, ph, -side * d, d * 0.7, pw, ph);
     g.globalAlpha = 0.42; g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
+    if (fire && fire.k > 0.12) {   // Randlicht vom Feuer
+      r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, ph);
+      r.drawImage(actBuf, 0, 0, pw, ph, 0, 0, pw, ph);
+      r.globalCompositeOperation = 'source-in'; r.fillStyle = '#ffb060'; r.fillRect(0, 0, pw, ph);
+      r.globalCompositeOperation = 'destination-out'; r.drawImage(actBuf, 0, 0, pw, ph, -fire.side * d * 0.9, d * 0.4, pw, ph);
+      g.globalAlpha = Math.min(0.9, fire.k * 1.2); g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
+    }
     // Maltextur auf die Figur (auf die Silhouette begrenzt)
     r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, ph);
     const pat = r.createPattern(paperCanvas(), 'repeat'); if (pat.setTransform) pat.setTransform(new DOMMatrix().scale(0.7 * bs));
@@ -657,12 +670,15 @@ function updateActors(dt) {
         Sound.sfx('rustle', panX(a.x));   // Klettern: Blätter rascheln und rieseln herab
         puff(a.x + (Math.random() - 0.5) * 30, a.y - a.h * roomScale(room, a.climbY) * 0.5, pick(['#6ac26a', '#4f9a4a', '#9ad86a']), 2, { vy: -10, vx: 30, r: 3, max: 900, spread: 30 });
       } else if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
-        Sound.step(room.floor, panX(a.x), (a.bw || 50) / 55, rainFx.on);
+        const st = STEP_STYLE[a.id] || [null, (a.bw || 50) / 55];
+        Sound.step(room.floor, panX(a.x), st[1], rainFx.on, st[0]);
         puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
       }
     }
   }
 }
+// Gangart je Figur: [Klang, Gewicht]
+const STEP_STYLE = { bernard: ['scuff', 0.85], hoagie: ['thud', 1.5], laverne: ['click', 0.7], drfred: ['scuff', 0.75], gertrude: [null, 1.05], hancock: ['click', 0.95], green: ['squish', 1], wache: ['squish', 1.2], lila: ['squish', 1.3] };
 // Aktions-Pose starten (wird von draw.js gezeichnet); beim Graben fliegt Erde
 function act(id, kind, dur) { const a = ACT[id]; if (a && !G.fast) a.pose = { kind, t0: G.t, dur, puff: 0 }; }
 function updatePoses() {
@@ -1476,8 +1492,10 @@ function turnScale(a) {
   return 0.2 + 0.8 * (1 - Math.pow(1 - k, 3));
 }
 function drawActor(a, room) {
-  const sc = roomScale(room, a.climbY != null ? a.climbY : a.y) * (a.scaleMul || 1), lt = !cx.isPix && (ROOM_FX[room.id] || {}).light, sx = lt ? -lt[0] * 7 * sc : 0;
-  const lift = a.climbY != null ? a.climbY - a.y : 0, shrink = 1 - Math.min(0.6, lift / 300);
+  const sc = roomScale(room, a.climbY != null ? a.climbY : a.y) * (a.scaleMul || 1), lt = !cx.isPix && (ROOM_FX[room.id] || {}).light;
+  let sx = lt ? -lt[0] * 7 * sc : 0;
+  const lift = a.climbY != null ? a.climbY - a.y : 0, shrink = 1 - Math.min(0.6, lift / 300), fire = !cx.isPix && fireLight(a);
+  if (fire) sx = -fire.side * (5 + 9 * fire.k) * sc;
   a._turn = turnScale(a);
   cx.save(); cx.translate(a.x, a.y + lift);
   // zweiteiliger Schatten: weicher Saum + dunklerer Kontaktkern, im HD-Modus von der Lichtquelle weg verschoben
@@ -1627,7 +1645,7 @@ function drawScene() {
   for (const a of acts) if (a.crit) drawCritter(a, room); else drawActor(a, room);
   HDS.deco = true;
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
-  if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg) drawForeground(fg); }
+  if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass) drawForeground(fg); }
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
   cx.restore();
@@ -2719,6 +2737,7 @@ function drawSceneModern() {
   finally { cx = keep; SSK = 1; G.modernPass = false; }
   const k = VS * DPR; cx.setTransform(k, 0, 0, k, 0, 0);
   cx.drawImage(sceneCv, G.view.x * s, 0, VW * s, SH * s, 0, 0, W, H);
+  drawParallaxFg();
   drawSceneOverlays();
 }
 function drawCaption(y) {
@@ -3015,6 +3034,78 @@ async function critterResolve(v, a, b) {
   if (v === 'talk') { Sound.sfx(c.sound, panX(c.x)); return say(p, pick(L.talk)); }
   if (v === 'pick' || v === 'push') { c.calm = 0; return say(p, pick(L[v])); }
   return say(p, pick(L.look));
+}
+
+// ---------- Kaminlicht ----------
+const fireSrc = {};
+function fireNoise(t) { return Math.sin(t * 0.013) * 0.5 + Math.sin(t * 0.031 + 1) * 0.3 + Math.sin(t * 0.071 + 2) * 0.2; }
+function fireLight(a) {
+  const room = ROOMS[a.room], fx = room && ROOM_FX[room.id];
+  if (!fx || fx.flicker !== 'fire' || a.room !== viewRoomId()) return null;
+  let src = fireSrc[room.id];
+  if (src === undefined) { const o = room.objs.find(o => /kamin|feuer|ofen/i.test(o.id + ' ' + (typeof o.name === 'string' ? o.name : ''))); src = fireSrc[room.id] = o ? hotspotCenter(o) : null; }
+  if (!src) return null;
+  const dx = src[0] - a.x, dist = Math.hypot(dx, (src[1] - a.y) * 0.5), k = Math.max(0, 1 - dist / 640) * (0.72 + 0.28 * fireNoise(G.t + a.x));
+  return k > 0.02 ? { side: dx < 0 ? -1 : 1, k } : null;
+}
+
+// ---------- Vordergrund mit Parallaxe (moderne Ansicht) ----------
+// unscharfe dunkle Silhouetten am Bildrand bewegen sich beim Kameraschwenk schneller als die Szene – Tiefe
+// x im Vordergrund-Raum: nur sichtbar, wenn die Kamera an den jeweiligen Raumrand fährt
+const FG_PROPS = {
+  lobby: [['plant', -14], ['lamp', 982]], labor: [['crates', -18], ['pipe', 990]], gasthaus: [['chair', -10], ['barrel', 984]],
+  garten1776: [['post', 986]], fgarten: [['alien', 988]], vorraum: [['curtain', -30], ['curtain', 990, -1]], thron: [['curtain', -30], ['curtain', 990, -1]],
+};
+const FG_PAR = 1.38, fgCache = {};
+function fgShape(c, kind) {
+  const F = (fn) => { c.beginPath(); fn(); c.fill(); };
+  if (kind === 'plant') {
+    F(() => { c.moveTo(-26, 0); c.lineTo(-20, -44); c.lineTo(20, -44); c.lineTo(26, 0); c.closePath(); });
+    for (const [x, y, rx, ry, r] of [[-30, -78, 30, 9, -0.9], [26, -84, 32, 9, 0.8], [-6, -112, 10, 34, 0.15], [-40, -104, 26, 8, -1.2], [36, -110, 28, 8, 1.1], [8, -90, 30, 9, 0.4]]) F(() => c.ellipse(x, y, rx, ry, r, 0, Math.PI * 2));
+  } else if (kind === 'lamp') {
+    F(() => c.rect(-3, -150, 6, 150)); F(() => { c.moveTo(-26, -150); c.lineTo(-16, -190); c.lineTo(16, -190); c.lineTo(26, -150); c.closePath(); }); F(() => c.ellipse(0, -2, 24, 6, 0, 0, Math.PI * 2));
+  } else if (kind === 'crates') {
+    F(() => c.rect(-40, -60, 80, 60)); F(() => c.rect(-26, -108, 60, 48));
+  } else if (kind === 'pipe') {
+    F(() => c.rect(-9, -440, 18, 440)); F(() => c.ellipse(0, -120, 22, 22, 0, 0, Math.PI * 2)); F(() => c.rect(-60, -76, 60, 14));
+  } else if (kind === 'chair') {
+    F(() => c.rect(-30, -100, 8, 100)); F(() => c.rect(18, -100, 8, 100)); F(() => c.rect(-30, -100, 56, 10)); F(() => c.rect(-30, -62, 56, 8)); F(() => c.rect(-34, -46, 72, 9));
+  } else if (kind === 'barrel') {
+    F(() => { c.moveTo(-30, 0); c.quadraticCurveTo(-40, -58, -30, -116); c.lineTo(30, -116); c.quadraticCurveTo(40, -58, 30, 0); c.closePath(); });
+  } else if (kind === 'post') {
+    F(() => c.rect(-9, -130, 18, 130)); F(() => c.rect(-90, -96, 180, 6)); F(() => c.rect(-90, -54, 180, 6));
+  } else if (kind === 'alien') {
+    for (const [a, l] of [[-0.6, 120], [-0.15, 150], [0.35, 130], [0.8, 95]]) F(() => { c.moveTo(-6, 0); c.quadraticCurveTo(Math.sin(a) * l * 0.4 - 10, -l * 0.6, Math.sin(a) * l, -l); c.quadraticCurveTo(Math.sin(a) * l * 0.4 + 10, -l * 0.6, 6, 0); c.closePath(); });
+  } else if (kind === 'curtain') {
+    F(() => { c.moveTo(-60, -440); c.lineTo(40, -440); for (let y = -440; y <= 0; y += 40) c.quadraticCurveTo(40 + Math.sin(y * 0.05) * 10, y + 20, 30 + Math.sin(y * 0.03) * 8, y + 40); c.lineTo(-60, 0); c.closePath(); });
+  }
+}
+function fgSprite(room, i, kind, flip) {
+  const s = Math.min(2, VS * DPR) * MK, key = room + i + '|' + s.toFixed(2);
+  let c = fgCache[key]; if (c) return c;
+  const w = 260, h = 470; c = fgCache[key] = document.createElement('canvas'); c.width = Math.ceil(w * s); c.height = Math.ceil(h * s);
+  const g = c.getContext('2d'), grd = GRADE[room], col = mix(grd ? grd[0] : '#403060', '#06030c', 0.86);
+  g.setTransform(s * (flip || 1), 0, 0, s, (flip < 0 ? w - w / 2 : w / 2) * s, (h - 12) * s);
+  if (BLOOM_OK) g.filter = `blur(${(2.6 * s).toFixed(1)}px)`;
+  g.fillStyle = col; fgShape(g, kind);
+  g.filter = 'none'; g.globalCompositeOperation = 'source-atop';
+  const lg = g.createLinearGradient(-130, 0, 130, 0); lg.addColorStop(0, 'rgba(255,255,255,0.05)'); lg.addColorStop(1, 'rgba(0,0,0,0.15)');
+  g.setTransform(s, 0, 0, s, w / 2 * s, (h - 12) * s); g.fillStyle = lg; g.fillRect(-130, -460, 260, 470);
+  return c;
+}
+function drawParallaxFg() {
+  if (G.fade >= 1) return;
+  const room = viewRoomId(), cen = (W - VW) / 2, off = cen + (G.view.x - cen) * FG_PAR;   // Vordergrund-Kamera
+  const fg = (ROOM_FX[room] || {}).fg;
+  if (fg) {   // Gras am unteren Rand, schneller als die Szene
+    cx.save(); cx.setTransform(VS * DPR * MK, 0, 0, VS * DPR * MK, -off * VS * DPR * MK, 0);
+    const keep = cx; drawForeground(fg); cx.restore();
+  }
+  for (const [i, [kind, x, flip]] of (FG_PROPS[room] || []).entries()) {
+    const sx = (x - off) * MK; if (sx < -260 || sx > W + 260) continue;
+    const img = fgSprite(room, i, kind, flip || 1);
+    cx.drawImage(img, sx - 130 * MK, H - 458 * MK, 260 * MK, 470 * MK);
+  }
 }
 
 // ---------- Hauptschleife ----------
