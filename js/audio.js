@@ -7,7 +7,7 @@
 
 const Sound = (() => {
   let ac = null, master = null, musicBus = null, sfxBus = null, ambBus = null, noiseBuf = null;
-  let verb = null, verbSend = null, musicSend = null, verbWanted = [0.6, 0.18];
+  let verb = null, verbSend = null, musicSend = null, verbWanted = [0.6, 0.18], muffleF = null, muffled = false, intensity = 0;
   const verbCache = {};
   let musicOn = true, ducked = false, retro = false;
   let cur = null, wanted = null, loopEnd = 0, loops = [];
@@ -18,7 +18,9 @@ const Sound = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ac = new AC();
-    master = ac.createGain(); master.gain.value = 0.8; master.connect(ac.destination);
+    // Tiefpass hinter dem Master: dämpft alles, solange das Pausenmenü offen ist
+    muffleF = ac.createBiquadFilter(); muffleF.type = 'lowpass'; muffleF.frequency.value = muffled ? 650 : 20000; muffleF.Q.value = 0.7; muffleF.connect(ac.destination);
+    master = ac.createGain(); master.gain.value = 0.8; master.connect(muffleF);
     musicBus = ac.createGain(); musicBus.gain.value = musicOn ? 0.2 : 0; musicBus.connect(master);
     sfxBus = ac.createGain(); sfxBus.gain.value = 0.55; sfxBus.connect(master);
     ambBus = ac.createGain(); ambBus.gain.value = 0.5; ambBus.connect(master);
@@ -111,6 +113,8 @@ const Sound = (() => {
       { inst: 'harp', seq: 'G4:1 B4:1 D5:1 C5:1 B4:0.5 A4:0.5 B4:1 A4:1 F#4:1 D4:1 G4:2 D5:1 E5:1 D5:1 C5:1 B4:1 A4:1 G4:1 A4:1 B4:0.5 A4:0.5 F#4:1 G4:3 B4:1 C5:1 D5:1 E5:2 D5:1 C5:1 B4:1 A4:1 B4:2 G4:1 A4:1 B4:1 C5:1 D5:1 C5:1 B4:1 A4:1 G4:1 F#4:1 G4:3' },
       { inst: 'harp', seq: 'G2:1 D3:1 B2:1 A2:1 D3:1 G2:1 D2:1 A2:1 F#2:1 G2:1 B2:1 D3:1 C3:1 E3:1 G2:1 G2:1 D3:1 B2:1 D2:1 F#2:1 A2:1 G2:1 D2:1 G2:1 G2:1 B2:1 D3:1 C3:1 E3:1 G3:1 A2:1 C3:1 E3:1 G2:1 B2:1 D3:1 F#2:1 A2:1 D3:1 G2:1 B2:1 D3:1 D2:1 F#2:1 A2:1 G2:1 D2:1 G1:1' },
       { inst: 'organ', seq: 'G3+B3+D4:3 A3+C4+D4:3 D3+F#3+A3:3 G3+B3+D4:3 C3+E3+G3:3 G3+B3+D4:3 D3+F#3+A3:3 G3+B3+D4:3 G3+B3+D4:3 C3+E3+G3:3 A2+C3+E3:3 G3+B3+D4:3 D3+F#3+A3:3 G3+B3+D4:3 D3+F#3+A3:3 G3+B3+D4:3' },
+      { inst: 'clar', lvl: 1, seq: 'D5:3 C5:3 A4:3 B4:3 C5:3 B4:3 A4:3 G4:3 B4:3 C5:3 C5:3 B4:3 A4:3 B4:3 A4:3 G4:3' },
+      { inst: 'drum', lvl: 2, seq: Array(16).fill('K:1 H:1 H:1').join(' ') },
     ] },
     // Zeitalter-Themen jetzt mit A- und B-Teil (16 Takte), damit der Loop nicht so schnell ermüdet
     present: { bpm: 116, tracks: [
@@ -118,6 +122,8 @@ const Sound = (() => {
       { inst: 'bassoon', seq: 'D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 G4:0.5 F4:0.5 E4:1 F4:0.5 E4:0.5 D4:2 Bb4:0.5 -:0.5 A4:0.5 -:0.5 G4:1 F4:1 E4:1 C#4:1 A3:2 D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 D5:1 C5:0.5 Bb4:0.5 A4:0.5 G4:0.5 A4:2 Bb4:1 G4:1 E4:1 C#4:1 D4:2 -:2 G4:1 Bb4:0.5 A4:0.5 G4:1 D4:1 F4:1 A4:0.5 G4:0.5 F4:2 D5:1 C5:0.5 Bb4:0.5 A4:1 F4:1 E4:2 C#4:2 G4:0.5 A4:0.5 Bb4:1 D5:1 Bb4:1 A4:0.5 G4:0.5 F4:1 A4:2 Bb4:1 A4:1 G4:1 E4:1 D4:4' },
       { inst: 'pad', seq: x2('D3+F3+A3:4 D3+F3+A3:4 Bb2+D3+F3:4 A2+C#3+E3:4') + ' ' + x2('G2+Bb2+D3:4 F2+A2+C3:4 Bb2+D3+F3:4 A2+C#3+E3:4') },
       { inst: 'drum', seq: Array(16).fill('K:1 H:1 S:1 H:1').join(' ') },
+      { inst: 'bell', lvl: 1, seq: x2('A5:1 -:1 F5:1 -:1 D5:1 -:1 A4:1 -:1 F5:1 -:1 D5:1 -:1 E5:1 -:1 C#5:1 -:1') + ' ' + x2('G5:1 -:1 D5:1 -:1 F5:1 -:1 C5:1 -:1 F5:1 -:1 D5:1 -:1 E5:1 -:1 A4:1 -:1') },
+      { inst: 'drum', lvl: 2, seq: Array(64).fill('-:0.5 H:0.5').join(' ') },
     ] },
     future: { bpm: 124, tracks: [
       { inst: 'arp', seq: x2('A3:0.5 C4:0.5 E4:0.5 A4:0.5 E4:0.5 C4:0.5 A3:0.5 C4:0.5 F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 C4:0.5 E4:0.5 G4:0.5 C5:0.5 G4:0.5 E4:0.5 C4:0.5 E4:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5 B3:0.5') + ' ' + x2('D4:0.5 F4:0.5 A4:0.5 D5:0.5 A4:0.5 F4:0.5 D4:0.5 F4:0.5 F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5 B3:0.5 A3:0.5 C4:0.5 E4:0.5 A4:0.5 E4:0.5 C4:0.5 A3:0.5 C4:0.5') },
@@ -125,12 +131,16 @@ const Sound = (() => {
       { inst: 'bell', seq: 'E5:2 D5:1 C5:1 A4:4 G4:2 C5:1 E5:1 D5:4 E5:2 G5:1 E5:1 F5:2 E5:1 C5:1 D5:2 B4:2 A4:4 A5:2 G5:1 F5:1 D5:4 F5:2 E5:1 D5:1 B4:4 C5:1 D5:1 E5:2 F5:2 E5:1 D5:1 E5:2 G#4:2 A4:4' },
       { inst: 'pad', seq: x2('A3+C4+E4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4') + ' ' + x2('D3+F3+A3:4 F3+A3+C4:4 G3+B3+D4:4 A3+C4+E4:4') },
       { inst: 'drum', seq: Array(16).fill('K:1 H:0.5 H:0.5 S:1 H:0.5 K:0.5').join(' ') },
+      { inst: 'harp', lvl: 1, seq: x2('A4:1.5 E5:1.5 A5:1 F4:1.5 C5:1.5 F5:1 C5:1.5 G5:1.5 C6:1 G4:1.5 D5:1.5 G5:1') + ' ' + x2('D5:1.5 A5:1.5 D6:1 F4:1.5 C5:1.5 F5:1 G4:1.5 D5:1.5 G5:1 A4:1.5 E5:1.5 A5:1') },
+      { inst: 'drum', lvl: 2, seq: Array(32).fill('-:0.5 H:0.25 H:0.25 -:0.5 H:0.5').join(' ') },
     ] },
     palace: { bpm: 96, tracks: [
       { inst: 'tuba', seq: x2('C2:1 G2:1 C2:1 G2:1 Ab1:1 Eb2:1 Ab1:1 Eb2:1 F1:1 C2:1 F1:1 C2:1 G1:1 D2:1 G1:1 B1:1') },
       { inst: 'clar', seq: 'C4:1 Eb4:0.5 F4:0.5 G4:1 G4:1 Ab4:1 G4:0.5 F4:0.5 Eb4:2 F4:1 Ab4:0.5 G4:0.5 F4:1 Eb4:1 D4:1 B3:1 G3:2 C4:1 Eb4:0.5 F4:0.5 G4:1 C5:1 Bb4:0.5 Ab4:0.5 G4:1 F4:2 Eb4:1 D4:1 F4:1 B3:1 C4:2 -:2' },
       { inst: 'pad', seq: x2('C3+Eb3+G3:4 Ab2+C3+Eb3:4 F2+Ab2+C3:4 G2+B2+D3:4') },
       { inst: 'drum', seq: Array(8).fill('K:1 -:1 S:1 -:0.5 S:0.5').join(' ') },
+      { inst: 'organ', lvl: 1, seq: x2('C5+G5:4 C5+Eb5:4 C5+F5:4 B4+D5:4') },
+      { inst: 'drum', lvl: 2, seq: Array(16).fill('K:0.5 K:0.5 -:1').join(' ') },
     ] },
     ending: { bpm: 126, tracks: [
       { inst: 'bell', seq: x2('C5:1 E5:1 G5:1 E5:1 F5:1 A5:1 G5:2 E5:1 C5:1 D5:1 B4:1 C5:4') },
@@ -156,6 +166,7 @@ const Sound = (() => {
     for (const tr of th.tracks) {
       const p = tr._p || (tr._p = parse(tr.seq));
       maxLen = Math.max(maxLen, p.len);
+      if (tr.lvl && intensity < (tr.lvl === 1 ? 0.25 : 0.6)) continue;
       for (const e of p.ev) inst(tr.inst, e.n, t0 + e.b * spb, e.len * spb, lg);
     }
     loopEnd = t0 + maxLen * spb;
@@ -172,6 +183,9 @@ const Sound = (() => {
     future: t => { osc('sine', 98 + Math.random() * 30, t, 3, 0.02, ambBus, { attack: 1, release: 1 }); if (Math.random() < 0.35) nz(t + Math.random(), 1.4, 0.025, ambBus, { type: 'bandpass', f: 300, f2: 1800, q: 5 }); return 2.2; },
     palace: t => { osc('sine', 65.4, t, 3.2, 0.028, ambBus, { attack: 1.2, release: 1.2 }); osc('sine', 98, t + 0.5, 2.8, 0.012, ambBus, { attack: 1, release: 1 }); return 2.8; },
     rain: t => { nz(t, 0.5, 0.035, ambBus, { type: 'bandpass', f: 2200 + Math.random() * 2400, q: 0.5, attack: 0.15 }); if (Math.random() < 0.3) osc('sine', 1800 + Math.random() * 900, t + Math.random() * 0.3, 0.04, 0.012, ambBus, { f2: 900, decay: true }); return 0.32; },
+    crickets: t => { if (Math.random() < 0.7) { const f = 4200 + Math.random() * 600; for (let i = 0; i < 3; i++) osc('sine', f, t + i * 0.045, 0.03, 0.012, ambBus, { decay: true }); } return 0.5 + Math.random() * 0.9; },
+    creak: t => { osc('sawtooth', 140 + Math.random() * 80, t, 0.5, 0.012, ambBus, { f2: 90 + Math.random() * 60, lp: 700, q: 6, attack: 0.08 }); return 5 + Math.random() * 8; },
+    drip: t => { osc('sine', 1400 + Math.random() * 700, t, 0.09, 0.03, ambBus, { f2: 500, decay: true }); return 1.5 + Math.random() * 3.5; },
     wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt
@@ -272,6 +286,8 @@ const Sound = (() => {
     click2: t => osc('triangle', 1200, t, 0.05, 0.08, sfxBus, { decay: true }),
     thunder: t => { nz(t, 0.25, 0.4, sfxBus, { type: 'lowpass', f: 900, f2: 300 }); nz(t + 0.15, 3.2, 0.32, sfxBus, { type: 'lowpass', f: 260, f2: 60, attack: 0.3 }); osc('sine', 48, t + 0.1, 2.6, 0.16, sfxBus, { f2: 32, attack: 0.25, release: 1.6 }); },
     open: t => { nz(t, 0.18, 0.18, sfxBus, { type: 'bandpass', f: 600, q: 2 }); osc('triangle', 220, t, 0.25, 0.06, sfxBus, { f2: 330, decay: true }); },
+    photo: t => { nz(t, 0.05, 0.3, sfxBus, { type: 'highpass', f: 3000 }); nz(t + 0.09, 0.08, 0.22, sfxBus, { type: 'bandpass', f: 1500, q: 2 }); },
+    crystal: t => { ['E6', 'B5', 'G#6', 'E7'].forEach((n, i) => osc('sine', freq(n), t + i * 0.07, 0.5, 0.05, sfxBus, { decay: true })); osc('triangle', freq('E5'), t, 0.8, 0.04, sfxBus, { decay: true }); },
     sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },
   };
   const listeners = [];
@@ -303,6 +319,25 @@ const Sound = (() => {
     panned(pan, () => nz(ac.currentTime + 0.005, 0.06, s.v, sfxBus, { type: s.type || 'bandpass', f: s.f * (0.9 + Math.random() * 0.2), q: s.q }));
   }
 
+  // Kurzes Erkennungsmotiv, wenn ein Gespräch mit einer Figur beginnt
+  const STING = {
+    drfred: ['bell', 'C5:0.25 E5:0.25 G5:0.25 C6:0.5'], green: ['arp', 'E4:0.25 G4:0.25 B4:0.5'], gertrude: ['harp', 'G4:0.5 B4:0.5 D5:1'],
+    hancock: ['clar', 'D4:0.5 G4:0.5 B4:1'], wache: ['tuba', 'G2:0.5 D2:1'], lila: ['organ', 'C4+Eb4:0.5 B3+D4:1'],
+  };
+  function sting(id) {
+    const s = STING[id]; if (!ac || !s) return;
+    const lg = ac.createGain(); lg.gain.value = 0.9; lg.connect(musicBus);
+    let t = ac.currentTime + 0.05; const spb = 0.42;
+    for (const e of parse(s[1]).ev) inst(s[0], e.n, t + e.b * spb, e.len * spb, lg);
+    setTimeout(() => { try { lg.disconnect(); } catch (e) { /* ok */ } }, 4000);
+  }
+  function muffle(on) {
+    if (muffled === on) return; muffled = on;
+    if (muffleF) muffleF.frequency.setTargetAtTime(on ? 650 : 20000, ac.currentTime, on ? 0.08 : 0.15);
+  }
+  // Fortschritt 0..1: schaltet zusätzliche Musik-Ebenen dazu (wirkt ab dem nächsten Loop-Durchlauf)
+  function setIntensity(k) { intensity = Math.max(0, Math.min(1, k || 0)); }
+
   // Liefert den Spielton als MediaStream (z. B. für Trailer-Aufnahmen per MediaRecorder)
   function captureStream() {
     init(); if (!ac || !ac.createMediaStreamDestination) return null;
@@ -316,7 +351,7 @@ const Sound = (() => {
     if (ac && cur) { const c = cur; stopMusic(); cur = c; scheduleLoop(ac.currentTime + 0.1); }
   }
 
-  return { init, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, captureStream, get musicOn() { return musicOn; } };
+  return { init, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------

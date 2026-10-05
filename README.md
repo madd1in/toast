@@ -38,6 +38,10 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Schwebeteilchen pro Raum: Staub im Lampenlicht, fallendes Herbstlaub 1776, Glühwürmchen im Zukunftsgarten (sie weichen dir aus), magische Funken im Palast
 - Raumklang: eigener Hall pro Raum (vom trockenen Garten bis zum hallenden Thronsaal), Schritte und Stimmen im Stereo-Panorama
 - NPCs murmeln nebenbei vor sich hin, und wer zu lange herumsteht, bekommt einen Spruch von der eigenen Figur
+- Spiegelungen auf Fliesen und Marmor, leichtes Atmen im Stand, Dialog-Kamera, die bei Gesprächen sanft heranzoomt, Funkenregen beim Aufheben, Gräser im Vordergrund der Gärten, ziehende Wolken und Sternschnuppen im Titelbild
+- **Adaptive Musik:** Mit jedem gelösten Rätsel kommen neue Instrumente dazu; jede Figur hat ein kurzes Erkennungsmotiv beim Gesprächsbeginn; im Pausenmenü klingt alles gedämpft
+- **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
+- **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG
 - Automatisch adaptive Qualität: Bei ruckelnder Bildrate reduziert das Spiel Auflösung und Effekte von selbst – und schaltet hoch, wenn wieder Luft ist
 - Optionale Sprachausgabe über die Browser-Stimmen (Web Speech API): natürliche Stimmen bevorzugt, eigene Stimme und Tonlage pro Figur
 - **Doppelklick zum Rennen**, Ausgänge per Doppelklick sofort benutzen
@@ -60,6 +64,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 | Klo-Post | K · „Klo-Post“ | „Klo-Post“ | Linker Stick |
 | Pixel-Grafik | F1 · P | „Pixel“ | Rechter Stick |
 | Vollbild | F | Symbol oben rechts | – |
+| Foto | O · F2 | – | – |
 | Menü | Esc | „Menü“ | Menü |
 
 Gegenstände schickst du per Chrono-Klo durch die Zeit: **Gib** → Gegenstand → Gesicht unten rechts. Das klappt von überall – die Figur läuft kurz zum Klo und kommt zurück.

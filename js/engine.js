@@ -33,6 +33,7 @@ const G = {
   reveal: 0, fly: [], shake: { until: 0, mag: 0 }, ach: {}, achToast: null, nextBlip: 0, fsTried: false,
   parts: [], ripples: [], quality: 1, fpsAvg: 16.7, fpsGate: 0,
   motes: [], moteKind: null, storm: null, neon: null, bark: null, barkNext: 0, idleSince: 0, lastClick: null,
+  cam: { z: 1, x: W / 2, y: SH / 2 }, photoFlash: 0,
 };
 const OBJ = {};
 
@@ -51,6 +52,7 @@ function addItem(i, c = curId(), quiet) {
     const a = me(), room = ROOMS[viewRoomId()];
     const from = a.room === room.id ? [a.x, a.y - a.h * roomScale(room, a.y) * 0.6] : [W / 2, SH / 2];
     G.fly.push({ id: i, from, t0: G.t });
+    puff(from[0], from[1], '#fff1a8', 10, { vy: 80, vx: 150, r: 2.2, max: 650, spread: 12 });
   }
 }
 function takeItem(i, c = curId()) { const a = inv(c), k = a.indexOf(i); if (k >= 0) a.splice(k, 1); if (G.first === 'i:' + i) G.first = null; }
@@ -110,13 +112,13 @@ function drawRipples() {
 // ---------- Raum-Atmosphäre: Hall, Licht auf Figuren, Bloom, Wetter, Schwebeteilchen ----------
 // light: [Seite der Hauptlichtquelle (-1 links, 1 rechts), Führungslicht, Schattenfarbe]
 const ROOM_FX = {
-  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, motes: 'dust' },
-  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, motes: 'dust', flicker: 'neon' },
-  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, motes: 'warm', flicker: 'fire' },
-  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind'], motes: 'leaf' },
-  fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, motes: 'firefly' },
-  vorraum: { verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain'], motes: 'magic', storm: true },
-  thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain'], motes: 'magic', storm: true },
+  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets'], motes: 'dust' },
+  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
+  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire' },
+  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'] },
+  fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, motes: 'firefly', fg: ['#2a0f3e', '#45206a'] },
+  vorraum: { verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
+  thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
 };
 function roomFx() { return (G.state && ROOM_FX[viewRoomId()]) || {}; }
 function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -222,13 +224,15 @@ function drawBloom(alpha, h = SH) {
 // Figuren im HD-Modus: erst in einen Puffer zeichnen, dann Licht-/Schattenseite, Bodenschatten und Randlicht auftragen
 const actBuf = document.createElement('canvas'), actG = actBuf.getContext('2d');
 const rimBuf = document.createElement('canvas'), rimG = rimBuf.getContext('2d');
-function drawActorLit(a, sc, lt) {
-  const bs = Math.min(VS * DPR, G.quality < 1 ? 1.5 : 3), k = sc * bs, top = a.h + 90, bot = 30;
-  const pw = Math.ceil(270 * k), ph = Math.ceil((top + bot) * k);
-  if (actBuf.width < pw || actBuf.height < ph) { actBuf.width = rimBuf.width = Math.max(actBuf.width, pw); actBuf.height = rimBuf.height = Math.max(actBuf.height, ph); }
+function drawActorLit(a, sc, lt, refl) {
+  const bs = Math.min(VS * DPR, G.quality < 1 ? 1.5 : 3), k = sc * bs, top = a.h + 90, bot = 30, fade = a.h * 0.55;
+  const pw = Math.ceil(270 * k), ph = Math.ceil((top + bot) * k), need = Math.ceil((top + Math.max(bot, fade)) * k);
+  if (actBuf.width < pw || actBuf.height < need) { actBuf.width = rimBuf.width = Math.max(actBuf.width, pw); actBuf.height = rimBuf.height = Math.max(actBuf.height, need); }
   const g = actG, ox = pw / 2, oy = top * k, [side, key, fill] = lt;
+  // im Stand atmen die Figuren ganz leicht
+  const br = a.walking ? 0 : Math.sin(G.t * 0.0024 + (a.seed || 0) * 3) * 0.007;
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, pw, ph);
-  g.setTransform(k * (a.dir < 0 ? -1 : 1), 0, 0, k, ox, oy);
+  g.setTransform(k * (a.dir < 0 ? -1 : 1) * (1 - br * 0.5), 0, 0, k * (1 + br), ox, oy);
   CHAR[a.kind](g, a, G.t);
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = 'source-atop';
@@ -248,7 +252,103 @@ function drawActorLit(a, sc, lt) {
     g.globalAlpha = 0.42; g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
   }
   g.globalCompositeOperation = 'source-over';
+  if (refl) {
+    // Spiegelbild: an der Fußlinie gespiegelt und nach unten ausgeblendet
+    const r = rimG, fh = Math.ceil(fade * k);
+    r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, oy + fh);
+    r.setTransform(1, 0, 0, -1, 0, 2 * oy); r.drawImage(actBuf, 0, 0, pw, ph, 0, 0, pw, ph);
+    r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'destination-in';
+    const fg = r.createLinearGradient(0, oy, 0, oy + fh); fg.addColorStop(0, 'rgba(0,0,0,1)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
+    r.fillStyle = fg; r.fillRect(0, oy, pw, fh); r.globalCompositeOperation = 'source-over';
+    cx.save(); cx.globalAlpha = refl; cx.drawImage(rimBuf, 0, oy, pw, fh, a.x - ox / bs, a.y + 1, pw / bs, fh / bs); cx.restore();
+  }
   cx.drawImage(actBuf, 0, 0, pw, ph, a.x - ox / bs, a.y - oy / bs, pw / bs, ph / bs);
+}
+
+// Vordergrund-Gräser an den Bildrändern (Tiefenwirkung im Freien), wiegen sich im Wind
+function drawForeground(fg) {
+  const t = G.t * 0.0018;
+  for (let i = 0; i < 46; i++) {
+    const side = i % 2, k = (i * 0.618) % 1, x = side ? W - 6 - k * 150 : 6 + k * 150, x2 = i % 7 === 0 ? 220 + ((i * 97) % 520) : x;
+    const h = (i % 7 === 0 ? 10 : 16) + ((i * 37) % 22), lean = Math.sin(t + x2 * 0.03) * 5 + (side ? -2 : 2);
+    S(cx, fg[i % 2], 0, () => { cx.moveTo(x2 - 3.5, SH + 2); cx.quadraticCurveTo(x2 + lean * 0.4, SH - h * 0.6, x2 + lean, SH - h); cx.quadraticCurveTo(x2 + lean * 0.3 + 1, SH - h * 0.5, x2 + 3.5, SH + 2); cx.closePath(); });
+  }
+}
+
+// Dialog-Kamera: bei Gesprächen zoomt die Szene sanft auf die Gesprächspartner
+function updateCam(dt) {
+  const c = G.cam; let z = 1, fx = c.x, fy = c.y;
+  if (G.dialog && G.screen === 'game' && G.state && !G.menu) {
+    const p = me(), room = ROOMS[viewRoomId()];
+    if (p.room === room.id) {
+      const npc = Object.values(ACT).filter(a => a.room === room.id && a.visible && a.id !== p.id).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
+      fx = npc ? (p.x + npc.x) / 2 : p.x; fy = p.y - p.h * roomScale(room, p.y) * 0.62; z = 1.07;
+    }
+  }
+  const k = Math.min(1, dt * 0.004);
+  c.z += (z - c.z) * k; c.x += (fx - c.x) * k; c.y += (fy - c.y) * k;
+}
+function camApply() { const c = G.cam; if (c.z > 1.001) { cx.translate(c.x, c.y); cx.scale(c.z, c.z); cx.translate(-c.x, -c.y); } }
+
+// ---------- Chrono-Kristalle: in jedem Raum (außer dem Thronsaal) liegt einer versteckt ----------
+const CRYSTAL_ROOMS = ['labor', 'lobby', 'gasthaus', 'garten1776', 'fgarten', 'vorraum'];
+const CRYSTAL_COL = { present: '#7fe8ff', past: '#ffc46a', future: '#d79bff' };
+const crystalPos = {};
+function crystalAt(id) {
+  if (crystalPos[id]) return crystalPos[id];
+  const room = ROOMS[id]; if (!room || !room.walk) return null;
+  let seed = 0; for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const xs = room.walk.map(p => p[0]), ys = room.walk.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  let best = [(x0 + x1) / 2, (y0 + y1) / 2];
+  for (let i = 0; i < 400; i++) {
+    const x = x0 + rnd() * (x1 - x0), y = y0 + rnd() * (y1 - y0);
+    // genug Abstand zum Rand der Lauffläche und nicht hinter einer Figur versteckt
+    const free = Object.values(START_POS).every(sp => sp.room !== id || Math.hypot(sp.x - x, (sp.y - y) * 1.5) > 95);
+    if (free && [[0, 0], [24, 0], [-24, 0], [0, 14], [0, -14]].every(([dx, dy]) => inPoly(x + dx, y + dy, room.walk))) { best = [x, y]; break; }
+  }
+  return (crystalPos[id] = best);
+}
+function crystalCount() { return CRYSTAL_ROOMS.filter(r => G.state.crystals[r]).length; }
+function updateCrystals() {
+  if (G.screen !== 'game' || !G.state || G.inIntro) return;
+  const p = me(), id = p.room;
+  if (!CRYSTAL_ROOMS.includes(id) || G.state.crystals[id] || id !== viewRoomId()) return;
+  const c = crystalAt(id); if (!c || Math.hypot(p.x - c[0], (p.y - c[1]) * 1.6) > 28) return;
+  G.state.crystals[id] = Date.now();
+  Sound.sfx('crystal', panX(c[0])); rumble(120, 0.1, 0.5);
+  puff(c[0], c[1] - 14, CRYSTAL_COL[ROOMS[id].era] || '#ffffff', 12, { vy: 70, vx: 140, r: 2.4, max: 700, spread: 10 });
+  const n = crystalCount();
+  note(n === CRYSTAL_ROOMS.length ? 'Alle Chrono-Kristalle gefunden!' : `Chrono-Kristall gefunden! (${n}/${CRYSTAL_ROOMS.length})`);
+  if (n === CRYSTAL_ROOMS.length) unlock('kristalle');
+  save();
+}
+function drawCrystal(room) {
+  if (!G.state || G.inIntro || !CRYSTAL_ROOMS.includes(room.id) || G.state.crystals[room.id]) return;
+  const c = crystalAt(room.id); if (!c) return;
+  const col = CRYSTAL_COL[room.era] || '#ffffff', bob = Math.sin(G.t * 0.004) * 3, x = c[0], y = c[1] - 16 + bob;
+  cx.globalAlpha = 0.25; E(cx, x, c[1], 9, 3, '#000000', 0); cx.globalAlpha = 1;
+  if (!cx.isPix) {
+    const gr = cx.createRadialGradient(x, y, 0, x, y, 26); gr.addColorStop(0, hexA(col, 0.55)); gr.addColorStop(1, hexA(col, 0));
+    cx.save(); cx.globalCompositeOperation = 'lighter'; cx.fillStyle = gr; cx.fillRect(x - 26, y - 26, 52, 52); cx.restore();
+  }
+  P(cx, [x, y - 11, x + 7, y - 2, x, y + 10, x - 7, y - 2], col, 2.5);
+  P(cx, [x, y - 11, x + 7, y - 2, x, y - 1], 'rgba(255,255,255,0.55)', 0);
+  const tw = Math.sin(G.t * 0.007);
+  if (tw > 0.3) { const sx = x + 6, sy = y - 9, r = 2 + tw * 3; L(cx, [sx - r, sy, sx + r, sy], 1.5, '#ffffff'); L(cx, [sx, sy - r, sx, sy + r], 1.5, '#ffffff'); }
+}
+
+// Foto-Taste: aktuelles Bild als PNG speichern
+function takePhoto() {
+  if (!cv.toBlob) return;
+  G.photoFlash = G.t; Sound.sfx('photo');
+  cv.toBlob(b => {
+    if (!b) return;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b);
+    a.download = `tentakel-toast-foto-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, 'image/png');
 }
 
 // ---------- Nebenbei-Sprüche: NPCs murmeln vor sich hin, gelangweilte Spielfiguren melden sich ----------
@@ -421,8 +521,9 @@ function music() {
   if (G.screen === 'title' || G.screen === 'end') { Sound.ambience([]); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
   const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
   Sound.play(r.theme || ERA[r.era].theme);
-  Sound.ambience([...(r.amb || []), ...(fx.amb || [])]);
+  Sound.ambience([...new Set([...(r.amb || []), ...(fx.amb || [])])]);
   if (fx.verb) Sound.setReverb(fx.verb[0], fx.verb[1]);
+  Sound.setIntensity(progress() / MILESTONES.length);
 }
 async function goRoom(id, roomId, x, y, dir = 1) {
   const a = ACT[id], view = id === curId();
@@ -580,7 +681,7 @@ async function resolve(v, a, b) {
     const ac = ACT[a.slice(2)];
     if (v === 'look' && ac.look) return say(p, typeof ac.look === 'function' ? ac.look() : ac.look);
     if (v === 'talk' && ac.talk) {
-      st.talked[ac.id] = 1;
+      st.talked[ac.id] = 1; Sound.sting(ac.id);
       if (NPCS.every(n => st.talked[n])) unlock('plausch');
       return ac.talk();
     }
@@ -740,6 +841,7 @@ window.addEventListener('keydown', e => {
   firstInteraction();
   const k = e.key;
   if (k === 'f' || k === 'F') { toggleFullscreen(); return; }
+  if (k === 'o' || k === 'O' || k === 'F2') { if (G.screen !== 'loading') { e.preventDefault(); takePhoto(); } return; }
   if (k === 'F1' || k === 'p' || k === 'P') { e.preventDefault(); toggleRetro(); return; }
   if (k.startsWith('Arrow')) { e.preventDefault(); G.pointer = 'pad'; snapNav(k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0, k === 'ArrowUp' ? -1 : k === 'ArrowDown' ? 1 : 0); return; }
   if (k === 'Enter') { e.preventDefault(); if (G.pointer === 'pad') onClick(G.mouse.x, G.mouse.y, false); else if (G.screen === 'title') { if (!G.menu) titleDefault(); } else if (G.speech) skipSpeech(); return; }
@@ -916,7 +1018,7 @@ function save() {
   if (G.screen !== 'game' || !G.state) return;
   const p = progress();
   if (p > (G.state.progress || 0)) {
-    G.state.progress = p;
+    G.state.progress = p; Sound.setIntensity(p / MILESTONES.length);
     if (!G.fast) { Sound.sfx('solve'); note(`Rätsel gelöst! Fortschritt: ${p} von ${MILESTONES.length}`); }
   }
   try { localStorage.setItem(SAVE_KEY, snapshot()); } catch (e) { /* Speicher nicht verfügbar – Spiel läuft trotzdem */ }
@@ -990,7 +1092,7 @@ function resetWorld() {
   for (const a of Object.values(ACT)) { a.nice = 0; a.talking = false; a.walking = false; a.target = null; a._res = null; a.speed = a.baseSpeed; }
 }
 function normalizeState(s) {
-  s.looked = s.looked || {}; s.talked = s.talked || {}; s.stats = s.stats || { sent: 0, ms: 0 };
+  s.looked = s.looked || {}; s.talked = s.talked || {}; s.stats = s.stats || { sent: 0, ms: 0 }; s.crystals = s.crystals || {};
   if (s.progress == null) s.progress = 0;
   return s;
 }
@@ -1032,7 +1134,7 @@ function drawActor(a, room) {
   // zweiteiliger Schatten: weicher Saum + dunklerer Kontaktkern, im HD-Modus von der Lichtquelle weg verschoben
   cx.fillStyle = 'rgba(0,0,0,0.16)'; cx.beginPath(); cx.ellipse(sx, 2, 34 * sc * (a.shadowW || 1), 8 * sc, 0, 0, Math.PI * 2); cx.fill();
   cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.beginPath(); cx.ellipse(sx * 0.4, 2, 21 * sc * (a.shadowW || 1), 4.8 * sc, 0, 0, Math.PI * 2); cx.fill();
-  if (lt) { cx.restore(); drawActorLit(a, sc, lt); return; }
+  if (lt) { cx.restore(); drawActorLit(a, sc, lt, (ROOM_FX[room.id] || {}).reflect); return; }
   cx.scale(sc * (a.dir < 0 ? -1 : 1), sc);
   CHAR[a.kind](cx, a, G.t);
   cx.restore();
@@ -1130,22 +1232,24 @@ function drawScene() {
   cx.save(); cx.beginPath(); cx.rect(0, 0, W, SH); cx.clip();
   cx.save();
   if (G.t < G.shake.until) cx.translate((Math.random() - 0.5) * G.shake.mag * 2, (Math.random() - 0.5) * G.shake.mag * 2);
+  camApply();
   drawBg(room);
   if (room.dyn) room.dyn(cx, G.t);
   for (const o of room.objs) if (o.draw && !o.fg && isVisible(o)) o.draw(cx, G.t);
+  drawCrystal(room);
   if (cx.isPix) cx.layer(1);   // Pixel-Modus: Figuren auf eigene Ebene, damit Schilder-Texte dahinter bleiben
   const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible).sort((p, q) => p.y - q.y);
   for (const a of acts) drawActor(a, room);
   for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t);
-  if (!cx.isPix) drawMotes();
+  if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg) drawForeground(fg); }
   drawParts(); drawRipples();
   cx.restore();
   drawLightFx(!cx.isPix);
   if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
   drawReveal(room);
   drawTransition();
-  drawBark();
-  drawSpeech();
+  cx.save(); camApply(); drawBark(); drawSpeech(); cx.restore();
+  if (G.photoFlash && G.t - G.photoFlash < 260) { cx.fillStyle = `rgba(255,255,255,${(0.7 * (1 - (G.t - G.photoFlash) / 260)).toFixed(3)})`; cx.fillRect(0, 0, W, SH); }
   if (G.caption) {
     cx.font = '400 26px "Titan One", sans-serif';
     const w = cx.measureText(G.caption).width + 40;
@@ -1234,7 +1338,7 @@ const HELP = [
   'Controller: Stick = Zeiger · Steuerkreuz = von Ziel zu Ziel', 'A Aktion · X Standard · B Zurück · Y Tipp · RS Pixel-Grafik',
   'LB/RB Figur wechseln · LT/RT Verb wählen · LS Klo-Post', 'Ansicht/Tab/Leertaste: Hotspots · F Vollbild · F1/P Pixel-Grafik',
   'Tastatur: Pfeile springen · Enter Aktion · 1–3 Figur · K Klo-Post', 'G Gib · N Nimm · B Benutze · S Schau an · R Rede mit',
-  'Klo-Post: Gegenstand wählen → Gesicht unten rechts (geht überall)',
+  'Klo-Post: Gegenstand wählen → Gesicht unten rechts (geht überall) · O Foto',
 ];
 function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
@@ -1259,7 +1363,7 @@ function drawMenu() {
     });
     y += NOTES.length * 28 + 8;
     const st = G.state.stats;
-    txt(cx, `Spielzeit ${fmtTime(st.ms)} · Zeitreise-Sendungen: ${st.sent}`, W / 2, y + 10, '700 14px "Baloo 2", sans-serif', '#ffd23a');
+    txt(cx, `Spielzeit ${fmtTime(st.ms)} · Zeitreise-Sendungen: ${st.sent} · Chrono-Kristalle: ${crystalCount()}/${CRYSTAL_ROOMS.length}`, W / 2, y + 10, '700 14px "Baloo 2", sans-serif', '#ffd23a');
     txt(cx, 'Feststecken? Der Tipp-Knopf verrät den nächsten Schritt.', W / 2, y + 30, '600 13px "Baloo 2", sans-serif', '#a99ad0');
     y += 42;
   }
@@ -1322,6 +1426,21 @@ function drawTitle() {
   mg.addColorStop(0, 'rgba(255,236,190,0.3)'); mg.addColorStop(1, 'rgba(255,236,190,0)');
   cx.fillStyle = mg; cx.fillRect(650, 0, 300, 300);
   E(cx, 800, 150, 70, 70, '#ffe9b0', 4, 0, '#c8a060'); E(cx, 780, 130, 12, 9, '#f2d898', 0); E(cx, 826, 172, 9, 7, '#f2d898', 0);
+  for (let i = 0; i < 3; i++) {   // Wolken ziehen langsam vor dem Mond vorbei
+    const wx = ((t * (0.01 + i * 0.004) + i * 470) % 1500) - 260, wy = 110 + i * 46, s = 1 + i * 0.25;
+    cx.save(); cx.globalAlpha = 0.78 - i * 0.12;
+    for (const [dx, dy, rx, ry] of [[0, 0, 70, 20], [-46, 6, 44, 15], [48, 5, 50, 16], [10, -12, 40, 17]]) E(cx, wx + dx * s, wy + dy * s, rx * s, ry * s, '#3b1d5a', 0);
+    for (const [dx, dy, rx, ry] of [[10, -15, 34, 9], [-40, 1, 30, 7]]) E(cx, wx + dx * s, wy + dy * s, rx * s, ry * s, 'rgba(255,226,170,0.16)', 0);
+    cx.restore();
+  }
+  const sk = (t % 5600) / 800;   // Sternschnuppe alle paar Sekunden
+  if (sk < 1) {
+    const n = Math.floor(t / 5600), sx = 120 + (n * 263) % 560, sy = 40 + (n * 71) % 120, ex = sx + 170 * sk, ey = sy + 60 * sk;
+    cx.save(); cx.globalAlpha = Math.sin(sk * Math.PI);
+    cx.strokeStyle = grad(cx, ex - 90, ey - 32, ex, ey, [[0, 'rgba(255,255,255,0)'], [1, '#ffffff']]); cx.lineWidth = 2.5; cx.lineCap = 'round';
+    cx.beginPath(); cx.moveTo(Math.max(sx, ex - 90), Math.max(sy, ey - 32)); cx.lineTo(ex, ey); cx.stroke(); E(cx, ex, ey, 2.2, 2.2, '#ffffff', 0);
+    cx.restore();
+  }
   cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore();
   // Vordergrund-Hügel, damit das Haus im Gras sitzt
   S(cx, grad(cx, 0, 480, 0, H, [[0, '#244a30'], [1, '#0e2416']]), 0, () => { cx.moveTo(-4, 566); cx.quadraticCurveTo(260, 522, 500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
@@ -1407,7 +1526,8 @@ function update(dt) {
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
-  updateParts(dt); updateMotes(dt); updateWeather(); updateBarks();
+  updateParts(dt); updateMotes(dt); updateWeather(); updateBarks(); updateCam(dt); updateCrystals();
+  Sound.muffle(!!G.menu && G.screen === 'game');
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();
   if (G.fadeRes) {
     const k = G.skipAll ? 1 : Math.min(1, (G.t - G.fadeStart) / G.fadeDur);

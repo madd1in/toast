@@ -109,6 +109,7 @@ const ACH = [
   { id: 'rock', name: 'Tentakel-Rock', desc: 'Dem Grünen Tentakel zu seinem ersten Solo verholfen.' },
   { id: 'plausch', name: 'Plaudertasche', desc: 'Mit allen sechs Figuren gesprochen.' },
   { id: 'neugier', name: 'Neugiernase', desc: '25 verschiedene Dinge angeschaut.' },
+  { id: 'kristalle', name: 'Kristallklar', desc: 'Alle sechs Chrono-Kristalle eingesammelt.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
 
