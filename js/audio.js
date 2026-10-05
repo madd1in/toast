@@ -385,6 +385,7 @@ const Sound = (() => {
     wink: t => { osc('sine', 1200, t, 0.12, 0.05, sfxBus, { f2: 1800, decay: true }); osc('sine', 2400, t + 0.1, 0.25, 0.03, sfxBus, { decay: true }); },
     miss: t => osc('sawtooth', 110, t, 0.18, 0.05, sfxBus, { lp: 600, f2: 80, decay: true }),
     cheer: t => { nz(t, 2.2, 0.16, sfxBus, { type: 'bandpass', f: 1400, q: 0.6, attack: 0.25 }); for (let i = 0; i < 24; i++) nz(t + Math.random() * 1.8, 0.03, 0.08, sfxBus, { type: 'bandpass', f: 1800 + Math.random() * 1500, q: 2 }); },
+    rustle: t => { nz(t, 0.16, 0.09, sfxBus, { type: 'bandpass', f: 2600 + Math.random() * 1200, q: 0.8 }); nz(t + 0.07, 0.12, 0.06, sfxBus, { type: 'highpass', f: 3500 }); },
     page: t => { nz(t, 0.16, 0.12, sfxBus, { type: 'bandpass', f: 2600, f2: 900, q: 1.2 }); nz(t + 0.12, 0.12, 0.08, sfxBus, { type: 'bandpass', f: 2000, f2: 700, q: 1.2 }); },
     menu: t => nz(t, 0.28, 0.05, sfxBus, { type: 'bandpass', f: 500, f2: 1700, q: 2, attack: 0.08 }),
     fanfare: t => ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => osc('square', freq(n), t + i * 0.12, i === 3 ? 0.6 : 0.12, 0.06, sfxBus, { lp: 2500 })),

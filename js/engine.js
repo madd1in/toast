@@ -309,7 +309,7 @@ function drawActorLit(a, sc, lt, refl) {
   // im Stand atmen die Figuren ganz leicht
   const br = a.walking ? 0 : Math.sin(G.t * 0.0024 + (a.seed || 0) * 3) * 0.007;
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, pw, ph);
-  g.setTransform(k * (a.dir < 0 ? -1 : 1) * (1 - br * 0.5), 0, 0, k * (1 + br), ox, oy);
+  g.setTransform(k * (a.dir < 0 ? -1 : 1) * (1 - br * 0.5) * (a._turn || 1), 0, 0, k * (1 + br), ox, oy);
   CHAR[a.kind](g, a, G.t);
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = 'source-atop';
@@ -617,7 +617,7 @@ function updateActors(dt) {
   const view = G.state ? viewRoomId() : null;
   for (const a of Object.values(ACT)) {
     if (!a.target) continue;
-    const room = ROOMS[a.room]; const sc = room ? roomScale(room, a.y) : 1;
+    const room = ROOMS[a.room]; const sc = room ? roomScale(room, a.climbY != null ? a.climbY : a.y) : 1;
     const [tx, ty] = a.target, dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
     const sp = (a.speed || 170) * (a.run ? 2.6 : 1) * sc * dt / 1000;
     if (Math.abs(dx) > 2) a.dir = dx > 0 ? 1 : -1;
@@ -629,7 +629,10 @@ function updateActors(dt) {
       const before = Math.floor((a.phase || 0) / Math.PI);
       a.phase = (a.phase || 0) + dt * (a.run ? 0.02 : 0.011);
       if (Math.floor(a.phase / Math.PI) !== before && G.state && a.id === curId()) G.state.stats.steps = (G.state.stats.steps || 0) + 1;
-      if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
+      if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room && a.climb) {
+        Sound.sfx('rustle', panX(a.x));   // Klettern: Blätter rascheln und rieseln herab
+        puff(a.x + (Math.random() - 0.5) * 30, a.y - a.h * roomScale(room, a.climbY) * 0.5, pick(['#6ac26a', '#4f9a4a', '#9ad86a']), 2, { vy: -10, vx: 30, r: 3, max: 900, spread: 30 });
+      } else if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
         Sound.step(room.floor, panX(a.x), (a.bw || 50) / 55, rainFx.on);
         puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
       }
@@ -1400,14 +1403,24 @@ function finishBg(g, c, room) {
   g.globalCompositeOperation = 'overlay'; g.globalAlpha = 0.2; g.fillStyle = pat; g.fillRect(0, 0, W, SH);
   g.restore();
 }
+// kurze Drehung statt hartem Spiegeln, wenn eine Figur die Richtung wechselt
+function turnScale(a) {
+  if (a._ld === undefined) { a._ld = a.dir; a._dt = -1e9; }
+  if (a._ld !== a.dir) { a._ld = a.dir; a._dt = G.t; }
+  const k = Math.min(1, (G.t - a._dt) / 170);
+  return 0.2 + 0.8 * (1 - Math.pow(1 - k, 3));
+}
 function drawActor(a, room) {
-  const sc = roomScale(room, a.y) * (a.scaleMul || 1), lt = !cx.isPix && (ROOM_FX[room.id] || {}).light, sx = lt ? -lt[0] * 7 * sc : 0;
-  cx.save(); cx.translate(a.x, a.y);
+  const sc = roomScale(room, a.climbY != null ? a.climbY : a.y) * (a.scaleMul || 1), lt = !cx.isPix && (ROOM_FX[room.id] || {}).light, sx = lt ? -lt[0] * 7 * sc : 0;
+  const lift = a.climbY != null ? a.climbY - a.y : 0, shrink = 1 - Math.min(0.6, lift / 300);
+  a._turn = turnScale(a);
+  cx.save(); cx.translate(a.x, a.y + lift);
   // zweiteiliger Schatten: weicher Saum + dunklerer Kontaktkern, im HD-Modus von der Lichtquelle weg verschoben
-  cx.fillStyle = 'rgba(0,0,0,0.16)'; cx.beginPath(); cx.ellipse(sx, 2, 34 * sc * (a.shadowW || 1), 8 * sc, 0, 0, Math.PI * 2); cx.fill();
-  cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.beginPath(); cx.ellipse(sx * 0.4, 2, 21 * sc * (a.shadowW || 1), 4.8 * sc, 0, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = 'rgba(0,0,0,0.16)'; cx.beginPath(); cx.ellipse(sx, 2, 34 * sc * (a.shadowW || 1) * shrink, 8 * sc * shrink, 0, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.beginPath(); cx.ellipse(sx * 0.4, 2, 21 * sc * (a.shadowW || 1) * shrink, 4.8 * sc * shrink, 0, 0, Math.PI * 2); cx.fill();
+  if (lift) cx.translate(0, -lift);
   if (lt) { cx.restore(); drawActorLit(a, sc, lt, (ROOM_FX[room.id] || {}).reflect); return; }
-  cx.scale(sc * (a.dir < 0 ? -1 : 1), sc);
+  cx.scale(sc * (a.dir < 0 ? -1 : 1) * a._turn, sc);
   CHAR[a.kind](cx, a, G.t);
   cx.restore();
 }
@@ -1427,7 +1440,7 @@ function drawSpeech() {
   let x = W / 2, y = 36 + lines.length * lh, col = '#ffffff';
   if (sp.a) {
     col = sp.a.color;
-    if (sp.a.room === room.id && sp.a.visible) { const sc = roomScale(room, sp.a.y) * (sp.a.scaleMul || 1); x = sp.a.x; y = sp.a.y - sp.a.h * sc - 12; }
+    if (sp.a.room === room.id && sp.a.visible) { const sc = roomScale(room, sp.a.climbY != null ? sp.a.climbY : sp.a.y) * (sp.a.scaleMul || 1); x = sp.a.x; y = sp.a.y - sp.a.h * sc - 12; }
   }
   const maxW = Math.max(...lines.map(l => cx.measureText(l).width));
   x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, x));

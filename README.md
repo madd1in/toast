@@ -52,6 +52,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Adaptive Musik:** Mit jedem gelösten Rätsel kommen neue Instrumente dazu; jede Figur hat ein kurzes Erkennungsmotiv beim Gesprächsbeginn; im Pausenmenü klingt alles gedämpft
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
 - **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG und legt es im **Fotoalbum** (Menü → Extras) ab
+- **Bessere Figuren-Animation:** Knie und Ellbogen beugen sich im Gangzyklus, der Oberkörper neigt sich beim Laufen, Figuren gestikulieren und nicken beim Reden, Richtungswechsel mit kurzer Drehung; Laverne klettert im Zukunftsgarten in echter Kletterpose (Arme und Beine greifen abwechselnd, Blätter rascheln und rieseln)
 - Kleine Gesten im Stand: Bernard schiebt die Brille hoch, Hoagie trommelt Luftschlagzeug, Laverne winkt, Dr. Fred reibt sich das Kinn
 - Schrittzähler im Notizbuch und im Abspann; wer dasselbe Ding zu oft anschaut, bekommt einen genervten Spruch
 - Neue Musik: komischer Marsch „Wachparade“ im Palast-Vorraum

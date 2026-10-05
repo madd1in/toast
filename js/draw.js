@@ -178,22 +178,51 @@ function mix(a, b, k) {
 }
 
 // Bein/Arm als gedrehtes Rechteck um den Drehpunkt (Hüfte/Schulter)
-function limb(c, px, py, w, len, ang, fill, foot) {
+// Bein: mit bend > 0 knickt es im Knie (Unterschenkel nach hinten), der Fuß bleibt fast waagrecht
+function limb(c, px, py, w, len, ang, fill, foot, bend = 0) {
   c.save(); c.translate(px, py); c.rotate(ang);
-  R(c, -w / 2, 0, w, len, fill, 3, w / 2.2);
-  if (foot) {
-    E(c, foot.dx || 6, len, foot.l, foot.h || 6, foot.fill, 3);
-    if (hd(c)) E(c, (foot.dx || 6) + foot.l * 0.25, len - (foot.h || 6) * 0.35, foot.l * 0.38, (foot.h || 6) * 0.22, 'rgba(255,255,255,0.26)', 0);
+  const drawFoot = (y) => {
+    if (!foot) return;
+    E(c, foot.dx || 6, y, foot.l, foot.h || 6, foot.fill, 3);
+    if (hd(c)) E(c, (foot.dx || 6) + foot.l * 0.25, y - (foot.h || 6) * 0.35, foot.l * 0.38, (foot.h || 6) * 0.22, 'rgba(255,255,255,0.26)', 0);
+  };
+  if (bend > 0.02) {
+    const up = len * 0.52;
+    c.save(); c.translate(0, up); c.rotate(bend);
+    R(c, -w * 0.46, -w * 0.3, w * 0.92, len - up + w * 0.3, fill, 3, w / 2.3);
+    c.translate(0, len - up); c.rotate(-bend * 0.8 - ang * 0.5); drawFoot(0);
+    c.restore();
+    R(c, -w / 2, 0, w, up + w * 0.25, fill, 3, w / 2.2);
+  } else { R(c, -w / 2, 0, w, len, fill, 3, w / 2.2); drawFoot(len); }
+  c.restore();
+}
+// Arm: mit bend > 0 knickt der Unterarm im Ellbogen nach vorn; ein langer Ärmel läuft über beide Teile
+function arm(c, px, py, ang, sleeve, sleeveLen, skin, len, w, hand = 5.5, bend = 0) {
+  c.save(); c.translate(px, py); c.rotate(ang);
+  if (bend > 0.02) {
+    const up = len * 0.5;
+    c.save(); c.translate(0, up); c.rotate(-bend);
+    R(c, -w * 0.47, -w * 0.3, w * 0.94, len - up + w * 0.3, skin, 3, w / 2.2);
+    if (sleeve && sleeveLen > up) R(c, -w / 2 - 1.5, -w * 0.3, w + 3, sleeveLen - up + w * 0.3, sleeve, 3, 4);
+    E(c, 0, len - up + 2, hand, hand, skin, 3);
+    c.restore();
+    R(c, -w / 2, 0, w, up + w * 0.3, skin, 3, w / 2.2);
+    if (sleeve) R(c, -w / 2 - 1.5, -2, w + 3, Math.min(sleeveLen, up + w * 0.3) + 2, sleeve, 3, 4);
+  } else {
+    R(c, -w / 2, 0, w, len, skin, 3, w / 2.2);
+    if (sleeve) R(c, -w / 2 - 1.5, -2, w + 3, sleeveLen, sleeve, 3, 4);
+    E(c, 0, len + 2, hand, hand, skin, 3);
   }
   c.restore();
 }
-function arm(c, px, py, ang, sleeve, sleeveLen, skin, len, w, hand = 5.5) {
-  c.save(); c.translate(px, py); c.rotate(ang);
-  R(c, -w / 2, 0, w, len, skin, 3, w / 2.2);
-  if (sleeve) R(c, -w / 2 - 1.5, -2, w + 3, sleeveLen, sleeve, 3, 4);
-  E(c, 0, len + 2, hand, hand, skin, 3);
-  c.restore();
-}
+// Gangzyklus: das nach vorn schwingende Bein knickt ein; side = 1 vorderes, -1 hinteres Bein
+function knee(a, side) { return a.walking || a.climb ? Math.max(0, side * Math.cos(a.phase || 0)) * (a.climb ? 1.4 : a.run ? 1.1 : 0.8) : 0; }
+function elbow(a, side) { return 0.12 + (a.walking ? Math.max(0, side * Math.cos(a.phase || 0)) * 0.55 : 0) + (a.talking && side > 0 ? 0.5 : 0); }
+// beim Reden gestikuliert der vordere Arm
+function talkArm(a, t) { return a.talking ? Math.sin(t * 0.0075 + (a.seed || 0) * 2) * 0.32 - 0.32 : 0; }
+function nod(a, t) { return a.talking ? Math.sin(t * 0.013) * 1.3 : 0; }
+// Oberkörper beim Gehen leicht nach vorn neigen (Drehpunkt in der Hüfte)
+function lean(c, a, hipY) { const l = a.walking ? (a.run ? 0.08 : 0.035) : 0; if (l) { c.translate(0, hipY); c.rotate(l); c.translate(0, -hipY); } }
 function mouthOpen(a, t) { return !!a.talking && Math.floor(t / 115) % 2 === 0; }
 function blinking(a, t) { return ((t + (a.seed || 0) * 1777) % 3900) < 130; }
 // Pupille – oder ein geschlossenes Lid, wenn die Figur gerade blinzelt
@@ -228,10 +257,10 @@ const CHAR = {};
 CHAR.bernard = (c, a, t) => {
   const sw = swing(a), b = bobY(a, t), mo = mouthOpen(a, t);
   const skin = '#f3c9a1', shirt = '#f3f0e2', pants = '#7b5634', pantsB = '#664629', shoe = '#2b2320';
-  limb(c, -4, -88, 13, 82, -sw * 0.42, pantsB, { l: 13, h: 6, dx: 7, fill: shoe });
-  c.save(); c.translate(0, b); arm(c, -5, -144, 0.12 - sw * 0.45, shirt, 18, skin, 50, 9); c.restore();
-  limb(c, 5, -88, 13, 82, sw * 0.42, pants, { l: 13, h: 6, dx: 7, fill: shoe });
-  c.save(); c.translate(0, b);
+  limb(c, -4, -88, 13, 82, -sw * 0.42, pantsB, { l: 13, h: 6, dx: 7, fill: shoe }, knee(a, -1));
+  c.save(); c.translate(0, b); lean(c, a, -88); arm(c, -5, -144, 0.12 - sw * 0.45, shirt, 18, skin, 50, 9, 5.5, elbow(a, -1)); c.restore();
+  limb(c, 5, -88, 13, 82, sw * 0.42, pants, { l: 13, h: 6, dx: 7, fill: shoe }, knee(a, 1));
+  c.save(); c.translate(0, b + nod(a, t)); lean(c, a, -88);
   P(c, [-14, -84, 15, -84, 18, -148, -15, -150], shirt);
   R(c, -15, -93, 31, 8, '#4a2e18', 2.5, 2);
   if (hd(c)) {
@@ -261,7 +290,7 @@ CHAR.bernard = (c, a, t) => {
   E(c, 29, -177, 8, 6.5, '#efb48c');
   if (mo) E(c, 18, -165, 5, 4, '#7a2222', 2); else L(c, [12, -165, 22, -166], 2.5);
   const gB = gesture(a, t);
-  arm(c, 7, -144, (-0.12 + sw * 0.45) * (1 - gB) - 2.75 * gB, shirt, 18, skin, 50, 9);
+  arm(c, 7, -144, (-0.12 + sw * 0.45 + talkArm(a, t)) * (1 - gB) - 2.75 * gB, shirt, 18, skin, 50, 9, 5.5, elbow(a, 1) * (1 - gB));
   c.restore();
 };
 
@@ -269,10 +298,10 @@ CHAR.hoagie = (c, a, t) => {
   const gH = gesture(a, t), drum = Math.sin(t * 0.03) * 0.45 * gH;
   const sw = swing(a), b = bobY(a, t) + Math.abs(Math.sin(t * 0.015)) * 3 * gH, mo = mouthOpen(a, t);
   const skin = '#e9b088', shirt = '#26232c', jeans = '#3d5fa6', jeansB = '#34518e', boot = '#3a2416', hair = '#1d1a1e';
-  limb(c, -10, -70, 20, 64, -sw * 0.35, jeansB, { l: 16, h: 8, dx: 6, fill: boot });
-  c.save(); c.translate(0, b); arm(c, -22, -126, 0.1 - sw * 0.4 - gH * 0.9 + drum, shirt, 16, skin, 44, 15, 8); c.restore();
-  limb(c, 10, -70, 20, 64, sw * 0.35, jeans, { l: 16, h: 8, dx: 6, fill: boot });
-  c.save(); c.translate(0, b);
+  limb(c, -10, -70, 20, 64, -sw * 0.35, jeansB, { l: 16, h: 8, dx: 6, fill: boot }, knee(a, -1));
+  c.save(); c.translate(0, b); lean(c, a, -70); arm(c, -22, -126, 0.1 - sw * 0.4 - gH * 0.9 + drum, shirt, 16, skin, 44, 15, 8, elbow(a, -1) + gH * 0.8); c.restore();
+  limb(c, 10, -70, 20, 64, sw * 0.35, jeans, { l: 16, h: 8, dx: 6, fill: boot }, knee(a, 1));
+  c.save(); c.translate(0, b + nod(a, t)); lean(c, a, -70);
   R(c, -24, -82, 50, 18, jeans, 3, 7);
   if (hd(c)) { L(c, [-16, -80, -16, -66], 1.3, 'rgba(255,230,160,0.35)'); L(c, [18, -80, 18, -66], 1.3, 'rgba(255,230,160,0.35)'); R(c, -6, -80, 6, 5, '#6a6a7a', 1, 1); }
   S(c, hair, 3, () => { c.moveTo(-14, -168); c.quadraticCurveTo(-36, -150, -30, -110); c.lineTo(-8, -114); c.quadraticCurveTo(-10, -140, 2, -150); c.closePath(); });
@@ -298,29 +327,38 @@ CHAR.hoagie = (c, a, t) => {
   E(c, 30, -147, 6.5, 5, '#df9a72');
   if (mo) E(c, 20, -136, 7, 5, '#6e1f1f', 2.5);
   else S(c, null, 2.5, () => { c.moveTo(12, -139); c.quadraticCurveTo(20, -132, 28, -139); });
-  arm(c, 24, -126, -0.1 + sw * 0.4 - gH * 0.9 - drum, shirt, 16, skin, 44, 15, 8);
+  arm(c, 24, -126, -0.1 + sw * 0.4 - gH * 0.9 - drum + talkArm(a, t), shirt, 16, skin, 44, 15, 8, elbow(a, 1) + gH * 0.8);
   c.restore();
 };
 
-function stocking(c, px, py, ang, back) {
+function stocking(c, px, py, ang, back, bend = 0) {
+  // Ringelstrumpf-Stück von y0 bis y1 (Streifen laufen über das Knie hinweg weiter)
+  const piece = (y0, y1) => {
+    R(c, -4.5, y0, 9, y1 - y0, back ? '#e8e0e0' : '#f6f0f0', 0, 4);
+    c.save(); c.beginPath(); c.roundRect(-4.5, y0, 9, y1 - y0, 4); c.clip();
+    c.fillStyle = back ? '#b42a3a' : '#d8344a';
+    for (let y = 6; y < 74; y += 12) c.fillRect(-6, y, 12, 5);
+    c.restore();
+    R(c, -4.5, y0, 9, y1 - y0, null, 3, 4);
+  };
   c.save(); c.translate(px, py); c.rotate(ang);
-  R(c, -4.5, 0, 9, 74, back ? '#e8e0e0' : '#f6f0f0', 0, 4);
-  c.save(); c.beginPath(); c.roundRect(-4.5, 0, 9, 74, 4); c.clip();
-  c.fillStyle = back ? '#b42a3a' : '#d8344a';
-  for (let y = 6; y < 74; y += 12) c.fillRect(-6, y, 12, 5);
-  c.restore();
-  R(c, -4.5, 0, 9, 74, null, 3, 4);
-  E(c, 6, 74, 11, 5.5, '#1e1a22', 3);
+  if (bend > 0.02) {
+    c.save(); c.translate(0, 37); c.rotate(bend); c.translate(0, -37);
+    piece(34, 74); c.translate(6, 74); c.rotate(-bend * 0.8 - ang * 0.5); E(c, 0, 0, 11, 5.5, '#1e1a22', 3);
+    c.restore();
+    piece(0, 40);
+  } else { piece(0, 74); E(c, 6, 74, 11, 5.5, '#1e1a22', 3); }
   c.restore();
 }
 
 CHAR.laverne = (c, a, t) => {
-  const sw = swing(a), b = bobY(a, t), mo = mouthOpen(a, t);
+  const sw = swing(a), b = a.climb ? 0 : bobY(a, t), mo = mouthOpen(a, t), cl = a.climb ? Math.sin(a.phase || 0) : 0;
   const skin = '#f7e0cd', dress = '#3e9e5e', dressB = '#348650', hair = '#18141d';
-  stocking(c, -4, -80, -sw * 0.45, true);
-  c.save(); c.translate(0, b); arm(c, -5, -138, 0.15 - sw * 0.45, dressB, 36, skin, 48, 8); c.restore();
-  stocking(c, 5, -80, sw * 0.45, false);
-  c.save(); c.translate(0, b);
+  if (a.climb) { c.translate(0, -80); c.rotate(-0.1); c.translate(0, 80); }   // beim Klettern zum Stamm geneigt
+  stocking(c, -4, -80, a.climb ? -0.55 + cl * 0.45 : -sw * 0.45, true, a.climb ? 0.9 + cl * 0.5 : knee(a, -1));
+  c.save(); c.translate(0, b); lean(c, a, -80); arm(c, -5, -138, a.climb ? -2.75 + cl * 0.45 : 0.15 - sw * 0.45, dressB, 36, skin, 48, 8, 5.5, a.climb ? 0.35 : elbow(a, -1)); c.restore();
+  stocking(c, 5, -80, a.climb ? -0.55 - cl * 0.45 : sw * 0.45, false, a.climb ? 0.9 - cl * 0.5 : knee(a, 1));
+  c.save(); c.translate(0, b + nod(a, t)); lean(c, a, -80);
   P(c, [-6, -186, -26, -196, -20, -178, -34, -170, -20, -160, -30, -146, -12, -150, -4, -140, 6, -160], hair);
   P(c, [-13, -142, 13, -142, 25, -74, -23, -74], dress);
   L(c, [-20, -84, 22, -84], 2, '#2f7a48');
@@ -340,17 +378,18 @@ CHAR.laverne = (c, a, t) => {
   E(c, 26, -159, 3.5, 3, '#efc4ac', 2);
   if (mo) E(c, 18, -151, 4, 3.5, '#7a2222', 2); else L(c, [14, -151, 21, -152], 2.5);
   const gL = gesture(a, t);
-  arm(c, 6, -138, (-0.15 + sw * 0.45) * (1 - gL) + (-2.9 + Math.sin(t * 0.02) * 0.35) * gL, dress, 36, skin, 48, 8);
+  if (a.climb) arm(c, 6, -138, -2.55 - cl * 0.45, dress, 36, skin, 48, 8, 5.5, 0.35);
+  else arm(c, 6, -138, (-0.15 + sw * 0.45 + talkArm(a, t)) * (1 - gL) + (-2.9 + Math.sin(t * 0.02) * 0.35) * gL, dress, 36, skin, 48, 8, 5.5, elbow(a, 1) * (1 - gL));
   c.restore();
 };
 
 CHAR.drfred = (c, a, t) => {
   const sw = swing(a), b = bobY(a, t), mo = mouthOpen(a, t);
   const skin = '#f0c6a0', coat = '#f4f4f2', hairW = '#ffffff';
-  limb(c, -5, -64, 11, 58, -sw * 0.4, '#30303e', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' });
-  limb(c, 5, -64, 11, 58, sw * 0.4, '#3a3a4a', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' });
-  c.save(); c.translate(0, b); c.rotate(0.08);
-  arm(c, -8, -118, 0.25 - sw * 0.3, coat, 40, skin, 46, 10);
+  limb(c, -5, -64, 11, 58, -sw * 0.4, '#30303e', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' }, knee(a, -1));
+  limb(c, 5, -64, 11, 58, sw * 0.4, '#3a3a4a', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' }, knee(a, 1));
+  c.save(); c.translate(0, b + nod(a, t)); c.rotate(0.08); lean(c, a, -64);
+  arm(c, -8, -118, 0.25 - sw * 0.3, coat, 40, skin, 46, 10, 5.5, elbow(a, -1));
   P(c, [-18, -124, 14, -126, 26, -40, -26, -38], coat);
   L(c, [2, -124, 8, -42], 2);
   R(c, 8, -110, 10, 12, '#e6e6e6', 2, 2);
@@ -370,14 +409,14 @@ CHAR.drfred = (c, a, t) => {
   E(c, 35, -137, 9, 6.5, '#e9a888');
   if (mo) E(c, 25, -126, 6, 4.5, '#6a1a1a', 2); else L(c, [19, -127, 29, -126], 2.5);
   const gF = gesture(a, t);
-  arm(c, 8, -118, (-0.2 + sw * 0.3) * (1 - gF) + (-2.35 + Math.sin(t * 0.025) * 0.12) * gF, coat, 40, skin, 46, 10);
+  arm(c, 8, -118, (-0.2 + sw * 0.3 + talkArm(a, t)) * (1 - gF) + (-2.35 + Math.sin(t * 0.025) * 0.12) * gF, coat, 40, skin, 46, 10, 5.5, elbow(a, 1) * (1 - gF) + gF * 0.9);
   c.restore();
 };
 
 CHAR.gertrude = (c, a, t) => {
   const b = bobY(a, t), mo = mouthOpen(a, t), sw = swing(a);
   const skin = '#f5c9a6';
-  c.save(); c.translate(0, b);
+  c.save(); c.translate(0, b + nod(a, t));
   S(c, '#3d6fb6', 3, () => {
     c.moveTo(-18, -92); c.quadraticCurveTo(-34 - sw * 3, -40, -42, 0); c.lineTo(44, 0);
     c.quadraticCurveTo(34 + sw * 3, -40, 18, -92); c.closePath();
@@ -401,16 +440,16 @@ CHAR.gertrude = (c, a, t) => {
   E(c, 24, -156, 4, 3.5, '#eeb090', 2);
   if (mo) E(c, 17, -147, 5, 4, '#7a2222', 2);
   else S(c, null, 2.5, () => { c.moveTo(12, -149); c.quadraticCurveTo(17, -145, 22, -149); });
-  arm(c, 10, -134, -0.3, '#f6f2e6', 16, skin, 44, 9);
+  arm(c, 10, -134, -0.3 + talkArm(a, t), '#f6f2e6', 16, skin, 44, 9, 5.5, 0.15 + (a.talking ? 0.6 : 0));
   c.restore();
 };
 
 CHAR.hancock = (c, a, t) => {
   const sw = swing(a), b = bobY(a, t), mo = mouthOpen(a, t);
   const skin = '#f2c4a0', coat = '#2f4f8f', vest = '#e8d9b0';
-  limb(c, -4, -82, 11, 76, -sw * 0.4, '#e6e0d2', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' });
-  limb(c, 5, -82, 11, 76, sw * 0.4, '#f6f2e8', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' });
-  c.save(); c.translate(0, b);
+  limb(c, -4, -82, 11, 76, -sw * 0.4, '#e6e0d2', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' }, knee(a, -1));
+  limb(c, 5, -82, 11, 76, sw * 0.4, '#f6f2e8', { l: 13, h: 5.5, dx: 6, fill: '#1d1d1d' }, knee(a, 1));
+  c.save(); c.translate(0, b + nod(a, t)); lean(c, a, -82);
   R(c, -14, -96, 31, 24, vest, 3, 7);
   P(c, [-12, -142, -32, -54, -10, -60, 2, -120], coat);
   P(c, [-12, -142, 16, -142, 18, -88, -12, -88], vest);

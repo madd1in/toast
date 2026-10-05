@@ -389,11 +389,13 @@ async function CLIMB() {
   const l = ACT.laverne;
   await walkTo(l, 628, 356); l.dir = -1;
   await s('Hoch hinaus!');
-  Sound.sfx('climb'); l.speed = 110;
+  // Kletterpose: Größe bleibt wie am Boden, der Schatten bleibt unten, Arme und Beine greifen abwechselnd
+  Sound.sfx('climb'); l.speed = 95; l.climbY = 356; l.climb = true;
   await walkTo(l, 604, 190, true);
+  l.walking = false;
   await s('Nur noch ein kleines Stück... hab sie!');
   addItem('zelle'); fl().zelle = true; Sound.sfx('zap');
-  await walkTo(l, 628, 356, true); l.speed = l.baseSpeed;
+  await walkTo(l, 604, 356, true); l.speed = l.baseSpeed; l.climb = false; l.climbY = null;
   await s('Die Laterne ist aus. Die Tentakel werden es überleben. Im Dunkeln.');
 }
 RULES['look o:laterne'] = line(() => fl().zelle ? 'Die Laterne ist aus. Ups.' : 'Eine Tentakel-Laterne. Ganz oben leuchtet eine Energiezelle. Viel zu hoch für mich.');
