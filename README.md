@@ -53,6 +53,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
 - **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG und legt es im **Fotoalbum** (Menü → Extras) ab
 - **Bessere Figuren-Animation:** Knie und Ellbogen beugen sich im Gangzyklus, der Oberkörper neigt sich beim Laufen, Figuren gestikulieren und nicken beim Reden, Richtungswechsel mit kurzer Drehung; Laverne klettert im Zukunftsgarten in echter Kletterpose (Arme und Beine greifen abwechselnd, Blätter rascheln und rieseln)
+- **Lebendige Nebenfiguren:** Dr. Fred hat Geistesblitze (mit Glühbirne), Gertrude wischt sich die Hände an der Schürze ab und summt, John Hancock unterschreibt schwungvoll in die Luft, der Grüne Tentakel singt und wippt, Lila Tentakel heckt händereibend etwas aus, und die Wache döst mit „Zzz“ und leisem Schnarchen, bis sie ihren Kaffee bekommt
 - **Ortsschilder:** Beim ersten Betreten eines Raums gleitet ein Schild mit Raumname, Zeit-Symbol und Epoche ins Bild (beim Fortsetzen eines Spielstands zur Orientierung)
 - **Zeitreise-Karte (Taste M / Menü):** alle Orte nach Epochen, mit gemalten Postkarten-Vorschauen im aktuellen Zustand und den Positionen der drei Helden; besuchte Orte der eigenen Zeit per Schnellreise erreichbar; Erfolg „Weltenbummler“ für alle sieben Orte
 - **Figuren-Steckbriefe (Menü → Extras):** alle neun Figuren mit Rolle und kurzer Biografie – unbekannte NPCs bleiben Silhouetten, bis man sie anschaut oder anspricht

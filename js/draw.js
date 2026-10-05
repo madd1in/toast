@@ -270,6 +270,24 @@ function gesture(a, t) {
   const c = (t + (a.seed || 0) * 2971) % 9000;
   return c < 1400 ? Math.sin(Math.PI * c / 1400) : 0;
 }
+// Nebenfiguren-Leben: wiederkehrende Mini-Aktion im Stand – liefert 0..1 während der Aktion, sonst -1
+function idleAct(a, t, period, len, off = 0) {
+  if (a.walking || a.talking || a.x == null) return -1;
+  const p = ((t + off + (a.seed || 0) * 2311) % period) / len;
+  return p < 1 ? p : -1;
+}
+function actEnv(k) { return k < 0 ? 0 : Math.min(1, Math.sin(Math.PI * k) * 2.2); }   // weich ein- und ausblenden
+function noteGlyph(c, x, y, s, col) { c.save(); c.translate(x, y); c.scale(s, s); E(c, 0, 0, 4.2, 3.2, col, 1.5, -0.4); L(c, [3.8, -1, 3.8, -14, 9, -11], 2, col); c.restore(); }
+function zGlyph(c, x, y, s, col, flip) { c.save(); c.translate(x, y); c.scale(s * flip, s); L(c, [-5, -5, 5, -5, -5, 5, 5, 5], 3.2); L(c, [-5, -5, 5, -5, -5, 5, 5, 5], 1.6, col); c.restore(); }
+// aufsteigende Symbole (Noten, Zzz) über einer Figur
+function floaters(c, a, t, x, y, n, draw, alpha = 1) {
+  for (let i = 0; i < n; i++) {
+    const q = (t * 0.00045 + i / n + (a.seed || 0)) % 1;
+    c.save(); c.globalAlpha *= Math.sin(q * Math.PI) * alpha;
+    draw(x + q * 18 + Math.sin(q * 7 + i * 2) * 5, y - q * 46, 0.7 + q * 0.5, i);
+    c.restore();
+  }
+}
 function swing(a) { return a.walking ? Math.sin(a.phase) : 0; }
 function bobY(a, t) { return a.walking ? -Math.abs(Math.cos(a.phase)) * 3 : Math.sin(t * 0.002 + (a.seed || 0)) * 0.7; }
 
@@ -437,6 +455,15 @@ CHAR.drfred = (c, a, t) => {
   E(c, 35, -137, 9, 6.5, '#e9a888');
   if (mo) E(c, 25, -126, 6, 4.5, '#6a1a1a', 2); else L(c, [19, -127, 29, -126], 2.5);
   const gF = gesture(a, t);
+  if (gF > 0.15) {   // Geistesblitz: Glühbirne über dem Kopf
+    const by = -186 - gF * 10;
+    c.save(); c.globalAlpha *= Math.min(1, gF * 1.6);
+    if (hd(c)) { const g = c.createRadialGradient(8, by, 2, 8, by, 32); g.addColorStop(0, 'rgba(255,240,140,0.6)'); g.addColorStop(1, 'rgba(255,240,140,0)'); c.fillStyle = g; c.fillRect(-24, by - 32, 64, 64); }
+    E(c, 8, by, 8, 9, '#fff3a0', 2.5); R(c, 4, by + 7, 8, 6, '#a8a8b8', 2, 1.5);
+    L(c, [5, by + 3, 8, by - 3, 11, by + 3], 1.4, '#d8a020');
+    if (gF > 0.5) for (let i = 0; i < 5; i++) { const an = -Math.PI / 2 + (i - 2) * 0.5; L(c, [8 + Math.cos(an) * 14, by + Math.sin(an) * 14, 8 + Math.cos(an) * 20, by + Math.sin(an) * 20], 2, '#ffd23a'); }
+    c.restore();
+  }
   arm(c, 8, -118, (-0.2 + sw * 0.3 + talkArm(a, t)) * (1 - gF) + (-2.35 + Math.sin(t * 0.025) * 0.12) * gF, coat, 40, skin, 46, 10, 5.5, elbow(a, 1) * (1 - gF) + gF * 0.9);
   c.restore();
 };
@@ -455,7 +482,8 @@ CHAR.gertrude = (c, a, t) => {
   }
   P(c, [-2, -92, 18, -92, 30, -8, 0, -8], '#f6f2e6', 2.5);
   if (hd(c)) { L(c, [6, -86, 10, -12], 1.3, 'rgba(0,0,0,0.12)'); L(c, [16, -86, 22, -12], 1.3, 'rgba(0,0,0,0.12)'); }
-  arm(c, -10, -134, 0.2, '#f6f2e6', 16, skin, 44, 9);
+  const wk = idleAct(a, t, 11000, 2600), we = actEnv(wk), rub = Math.sin(t * 0.022) * 0.28, hk = idleAct(a, t, 13000, 3800, 6000);
+  arm(c, -10, -134, 0.2 * (1 - we) + (-0.45 + rub) * we, '#f6f2e6', 16, skin, 44, 9, 5.5, 0.9 * we);
   P(c, [-16, -90, 18, -90, 16, -140, -14, -140], '#7a4a2a');
   P(c, [-14, -140, 16, -140, 2, -118], '#f6f2e6', 2);
   R(c, -2, -152, 9, 14, skin, 3, 3);
@@ -467,8 +495,10 @@ CHAR.gertrude = (c, a, t) => {
   pupil(c, a, t, 12, -163, 2.1); pupil(c, a, t, 22, -163, 2.1);
   E(c, 24, -156, 4, 3.5, '#eeb090', 2);
   if (mo) E(c, 17, -147, 5, 4, '#7a2222', 2);
+  else if (hk >= 0) E(c, 17, -147, 2.6, 2.8, '#7a2222', 1.5);   // summt vor sich hin
   else S(c, null, 2.5, () => { c.moveTo(12, -149); c.quadraticCurveTo(17, -145, 22, -149); });
-  arm(c, 10, -134, -0.3 + talkArm(a, t), '#f6f2e6', 16, skin, 44, 9, 5.5, 0.15 + (a.talking ? 0.6 : 0));
+  arm(c, 10, -134, (-0.3 + talkArm(a, t)) * (1 - we) + (-0.55 - rub) * we, '#f6f2e6', 16, skin, 44, 9, 5.5, 0.15 + (a.talking ? 0.6 : 0) + 0.8 * we);
+  if (hk >= 0) floaters(c, a, t, 24, -186, 2, (x, y, s) => noteGlyph(c, x, y, s, '#ff7ab8'), actEnv(hk));
   c.restore();
 };
 
@@ -498,13 +528,21 @@ CHAR.hancock = (c, a, t) => {
   pupil(c, a, t, 12, -163, 2.1); pupil(c, a, t, 22, -163, 2.1);
   E(c, 25, -155, 5, 4, '#e9aa88', 2);
   if (mo) E(c, 17, -146, 5, 4, '#7a2222', 2); else L(c, [12, -147, 21, -147], 2.5);
+  const sk = idleAct(a, t, 8000, 1700), se = actEnv(sk);
   c.save(); c.translate(12, -138);
-  c.rotate(-0.5 + (a.talking ? Math.sin(t * 0.01) * 0.15 : Math.sin(t * 0.004) * 0.08));
+  c.rotate(-0.5 + (a.talking ? Math.sin(t * 0.01) * 0.15 : Math.sin(t * 0.004) * 0.08) + se * (-0.35 + Math.sin(t * 0.045) * 0.14));
   R(c, -5, 0, 10, 40, coat, 3, 5); R(c, -6, 34, 12, 8, '#fff', 2, 3); E(c, 0, 46, 6, 6, skin);
   c.save(); c.translate(0, 46); c.rotate(-0.9);
   S(c, '#fffdf4', 2.5, () => { c.moveTo(0, 0); c.quadraticCurveTo(14, -30, 6, -64); c.quadraticCurveTo(-8, -34, 0, 0); c.closePath(); });
   L(c, [0, 0, 6, -60], 1.5, '#b8b0a0');
   c.restore(); c.restore();
+  if (sk >= 0) {   // goldener Schnörkel, als würde er in die Luft unterschreiben
+    const n = Math.floor(sk * 30), pts = [];
+    for (let i = 0; i <= n; i++) { const s = i / 30; pts.push(40 + s * 48 + Math.cos(s * 22) * 6, -170 + Math.sin(s * 22) * 7 - s * 10); }
+    c.save(); c.globalAlpha *= se;
+    if (pts.length > 3) { L(c, pts, 3.4, 'rgba(60,30,0,0.35)'); L(c, pts, 1.8, '#ffd86a'); }
+    c.restore();
+  }
   c.restore();
 };
 
@@ -539,7 +577,7 @@ function tentacleBody(c, a, t, col, dark, lite, o = {}) {
     E(c, x, y, 2 - i * 0.15, 1.6, dark, 0);
   }
   const u = 0.78, mx = 30 + (22 + sway - 30) * u + 6, my = -10 + (-h + 20) * u;
-  const open = a.talking && Math.floor(t / 110) % 2 === 0;
+  const open = (a.talking && Math.floor(t / 110) % 2 === 0) || (o.sing > 0.3 && Math.floor(t / 240) % 2 === 0);
   E(c, mx, my, 12, open ? 10.5 : 7.5, dark, 3);
   E(c, mx + 2, my, 6.5, open ? 6.5 : 2.2, OUT, 0);
   E(c, mx - 4, my - 4, 4, 1.8, 'rgba(255,255,255,0.35)', 0);
@@ -553,11 +591,18 @@ function tArm(c, x, y, ang, col, len = 30) {
   L(c, [len + 6, -3, len + 9, -5], 2); L(c, [len + 7, 2, len + 11, 2], 2);
   c.restore();
 }
-CHAR.green = (c, a, t) => tentacleBody(c, a, t, '#4fbf3a', '#2c7a1f', '#b4ef98', { h: 145 });
+CHAR.green = (c, a, t) => {
+  const sk = idleAct(a, t, 9000, 3400, 2500), se = actEnv(sk), bop = se * Math.abs(Math.sin(t * 0.0105));   // singt und wippt im Takt
+  c.save(); c.scale(1 + bop * 0.05, 1 - bop * 0.06);
+  tentacleBody(c, a, t, '#4fbf3a', '#2c7a1f', '#b4ef98', { h: 145, sing: se });
+  c.restore();
+  if (sk >= 0) floaters(c, a, t, 34, -150, 3, (x, y, s, i) => noteGlyph(c, x, y, s, ['#ffd23a', '#7fe8ff', '#ff7ab8'][i]), se);
+};
 CHAR.purple = (c, a, t) => {
   const nice = a.nice ? Math.max(0, Math.min(1, (t - a.nice) / 1200)) : 0;
   const col = mix('#8e44c9', '#ef7fc4', nice), dark = mix('#5b2589', '#b5407f', nice);
-  const wave = a.talking ? Math.sin(t * 0.012) * 0.35 : Math.sin(t * 0.003) * 0.1;
+  const sk = idleAct(a, t, 10000, 2400, 4000), se = actEnv(sk) * (1 - nice);   // heckt etwas aus: reibt sich die Arme
+  const wave = a.talking ? Math.sin(t * 0.012) * 0.35 : Math.sin(t * 0.003) * 0.1 + se * Math.sin(t * 0.032) * 0.32;
   tentacleBody(c, a, t, col, dark, '#d9b2f2', {
     h: 165,
     back: (sw, h) => tArm(c, -14 + sw * 0.4, -h * 0.5, -2.6 - wave, dark, 30),
@@ -583,6 +628,8 @@ CHAR.guard = (c, a, t) => {
       P(c, [1 + sw, -h - 18, 5 + sw, -h - 34, 9 + sw, -h - 18], '#d8b040', 2.5);
     },
   });
+  const awake = typeof G !== 'undefined' && G.state && G.state.flags.guardGone;
+  if (!awake && !a.talking && a.x != null) floaters(c, a, t, 26, -176, 3, (x, y, s) => zGlyph(c, x, y, s * 1.1, '#cfe0ff', a.dir < 0 ? -1 : 1));   // döst im Stehen
 };
 
 // Graue Statue von Lila (für den Zukunftsgarten)

@@ -295,6 +295,7 @@ const Sound = (() => {
     creak: t => { osc('sawtooth', 140 + Math.random() * 80, t, 0.5, 0.012, ambBus, { f2: 90 + Math.random() * 60, lp: 700, q: 6, attack: 0.08 }); return 5 + Math.random() * 8; },
     drip: t => { osc('sine', 1400 + Math.random() * 700, t, 0.09, 0.03, ambBus, { f2: 500, decay: true }); return 1.5 + Math.random() * 3.5; },
     owl: t => { if (Math.random() < 0.65) { osc('sine', 392, t, 0.42, 0.026, ambBus, { f2: 345, attack: 0.06 }); osc('sine', 370, t + 0.62, 0.2, 0.018, ambBus, { f2: 335, attack: 0.04 }); osc('sine', 380, t + 0.9, 0.55, 0.022, ambBus, { f2: 322, attack: 0.07 }); } return 9 + Math.random() * 13; },
+    snore: t => { nz(t, 1.3, 0.045, ambBus, { type: 'bandpass', f: 300, f2: 520, q: 2, attack: 0.6 }); osc('sawtooth', 62, t + 1.45, 1.1, 0.028, ambBus, { f2: 48, lp: 380, q: 4, vib: 9, attack: 0.15 }); return 4.2 + Math.random() * 1.2; },
     wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt

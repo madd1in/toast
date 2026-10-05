@@ -205,6 +205,7 @@ function rainActive() { return !!(G.state && G.screen === 'game' && (ROOM_FX[vie
 function roomAmb() {
   const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
   const list = [...new Set([...(r.amb || []), ...(fx.amb || [])])];
+  if (G.state && !fl().guardGone && ACT.wache.room === r.id && ACT.wache.visible) list.push('snore');   // die Wache schnarcht leise
   return rainFx.on ? list : list.filter(n => n !== 'rain');
 }
 function updateRain(dt) {
@@ -2419,7 +2420,11 @@ function markVisit(r) {
   const v = G.state.visited || (G.state.visited = {});
   if (r && !v[r]) { v[r] = 1; if (Object.keys(ROOMS).every(id => v[id])) unlock('reise'); }
 }
-function updateVisits() { if (G.screen === 'game' && G.state) for (const p of PLAYERS) markVisit(ACT[p].room); }
+function updateVisits() {
+  if (G.screen !== 'game' || !G.state) return;
+  for (const p of PLAYERS) markVisit(ACT[p].room);
+  if (G.t - (G.ambSync || 0) > 1000) { G.ambSync = G.t; Sound.ambience(roomAmb()); }
+}
 // kleines Zeit-Symbol: Uhr (Gegenwart), Schreibfeder (1776), Planet (Zukunft)
 function eraIcon(c, era, x, y, s = 1) {
   c.save(); c.translate(x, y); c.scale(s, s);
