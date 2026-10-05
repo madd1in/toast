@@ -934,7 +934,8 @@ function defaultVerb(key) {
   if (!key) return null;
   const [k, id] = key.split(':');
   if (k === 'a') return ACT[id].dv || 'talk';
-  if (k === 'o') { const o = OBJ[id]; return o.exit ? 'walk' : (o.dv || 'look'); }
+  // Türen mit eigener Hingeh-Regel (z. B. zum Thronsaal) öffnet ein Linksklick direkt, statt sie nur anzuschauen
+  if (k === 'o') { const o = OBJ[id]; return o.exit ? 'walk' : (o.dv || (typeof RULES !== 'undefined' && RULES['walk ' + key] ? 'walk' : 'look')); }
   if (k === 'i') return 'look';
   if (k === 'c') return 'use';
   if (k === 'e') return EGGS[id].dv || 'look';
