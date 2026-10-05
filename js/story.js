@@ -133,6 +133,7 @@ const ACH = [
   { id: 'toastmeister', name: 'Toast-Meister', desc: 'Im Gut-O-Mat-Minispiel mindestens 400 Punkte geröstet.' },
   { id: 'reise', name: 'Weltenbummler', desc: 'Alle sieben Orte in drei Zeiten besucht.' },
   { id: 'party', name: 'Partytier', desc: 'Den geheimen Code gefunden. Hütchen auf!', secret: true },
+  { id: 'tierfreund', name: 'Tierfreund', desc: 'Katze, Huhn und Saugroboter gestreichelt.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
 // Figuren-Steckbriefe (Menü → Extras); NPCs erscheinen erst, wenn man sie angeschaut oder angesprochen hat
@@ -146,6 +147,38 @@ const BIOS = {
   hancock: { role: 'Gründervater · Jahr 1776', bio: 'Übt seine Unterschrift, bis man sie vom Mond aus lesen kann. Verbraucht dabei Federn im Akkord.' },
   wache: { role: 'Palastwache · Zukunft', bio: 'Bewacht seit vierzig Jahren den Thronsaal. Ohne Pause. Ohne Kaffee. Größter Wunsch: Feierabend.' },
   lila: { role: 'Herrscher der Welt · Zukunft', bio: 'Bekam durch einen sehr ungesunden Schluck Arme und schlechte Laune. Schwäche: alles Knusprige.' },
+};
+// Tierische Mitbewohner: laufen herum, reagieren auf die Figuren – keine Rätsel, nur Leben und Gags
+const CRITTERS = {
+  katze: { name: 'Katze Mozzarella', room: 'lobby', kind: 'cat', speed: 60, h: 34, w: 46, sound: 'meow', idles: ['sleep', 'groom', 'sit'] },
+  huhn: { name: 'Huhn Henriette', room: 'garten1776', kind: 'hen', speed: 48, h: 40, w: 36, sound: 'cluck', idles: ['peck', 'peck', 'sit'] },
+  saugbot: { name: 'Saugroboter Staubi 3000', room: 'vorraum', kind: 'bot', speed: 75, h: 18, w: 42, sound: 'botbeep', idles: ['sit', 'sit'] },
+};
+const CRITTER_LINES = {
+  katze: {
+    look: ['Die Lobby-Katze Mozzarella. Sie gehört niemandem. Alle gehören ihr.', 'Eine Katze. Statistisch schläft sie 16 Stunden am Tag. In den anderen acht plant sie etwas.'],
+    talk: ['Miez, miez? ...Sie ignoriert mich mit beeindruckender Professionalität.', 'Ich: „Hallo, Katze.“ Katze: „...“ Gutes Gespräch.'],
+    use: ['*streichel* Sie schnurrt! Ich glaube, ich bin gerade ein Level aufgestiegen.', 'Sie lässt sich kraulen. Genau drei Sekunden lang. Dann ist Schluss.'],
+    pick: ['Ich hebe keine Katzen hoch. Katzen heben mich hoch. Emotional.'],
+    push: ['Eine Katze schubsen? So endet man als Kratzbaum.'],
+    give: { zucker: 'Katzen mögen keinen Zucker. Katzen mögen Rache.', any: 'Sie schnuppert daran und schaut mich zutiefst enttäuscht an.' },
+  },
+  huhn: {
+    look: ['Ein Huhn. Es pickt. Es guckt. Es pickt wieder. Ein Leben voller Klarheit.', 'Henriette, das Huhn von Oma Gertrude. Sie hat mehr Würde als der halbe Kontinentalkongress.'],
+    talk: ['Bok? ...Bok bok. Mann, ich glaube, wir verstehen uns.', 'Ey, Huhn. Was geht? ...Picken. Verstehe.'],
+    use: ['Ich streichle das Huhn. Es lässt es zu. Wir sind jetzt Freunde fürs Leben.', 'Das Gefieder ist total weich. Wie ein Kissen, das einen bewertet.'],
+    pick: ['Ich versuche, das Huhn zu fangen. Das Huhn gewinnt.'],
+    push: ['Ein Huhn schubsen? Nicht im Jahr 1776. Nicht in irgendeinem Jahr.'],
+    give: { apfel: 'Henriette pickt am Apfel. Gutes Huhn. Gesundes Huhn.', butzen: 'Henriette beäugt den Butzen. Den brauche ich noch, Federvieh!', brot: 'Nix da, das ist Omas Freundlichkeits-Brot. Schnabel weg.', any: 'Henriette pickt einmal dagegen und verliert das Interesse. Harte Kritikerin.' },
+  },
+  saugbot: {
+    look: ['Ein Saugroboter mit Tentakel-Logo. Er saugt seit Jahren denselben Fleck. Hingabe.', 'Staubi 3000. Laut Aufkleber „der Stolz der Tentakel-Haushaltsflotte“.'],
+    talk: ['BIEP. STAUB ERKANNT. STAUB GEHASST. ...Charmant.', 'Ich frage ihn, wie es ihm geht. Er antwortet mit einem dreistimmigen Piepen. Klingt nach „gut“.'],
+    use: ['*tätschel* Er piept zufrieden und fährt eine Ehrenrunde.'],
+    pick: ['Er ist schwerer, als er aussieht. Und er saugt nach meinen Schnürsenkeln.'],
+    push: ['Ich schubse ihn an. Er nimmt es persönlich und fährt beleidigt gegen die Wand.'],
+    give: { any: 'Er saugt kurz daran und spuckt es wieder aus. Ein Feinschmecker.' },
+  },
 };
 // Party-Modus: die NPCs feiern mit
 const PARTY_BARKS = {

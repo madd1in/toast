@@ -72,6 +72,7 @@ function nameOf(key) {
   if (k === 'i') return ITEMS[id].name;
   if (k === 'o') { const n = OBJ[id].name; return typeof n === 'function' ? n() : n; }
   if (k === 'a' || k === 'p') return ACT[id].name;
+  if (k === 'c') return CRITTERS[id].name;
   return '';
 }
 function isVisible(o) { return !o.visible || o.visible(); }
@@ -676,6 +677,7 @@ function updatePoses() {
 function walkPoint(key) {
   const [k, id] = key.split(':');
   if (k === 'o') { const o = OBJ[id]; const w = typeof o.walk === 'function' ? o.walk() : o.walk; return w || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10]; }
+  if (k === 'c') { const c = CRIT[id], p = me(), side = p.x < c.x ? -1 : 1; return [c.x + side * 56, c.y + 4]; }
   const a = ACT[id], p = me(), side = p.x < a.x ? -1 : 1;
   return [a.x + side * (a.talkDist || 82), a.y + 6];
 }
@@ -684,6 +686,7 @@ function faceTarget(key) {
   let fx;
   if (k === 'o') { const o = OBJ[id]; if (o.face) { p.dir = o.face; return; } fx = o.rect[0] + o.rect[2] / 2; }
   else if (k === 'a') { fx = ACT[id].x; const a = ACT[id]; if (!a.fixedDir && a.id !== curId()) a.dir = p.x > a.x ? 1 : -1; }
+  else if (k === 'c') { const c = CRIT[id]; fx = c.x; c.dir = p.x > c.x ? 1 : -1; }
   if (fx !== undefined && Math.abs(fx - p.x) > 6) p.dir = fx > p.x ? 1 : -1;
 }
 
@@ -839,6 +842,7 @@ function defaultVerb(key) {
   if (k === 'a') return ACT[id].dv || 'talk';
   if (k === 'o') { const o = OBJ[id]; return o.exit ? 'walk' : (o.dv || 'look'); }
   if (k === 'i') return 'look';
+  if (k === 'c') return 'use';
   return null;
 }
 function sentence() {
@@ -853,7 +857,8 @@ function sentence() {
 async function runSentence(v, a, b) {
   if (G.busy || G.screen !== 'game') return;
   const tok = ++actToken;
-  const tgt = [b, a].find(k => k && (k[0] === 'o' || k[0] === 'a'));
+  const tgt = [b, a].find(k => k && (k[0] === 'o' || k[0] === 'a' || k[0] === 'c'));
+  for (const k of [a, b]) if (k && k[0] === 'c') { const c = CRIT[k.slice(2)]; c.calm = G.t + 9000; c.mode = 'sit'; c.until = G.t + 9000; }
   if (tgt && v !== 'look') {
     const [x, y] = walkPoint(tgt);
     const ok = await walkTo(me(), x, y);
@@ -875,6 +880,7 @@ async function resolve(v, a, b) {
     if (Object.keys(st.looked).length >= 25) unlock('neugier');
     if (st.looked[a] >= 4 && st.looked[a] % 3 === 1 && LOOK_AGAIN[p]) return say(p, pick(LOOK_AGAIN[p]));
   }
+  if (a[0] === 'c' || (b && b[0] === 'c')) return critterResolve(v, a, b);
   if (b && b[0] === 'p') {
     if (a[0] !== 'i') return say(p, 'Das kann ich nicht verschicken.');
     return sendItem(a.slice(2), b.slice(2));
@@ -940,6 +946,10 @@ function hitScene(x, y) {
   for (const a of acts) {
     const sc = roomScale(room, a.y) * (a.scaleMul || 1), w = a.bw * sc, h = a.h * sc;
     if (x >= a.x - w / 2 - pad && x <= a.x + w / 2 + pad && y >= a.y - h - pad && y <= a.y + 4 + pad) return 'a:' + a.id;
+  }
+  for (const c of critterList(room.id)) {
+    const sc = roomScale(room, c.y), w = c.w * sc, h = c.h * sc;
+    if (x >= c.x - w / 2 - pad - 4 && x <= c.x + w / 2 + pad + 4 && y >= c.y - h - pad - 4 && y <= c.y + 6 + pad) return 'c:' + c.id;
   }
   for (let i = room.objs.length - 1; i >= 0; i--) {
     const o = room.objs[i]; if (!isVisible(o)) continue;
@@ -1355,7 +1365,7 @@ function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /*
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(G.settings)); } catch (e) { /* ok */ } }
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(SET_KEY) || 'null'); if (s) Object.assign(G.settings, s); } catch (e) { /* ok */ }
-  Sound.setMusic(G.settings.music); Sound.setRetro(!!G.settings.retro); Voice.on = G.settings.voice;
+  Sound.setMusic(G.settings.music); Sound.setRetro(!!G.settings.retro); Sound.setParty(!!G.settings.party); Voice.on = G.settings.voice;
 }
 function applyActors(map) {
   for (const [id, s] of Object.entries(map)) {
@@ -1538,6 +1548,7 @@ function drawReveal(room, scr) {
   const spots = [];
   for (const o of room.objs) if (isVisible(o)) spots.push([...hotspotCenter(o), (o.exit ? '» ' : '') + (typeof o.name === 'function' ? o.name() : o.name)]);
   for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) spots.push([a.x, a.y - a.h * roomScale(room, a.y) * 0.55, a.name]);
+  for (const c of critterList(room.id)) spots.push([c.x, c.y - c.h * roomScale(room, c.y) * 0.6, c.name]);
   for (let [x, y, n] of spots) {
     if (scr) { [x, y] = toScreen(x, y); if (x < -20 || x > W + 20) continue; }
     E(cx, x, y, 8 * pulse, 8 * pulse, 'rgba(255,224,102,0.25)', 2.5, 0, '#ffe066'); E(cx, x, y, 3, 3, '#ffe066', 0);
@@ -1612,8 +1623,8 @@ function drawScene() {
   } finally { HDS.deco = false; }
   drawCrystal(room);
   if (cx.isPix) cx.layer(1);   // Pixel-Modus: Figuren auf eigene Ebene, damit Schilder-Texte dahinter bleiben
-  const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible).sort((p, q) => p.y - q.y);
-  for (const a of acts) drawActor(a, room);
+  const acts = [...Object.values(ACT).filter(a => a.room === room.id && a.visible), ...critterList(room.id)].sort((p, q) => p.y - q.y);
+  for (const a of acts) if (a.crit) drawCritter(a, room); else drawActor(a, room);
   HDS.deco = true;
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
   if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg) drawForeground(fg); }
@@ -2626,7 +2637,7 @@ function konamiKey(k) {
   G.kIdx = 0; toggleParty(); return true;
 }
 function toggleParty() {
-  G.settings.party = !G.settings.party; saveSettings();
+  G.settings.party = !G.settings.party; saveSettings(); Sound.setParty(G.settings.party);
   if (G.settings.party) { Sound.sfx('party'); confettiBurst(W / 2, G.screen === 'game' ? SH * 0.45 : H * 0.42, 140); unlock('party'); note('Party-Modus an! Hütchen auf! (Code noch mal = aus)'); }
   else { Sound.sfx('click'); CONF.length = 0; note('Party-Modus aus. Schade eigentlich.'); }
 }
@@ -2756,6 +2767,8 @@ function updateHud(dt) {
   const m = G.mouse, ptr = G.pointer !== 'touch' && m.x >= 0;
   const over = ptr && (m.y > H - 12 || inRect(m.x, m.y, HUD.bag, 6) || (G.hudK > 0.3 && inRect(m.x, m.y, hudShelf(), 16)));
   const want = !G.inIntro && !G.menu && !G.dialog && !(G.busy && G.t > (G.hudPeek || 0)) && (over || G.invPin || G.t < (G.hudPeek || 0));
+  if (want !== !!G.hudWant && (over || G.invPin)) Sound.sfx('shelf');
+  G.hudWant = want;
   G.hudK += ((want ? 1 : 0) - G.hudK) * Math.min(1, dt * 0.012);
 }
 function hitHUD(x, y) {
@@ -2838,6 +2851,7 @@ function dialogLayout() { const n = G.dialog ? G.dialog.opts.length : 0, lh = 32
 function verbsFor(key) {
   const [k, id] = key.split(':');
   if (k === 'i') return ['look', 'use'];
+  if (k === 'c') return ['look', 'use', 'talk', 'pick', 'push'];
   const out = [];
   if (k === 'o' && OBJ[id].exit) out.push('walk');
   out.push('look');
@@ -2854,7 +2868,7 @@ function openCoin(x, y, key) {
   const n = vs.length, rad = n <= 2 ? 44 : 64;
   const ccx = Math.max(110, Math.min(W - 110, x)), ccy = Math.max(90, Math.min(H - 70, y));
   const items = vs.map((v, i) => {
-    const a = -Math.PI / 2 + (i / n) * Math.PI * 2, label = VERB_LABEL[v], w = cx.measureText(label).width + 26, h = 30;
+    const a = -Math.PI / 2 + (i / n) * Math.PI * 2, label = key[0] === 'c' && v === 'use' ? 'Streicheln' : VERB_LABEL[v], w = cx.measureText(label).width + 26, h = 30;
     return { v, label, x: ccx + Math.cos(a) * rad * 1.25 - w / 2, y: ccy + Math.sin(a) * rad - h / 2, w, h };
   });
   G.coin = { x: ccx, y: ccy, key, items, t0: G.t };
@@ -2941,6 +2955,68 @@ function navTargetsModern() {
   return T;
 }
 
+// ---------- Tierische Mitbewohner ----------
+const CRIT = {};   // Laufzeitzustand; story.js lädt nach engine.js, darum erst beim ersten Gebrauch anlegen
+function ensureCrit() { if (!CRIT._ok) { Object.defineProperty(CRIT, '_ok', { value: true }); for (const [id, d] of Object.entries(CRITTERS)) CRIT[id] = Object.assign({ id, crit: true, x: null, y: 0, dir: 1, mode: 'sit', until: 0, phase: 0, calm: 0, seed: Math.random() * 6, nextSound: 0 }, d); } }
+function critterList(room) { ensureCrit(); return Object.values(CRIT).filter(c => c.room === room && c.x != null && ROOMS[c.room]); }
+function randWalkPt(room) {
+  const xs = room.walk.map(p => p[0]), ys = room.walk.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  for (let i = 0; i < 40; i++) { const x = x0 + Math.random() * (x1 - x0), y = y0 + Math.random() * (y1 - y0); if (inPoly(x, y, room.walk)) return [x, y]; }
+  return clampWalk(room, (x0 + x1) / 2, y1 - 10);
+}
+function updateCritters(dt) {
+  ensureCrit();
+  if (G.screen !== 'game' || !G.state) return;
+  for (const c of Object.values(CRIT)) {
+    const room = ROOMS[c.room]; if (!room) continue;
+    if (c.x == null) { [c.x, c.y] = randWalkPt(room); c.mode = pick(c.idles); c.until = G.t + 2000 + Math.random() * 5000; }
+    // Spielfiguren zu nahe? Dann weglaufen – außer man hat sich gerade um das Tier gekümmert
+    const p = PLAYERS.map(id => ACT[id]).find(a => a.room === c.room && a.visible && Math.hypot(a.x - c.x, (a.y - c.y) * 1.8) < 64);
+    if (p && G.t > c.calm && c.mode !== 'flee') {
+      const away = c.x >= p.x ? 1 : -1;
+      [c.tx, c.ty] = clampWalk(room, c.x + away * (110 + Math.random() * 90), c.y + (Math.random() - 0.5) * 40);
+      c.mode = 'flee'; c.dir = c.tx > c.x ? 1 : -1;
+      if (c.room === viewRoomId() && G.t > c.nextSound - 4000) { Sound.sfx(c.sound, panX(c.x)); c.nextSound = G.t + 6000; }
+    }
+    if (c.mode === 'walk' || c.mode === 'flee') {
+      const sp = c.speed * (c.mode === 'flee' ? 2.4 : 1) * dt / 1000, dx = c.tx - c.x, dy = c.ty - c.y, d = Math.hypot(dx, dy);
+      c.phase += dt * (c.mode === 'flee' ? 0.03 : 0.016);
+      if (d <= sp) { c.x = c.tx; c.y = c.ty; c.mode = pick(c.idles); c.until = G.t + 2500 + Math.random() * 6000; }
+      else { c.x += dx / d * sp; c.y += dy / d * sp; c.dir = dx > 0 ? 1 : -1; }
+    } else if (G.t > c.until && G.t > c.calm) {
+      if (Math.random() < 0.6) { [c.tx, c.ty] = randWalkPt(room); c.mode = 'walk'; }
+      else { c.mode = pick(c.idles); c.until = G.t + 2500 + Math.random() * 5000; }
+    }
+    // ab und zu ein Lebenszeichen, wenn man im selben Raum ist
+    if (c.room === viewRoomId() && !G.busy && G.t > c.nextSound && c.mode !== 'sleep') { if (G.nextCritter && G.t > G.nextCritter) Sound.sfx(c.sound, panX(c.x)); c.nextSound = G.t + 9000 + Math.random() * 14000; G.nextCritter = G.t + 3000; }
+  }
+}
+function drawCritter(c, room) {
+  const sc = roomScale(room, c.y) * 0.95;
+  cx.fillStyle = 'rgba(0,0,0,0.2)'; cx.beginPath(); cx.ellipse(c.x, c.y + 1, c.w * 0.45 * sc, 5 * sc, 0, 0, Math.PI * 2); cx.fill();
+  cx.save(); cx.translate(c.x, c.y + (c.mode === 'flee' || c.mode === 'walk' ? -Math.abs(Math.sin(c.phase)) * 2 * sc : 0)); cx.scale(sc * (c.dir < 0 ? -1 : 1), sc);
+  CRITTER_DRAW[c.kind](cx, c, G.t);
+  cx.restore();
+  if (G.settings.party) hatAt(c.x + (c.kind === 'cat' ? 17 : c.kind === 'hen' ? 11 : 0) * sc * (c.dir < 0 ? -1 : 1), c.y - (c.kind === 'cat' ? 31 : c.kind === 'hen' ? 39 : 13) * sc, sc * 0.55, c.dir < 0 ? -1 : 1, 3);
+}
+async function critterResolve(v, a, b) {
+  const key = a[0] === 'c' ? a : b, id = key.slice(2), c = CRIT[id], L = CRITTER_LINES[id], p = curId();
+  const item = a[0] === 'i' ? a.slice(2) : b && b[0] === 'i' ? b.slice(2) : null;
+  c.mode = c.kind === 'cat' && v === 'use' ? 'sit' : c.mode === 'sleep' ? 'sit' : c.mode; c.until = G.t + 5000;
+  if (item || v === 'give') return say(p, (L.give && (L.give[item] || L.give.any)) || 'Lieber nicht.');
+  if (v === 'look') return say(p, pick(L.look));
+  if (v === 'use') {
+    Sound.sfx(c.kind === 'cat' ? 'purr' : c.sound, panX(c.x));
+    const pets = G.state.pets || (G.state.pets = {}); pets[id] = 1;
+    if (Object.keys(CRITTERS).every(k => pets[k])) unlock('tierfreund');
+    puff(c.x, c.y - c.h * 0.8, '#ff9ad9', 4, { vy: 30, r: 2.2, spread: 10 });
+    return say(p, pick(L.use));
+  }
+  if (v === 'talk') { Sound.sfx(c.sound, panX(c.x)); return say(p, pick(L.talk)); }
+  if (v === 'pick' || v === 'push') { c.calm = 0; return say(p, pick(L[v])); }
+  return say(p, pick(L.look));
+}
+
 // ---------- Hauptschleife ----------
 function update(dt) {
   pollPad(dt);
@@ -2950,7 +3026,7 @@ function update(dt) {
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
-  updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt);
+  updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt); updateCritters(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
   updateParts(dt); updateMotes(dt); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();

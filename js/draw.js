@@ -378,6 +378,71 @@ function floaters(c, a, t, x, y, n, draw, alpha = 1) {
     c.restore();
   }
 }
+// Mimik: Augenbrauen je nach Satzzeichen beim Reden (! gehoben, ? eine schräg, ... besorgt), Überraschung bei Post
+function mood(a, t) {
+  let m = 0, q = 0;
+  const sp = typeof G !== 'undefined' && G.speech;
+  if (sp && sp.a === a) { const s = sp.text; if (/!/.test(s)) m = 1; if (/\?/.test(s)) q = 1; if (/\.\.\.|…/.test(s) && !m) m = -0.7; }
+  else if (a.pose) m = -0.35;
+  if (typeof G !== 'undefined' && G.flash && G.flash[a.id] && G.t - G.flash[a.id] < 1600) m = 1.3;
+  const wob = m > 0 && a.talking ? Math.sin(t * 0.02) * 0.8 : 0;
+  return { lift: m * 3.4 + wob, worry: m < 0 ? -m : 0, q };
+}
+// Augenbrauen-Paar: Mittelpunkte der Augen x1/x2, Höhe y, Breite w
+function brows(c, a, t, x1, x2, y, w, col, lw) {
+  const { lift, worry, q } = mood(a, t), k = w / 2;
+  L(c, [x1 - k, y - lift + worry * 1.5, x1 + k, y - lift - worry * 1.5 - 0.6], lw, col);
+  L(c, [x2 - k, y - lift - worry * 1.5 - 0.6 - q * 3, x2 + k, y - lift + worry * 1.5 - q * 1.5], lw, col);
+}
+
+// ---------- Tiere (Katze in der Lobby, Huhn 1776, Saugroboter im Palast) ----------
+// gezeichnet in Fußpunkt-Koordinaten, Blickrichtung +x
+const CRITTER_DRAW = {
+  cat(c, cr, t) {
+    const walk = cr.mode === 'walk' || cr.mode === 'flee', ph = cr.phase || 0, fur = '#e89a4a', dark = '#b8682a';
+    if (cr.mode === 'sleep') {   // eingerollt, Schwanz um den Körper, Zzz
+      S(c, dark, 2.5, () => { c.moveTo(-16, -3); c.quadraticCurveTo(-24, -10, -10, -14); }, OUT);
+      E(c, 0, -10, 18, 10, fur, 3); for (const x of [-8, -1, 6]) L(c, [x, -19, x + 2, -12], 2, dark);
+      E(c, 13, -11, 8, 7, fur, 3); P(c, [8, -16, 10, -23, 14, -17], fur, 2.5); P(c, [14, -17, 18, -23, 19, -15], fur, 2.5);
+      L(c, [12, -11, 16, -11], 1.6); L(c, [17, -11, 20, -11], 1.6);
+      if (cr.x != null) floaters(c, cr, t, 18, -22, 2, (x, y, s) => zGlyph(c, x, y, s * 0.7, '#cfe0ff', cr.dir < 0 ? -1 : 1));
+      return;
+    }
+    const tail = Math.sin(t * 0.004 + (cr.seed || 0)) * 6;
+    S(c, null, 5, () => { c.moveTo(-15, -14); c.quadraticCurveTo(-28, -18 + tail, -24, -34 + tail); }, OUT);
+    S(c, null, 3, () => { c.moveTo(-15, -14); c.quadraticCurveTo(-28, -18 + tail, -24, -34 + tail); }, fur);
+    for (const [x, s] of [[-10, 1], [8, -1], [-6, -1], [12, 1]]) { const sw = walk ? Math.sin(ph + (s > 0 ? 0 : Math.PI)) * 0.5 : 0; c.save(); c.translate(x, -9); c.rotate(sw); R(c, -2.2, 0, 4.4, 9, x < 0 ? dark : fur, 2, 2); c.restore(); }
+    E(c, 0, -15, 17, 9, fur, 3);
+    for (const x of [-9, -3, 3]) L(c, [x, -23, x + 2, -17], 2, dark);
+    const groom = cr.mode === 'groom', hx = groom ? 13 : 17, hy = groom ? -16 : -24;
+    E(c, hx, hy, 9, 8, fur, 3);
+    P(c, [hx - 6, hy - 4, hx - 4, hy - 12, hx, hy - 6], fur, 2.5); P(c, [hx + 1, hy - 6, hx + 5, hy - 12, hx + 6, hy - 3], fur, 2.5);
+    if (groom) { E(c, hx + 6, hy + 4, 3, 2.5, '#ff9ab0', 0); L(c, [hx + 1, hy - 1, hx + 5, hy - 1], 1.6); }
+    else { E(c, hx + 2, hy - 1, 1.8, 2.4, '#2a4a20', 0); E(c, hx + 7, hy - 1, 1.6, 2.2, '#2a4a20', 0); E(c, hx + 8, hy + 3, 1.6, 1.2, '#ff8aa0', 0); L(c, [hx + 9, hy + 4, hx + 15, hy + 2], 0.8, 'rgba(30,20,20,0.5)'); L(c, [hx + 9, hy + 5, hx + 15, hy + 6], 0.8, 'rgba(30,20,20,0.5)'); }
+  },
+  hen(c, cr, t) {
+    const walk = cr.mode === 'walk' || cr.mode === 'flee', ph = cr.phase || 0, peck = cr.mode === 'peck' ? Math.max(0, Math.sin(t * 0.018)) : 0;
+    for (const s of [1, -1]) { const sw = walk ? Math.sin(ph + (s > 0 ? 0 : Math.PI)) * 0.45 : 0; c.save(); c.translate(s * 3, -10); c.rotate(sw); L(c, [0, 0, 0, 10, 4, 10], 2.2, '#e8a020'); c.restore(); }
+    P(c, [-12, -18, -22, -30, -19, -16, -12, -12], '#e8e2d6', 2.5);   // Schwanzfedern
+    E(c, 0, -17, 14, 11, '#f6f2ea', 3);
+    S(c, '#e6ded0', 2, () => { c.moveTo(-6, -20); c.quadraticCurveTo(2, -10, 8, -18); c.quadraticCurveTo(1, -22, -6, -20); }, null);
+    c.save(); c.translate(8, -22); c.rotate(peck * 1.1);
+    E(c, 3, -6, 6, 6.5, '#f6f2ea', 2.5);
+    P(c, [0, -11, 2, -15, 4, -12, 6, -16, 8, -11], '#d8322e', 2);   // Kamm
+    P(c, [8, -7, 13, -5, 8, -4], '#f0b020', 2);   // Schnabel
+    E(c, 7, -1, 1.8, 2.6, '#d8322e', 1.2);   // Kehllappen
+    E(c, 5, -7, 1.2, 1.4, OUT, 0);
+    c.restore();
+  },
+  bot(c, cr, t) {
+    const moving = cr.mode === 'walk' || cr.mode === 'flee', spin = t * (moving ? 0.03 : 0.012);
+    for (let i = 0; i < 3; i++) { const a = spin + i * 2.094; L(c, [14, -2, 14 + Math.cos(a) * 7, -2 + Math.sin(a) * 2], 1.4, '#8a8aa0'); }
+    E(c, 0, -6, 20, 7.5, '#5c4a7a', 3);
+    E(c, 0, -9, 17, 4.5, '#7a66a0', 0); E(c, -4, -10, 8, 1.6, 'rgba(255,255,255,0.35)', 0);
+    E(c, 9, -8, 2, 1.4, Math.floor(t / 400) % 2 ? '#7dff7a' : '#2a6a2a', 0);
+    L(c, [-6, -8, -2, -10, 2, -8], 1.4, '#d9b2f2');   // Tentakel-Logo
+  },
+};
 function swing(a) { return a.walking ? Math.sin(a.phase) : 0; }
 function bobY(a, t) { return a.walking ? -Math.abs(Math.cos(a.phase)) * 3 : Math.sin(t * 0.002 + (a.seed || 0)) * 0.7; }
 
@@ -419,6 +484,7 @@ CHAR.bernard = (c, a, t) => {
   }
   E(c, 12, -189, 7.5, 7.5, '#eaf5ff'); E(c, 27, -189, 7.5, 7.5, '#eaf5ff');
   L(c, [4.5, -189, -8, -187], 2.5);
+  brows(c, a, t, 12, 27, -198.5, 10, '#3a2010', 2.8);
   pupil(c, a, t, 14, -188, 2); pupil(c, a, t, 29, -188, 2);
   if (hd(c)) { lensGlint(c, 8, -192); lensGlint(c, 23, -192); }   // Brillenglas-Reflex
   E(c, 29, -177, 8, 6.5, '#efb48c');
@@ -458,7 +524,7 @@ CHAR.hoagie = (c, a, t) => {
     for (const [x, y] of [[15, -137], [19, -135], [24, -135], [28, -137], [17, -132], [22, -131], [27, -133]]) E(c, x, y, 0.7, 0.7, 'rgba(60,35,35,0.45)', 0);   // Bartstoppeln
   }
   pupil(c, a, t, 18, -154, 2.3); pupil(c, a, t, 27, -154, 2.3);
-  L(c, [13, -160, 21, -161], 3); L(c, [24, -161, 31, -159], 3);
+  brows(c, a, t, 17, 27.5, -160.5, 8, OUT, 3);
   E(c, 30, -147, 6.5, 5, '#df9a72');
   if (mo || (po && po.chew && Math.floor(t / 140) % 2)) E(c, 20, -136, 7, 5, '#6e1f1f', 2.5);
   else S(c, null, 2.5, () => { c.moveTo(12, -139); c.quadraticCurveTo(20, -132, 28, -139); });
@@ -510,6 +576,7 @@ CHAR.laverne = (c, a, t) => {
   if (blinking(a, t)) { E(c, 13, -170, 5.5, 6.5, skin, 2.5); E(c, 25, -170, 5, 6.5, skin, 2.5); L(c, [8, -170, 18, -170], 2.2); L(c, [21, -170, 30, -170], 2.2); }
   else {
     E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5); pupil(c, a, t, 15, -169, 2); pupil(c, a, t, 27, -169, 2);
+    brows(c, a, t, 13, 25, -179.5, 8, '#18141d', 2.2);
     if (hd(c)) { E(c, 14.2, -170, 0.85, 0.85, '#fff', 0); E(c, 26.2, -170, 0.85, 0.85, '#fff', 0); }
   }
   if (hd(c)) {
@@ -546,6 +613,7 @@ CHAR.drfred = (c, a, t) => {
   E(c, 4, -157, 9, 4.5, 'rgba(255,255,255,0.4)', 0);
   E(c, 16, -148, 8, 8, '#d7f0ff', 4); E(c, 31, -148, 8, 8, '#d7f0ff', 4);
   pupil(c, a, t, 17, -147, 3); pupil(c, a, t, 32, -147, 3);
+  brows(c, a, t, 16, 31, -159, 11, '#f4f4f8', 3.4);
   if (hd(c)) { lensGlint(c, 11, -152, 4); lensGlint(c, 26, -152, 4); }
   E(c, 35, -137, 9, 6.5, '#e9a888');
   if (mo) E(c, 25, -126, 6, 4.5, '#6a1a1a', 2); else L(c, [19, -127, 29, -126], 2.5);

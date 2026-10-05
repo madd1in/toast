@@ -260,6 +260,7 @@ const Sound = (() => {
     return { ev, len: b };
   }
   const PAN = { harp: -0.35, organ: 0.3, clar: 0.22, bell: -0.25, arp: 0.32, pizz: -0.18, bassoon: 0.15, strings: -0.12, brass: 0.2, epiano: -0.22, pluck: -0.32, fiddle: 0.26 };
+  let partyOn = false;
   function scheduleLoop(t0) {
     const th = THEMES[cur]; if (!th) return;
     const spb = 60 / th.bpm;
@@ -273,6 +274,14 @@ const Sound = (() => {
       let out = lg; const pv = tr.pan != null ? tr.pan : PAN[tr.inst];
       if (pv && ac.createStereoPanner) { out = ac.createStereoPanner(); out.pan.value = pv; out.connect(lg); }
       for (const e of p.ev) inst(tr.inst, e.n, t0 + e.b * spb, e.len * spb, out);
+    }
+    if (partyOn && cur !== 'rock' && maxLen > 0) {   // Party-Modus: Disco-Beat über dem laufenden Stück
+      const pg = ac.createGain(); pg.gain.value = 0.55; pg.connect(lg);
+      for (let b = 0; b < maxLen; b += 1) {
+        inst('drum', 'K', t0 + b * spb, 0.2, pg);
+        inst('drum', 'O', t0 + (b + 0.5) * spb, 0.2, pg);
+        if (b % 2 === 1) inst('drum', 'C', t0 + b * spb, 0.2, pg);
+      }
     }
     loopEnd = t0 + maxLen * spb;
     loops.push({ g: lg, end: loopEnd + 1.5 });
@@ -433,6 +442,11 @@ const Sound = (() => {
       ['C5', 'E5', 'G5', 'C6', 'G5', 'C6'].forEach((n, i) => osc('square', freq(n), t + 0.6 + i * 0.09, 0.1, 0.035, sfxBus, { lp: 3000, decay: true }));
     },
     unfold: t => { nz(t, 0.35, 0.1, sfxBus, { type: 'bandpass', f: 1200, f2: 3200, q: 1, attack: 0.05 }); nz(t + 0.18, 0.22, 0.07, sfxBus, { type: 'bandpass', f: 2600, f2: 1200, q: 1.4 }); },
+    meow: t => { osc('sawtooth', 520, t, 0.55, 0.05, sfxBus, { f2: 760, lp: 1700, q: 4, vib: 6, attack: 0.05 }); osc('sawtooth', 720, t + 0.28, 0.32, 0.03, sfxBus, { f2: 470, lp: 1400, q: 3 }); },
+    purr: t => { for (let i = 0; i < 12; i++) nz(t + i * 0.085, 0.07, 0.07, sfxBus, { type: 'lowpass', f: 240 }); },
+    cluck: t => { [0, 0.11, 0.2, 0.46].forEach((d, i) => osc('square', i === 3 ? 520 : 780, t + d, i === 3 ? 0.2 : 0.06, 0.035, sfxBus, { f2: i === 3 ? 950 : 560, lp: 2400, decay: true })); },
+    botbeep: t => { [1320, 1760, 1175, 1568].forEach((f, i) => osc('square', f, t + i * 0.075, 0.06, 0.03, sfxBus, { decay: true })); },
+    shelf: t => nz(t, 0.22, 0.035, sfxBus, { type: 'bandpass', f: 900, f2: 2400, q: 1.5, attack: 0.06 }),
     sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },
   };
   const listeners = [];
@@ -525,7 +539,8 @@ const Sound = (() => {
   // Für Trailer-Aufnahmen: Klang in einen OfflineAudioContext rendern, getaktet über tick()
   function initOffline(ctx) { init(ctx); }
 
-  return { init, initOffline, tick, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
+  function setParty(on) { partyOn = !!on; }
+  return { init, initOffline, tick, play, sfx, setParty, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------
