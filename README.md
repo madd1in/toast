@@ -42,7 +42,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Spiegelungen auf Fliesen und Marmor, leichtes Atmen im Stand, Dialog-Kamera, die bei Gesprächen sanft heranzoomt, Funkenregen beim Aufheben, Gräser im Vordergrund der Gärten, neues Titelbild mit Hügel-Ebenen, Nebel, leuchtender Villa, Fledermäusen und den drei Helden im Mondlicht
 - **Neue Musik:** Tavernen-Gigue im Gasthaus 1776, Bossa-Lounge in der Lobby, neue Instrumente (Streicher, Blech, E-Piano, Laute, Fiedel), Schlagzeug mit Hi-Hats, Klatschen und Bodhrán, Instrumente im Stereo-Bild verteilt, Kompressor auf der Summe
 - **Musikbox** im Menü (Extras): alle Stücke anhören
-- **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
+- **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, drei Schwierigkeitsgrade mit Bestenliste, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
 - **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
 - **Großes Finale:** Feuerwerk, Konfetti, alle Figuren auf dem Hügel, Abspann und eine größere Abspannmusik
 - Lebendige Porträts und Figuren (blinzeln, reden mit, die Pupillen folgen dem Zeiger) und versteckte Gags auf dem Titelbildschirm
@@ -50,8 +50,10 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
 - **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG
 - Automatisch adaptive Qualität: Bei ruckelnder Bildrate reduziert das Spiel Auflösung und Effekte von selbst – und schaltet hoch, wenn wieder Luft ist
+- Einstellbare Textgeschwindigkeit (langsam, normal, schnell); Gegenstände im Inventar heben sich beim Überfahren und leuchten
 - Optionale Sprachausgabe über die Browser-Stimmen (Web Speech API): natürliche Stimmen bevorzugt, eigene Stimme und Tonlage pro Figur
 - **Doppelklick zum Rennen**, Ausgänge per Doppelklick sofort benutzen
+- **Sichtbare Zeitreise-Post:** Das Klo leuchtet als Zeitportal auf, der Gegenstand fliegt mit Leuchtspur zum Porträt des Empfängers; beim Figurenwechsel rast ein Sterntunnel vorbei
 - **Klo-Post von überall:** Taste K, Knopf „Klo-Post“ oder linker Stick – die Figur springt kurz zum Klo ihrer Zeit und wieder zurück
 - **Speichern & Laden:** Autosave plus 3 Speicherplätze, Export/Import als Datei; Notizbuch mit erledigten Aufgaben
 

@@ -112,10 +112,10 @@ function drawRipples() {
 // ---------- Raum-Atmosphäre: Hall, Licht auf Figuren, Bloom, Wetter, Schwebeteilchen ----------
 // light: [Seite der Hauptlichtquelle (-1 links, 1 rechts), Führungslicht, Schattenfarbe]
 const ROOM_FX = {
-  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets'], motes: 'dust', music: 'lounge' },
-  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
+  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic'], motes: 'dust', music: 'lounge' },
+  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
   gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire', music: 'tavern' },
-  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
+  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, amb: ['future', 'rain'], motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars', storm: true, rain: true },
   vorraum: { verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
   thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
@@ -641,7 +641,7 @@ function say(id, text) {
   if (G.fast || G.skipAll) return Promise.resolve();
   return new Promise(res => {
     const a = id ? ACT[id] : null;
-    const base = Math.max(1500, 800 + text.length * 58);
+    const base = Math.max(1500, 800 + text.length * 58) * ({ langsam: 1.45, schnell: 0.7 }[G.settings.textSpeed] || 1);
     const sp = { a, text, start: G.t, end: G.t + base, res };
     sp.babble = !!(a && a.voice && G.settings.babble && !Voice.on);
     sp.babbleEnd = G.t + Math.min(base - 300, text.length * 46);
@@ -724,6 +724,7 @@ async function sendItem(item, to) {
   const k = OBJ[room.klo];
   await walkTo(me(), k.walk[0], k.walk[1]);
   Sound.sfx('flush', panX(me().x)); G.kloAnim = { obj: room.klo, t: G.t }; shake(700, 2.5);
+  { const [kx, ky, kw, kh] = k.rect; G.sendFx = { item, to, room: room.id, x: kx + kw / 2, y: ky + Math.min(kh, 200) * 0.45, h: Math.min(kh, 200), t0: G.t, col: ERA[HOME_ERA[to]].col }; }
   takeItem(item, from); addItem(item, to, true);
   G.flash[to] = G.t;
   G.state.stats.sent++; unlock('post');
@@ -1002,7 +1003,9 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
     if (e.repeat) return;
     const lane = { a: 0, A: 0, ArrowLeft: 0, s: 1, S: 1, ArrowDown: 1, d: 2, D: 2, ArrowRight: 2 }[k];
-    if (lane != null && !RK.done) rockHit(lane);
+    if (RK.phase === 'select' && ['1', '2', '3'].includes(k)) beginRock(['leicht', 'normal', 'schwer'][+k - 1]);
+    else if (RK.phase === 'select' && k === 'Enter') beginRock('normal');
+    else if (lane != null && !RK.done) rockHit(lane);
     else if (k === 'Escape') endRock();
     else if (k === 'Enter' && RK.done) startRock();
     return;
@@ -1145,6 +1148,7 @@ function menuItems() {
     { id: 'music', label: 'Musik: ' + (G.settings.music ? 'an' : 'aus') },
     { id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') },
     { id: 'babble', label: 'Plapperstimmen: ' + (G.settings.babble ? 'an' : 'aus') },
+    { id: 'tspeed', label: 'Textgeschwindigkeit: ' + (G.settings.textSpeed || 'normal') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
     fsAvailable && { id: 'fs', label: 'Vollbild: ' + (isFullscreen() ? 'an' : 'aus') },
     back,
@@ -1167,6 +1171,7 @@ function menuClick(x, y) {
   else if (b.id === 'music') toggleMusic();
   else if (b.id === 'voice') toggleVoice();
   else if (b.id === 'babble') { G.settings.babble = !G.settings.babble; saveSettings(); }
+  else if (b.id === 'tspeed') { const o = ['langsam', 'normal', 'schnell']; G.settings.textSpeed = o[(o.indexOf(G.settings.textSpeed || 'normal') + 1) % 3]; saveSettings(); }
   else if (b.id === 'retro') toggleRetro();
   else if (b.id === 'fs') { G.settings.fullscreen = !isFullscreen(); saveSettings(); toggleFullscreen(); }
   else if (/^save\d$/.test(b.id)) saveSlot(+b.id.slice(4));
@@ -1438,12 +1443,33 @@ function drawTransition() {
     cx.restore();
   } else if (G.fadeMode === 'warp') {
     cx.fillStyle = `rgba(12,6,20,${G.fade})`; cx.fillRect(0, 0, W, SH);
-    cx.save(); cx.globalAlpha = G.fade; cx.translate(W / 2, SH / 2);
-    for (let i = 0; i < 9; i++) {
-      const r = (G.t * 0.35 + i * 55) % 495; cx.rotate(0.35 + G.t * 0.0004);
-      cx.setLineDash([26, 18]); E(cx, 0, 0, r, r * 0.6, null, 5, 0, i % 2 ? G.warpCol : '#ffffff');
+    if (cx.isPix) {
+      cx.save(); cx.globalAlpha = G.fade; cx.translate(W / 2, SH / 2);
+      for (let i = 0; i < 9; i++) {
+        const r = (G.t * 0.35 + i * 55) % 495; cx.rotate(0.35 + G.t * 0.0004);
+        cx.setLineDash([26, 18]); E(cx, 0, 0, r, r * 0.6, null, 5, 0, i % 2 ? G.warpCol : '#ffffff');
+      }
+      cx.setLineDash([]); cx.restore();
+    } else {
+      // Sterntunnel: Lichtstreifen rasen nach außen, Spiralarme drehen sich um ein helles Zentrum
+      cx.save(); cx.globalAlpha = G.fade; cx.translate(W / 2, SH / 2);
+      glow(0, 0, 260, G.warpCol, 0.5); glow(0, 0, 90, '#ffffff', 0.7);
+      cx.lineCap = 'round';
+      for (let i = 0; i < 70; i++) {
+        const ang = i * 2.399 + G.t * 0.0007, q = ((G.t * 0.0011 + i * 0.137) % 1), r = 20 + q * q * 560;
+        cx.globalAlpha = G.fade * Math.min(1, q * 3);
+        cx.strokeStyle = i % 3 ? G.warpCol : '#ffffff'; cx.lineWidth = 1 + q * 3;
+        cx.beginPath(); cx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r * 0.62); cx.lineTo(Math.cos(ang) * r * (1.08 + q * 0.25), Math.sin(ang) * r * 0.62 * (1.08 + q * 0.25)); cx.stroke();
+      }
+      cx.globalAlpha = G.fade * 0.6;
+      for (let arm = 0; arm < 3; arm++) {
+        cx.strokeStyle = arm === 1 ? '#ffffff' : G.warpCol; cx.lineWidth = 4;
+        cx.beginPath();
+        for (let j = 0; j <= 40; j++) { const u = j / 40, ang = arm * 2.094 + u * 5 - G.t * 0.003, r = 12 + u * 300; const px = Math.cos(ang) * r, py = Math.sin(ang) * r * 0.62; if (j) cx.lineTo(px, py); else cx.moveTo(px, py); }
+        cx.stroke();
+      }
+      cx.restore();
     }
-    cx.setLineDash([]); cx.restore();
     if (G.fade > 0.5 && G.warpLabel) {
       cx.globalAlpha = (G.fade - 0.5) * 2;
       txt(cx, G.warpLabel, W / 2, SH / 2 + 14, '400 40px "Titan One", sans-serif', G.warpCol, 'center', 8, '#0c0614');
@@ -1479,6 +1505,7 @@ function drawScene() {
   HDS.deco = true;
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
   if (!cx.isPix) { drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg) drawForeground(fg); }
+  drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
   cx.restore();
   drawLightFx(!cx.isPix);
@@ -1561,7 +1588,13 @@ function drawUI() {
       const id = items[s.i], hot = inRect(mx, my, s) && id, selected = id && G.first === 'i:' + id;
       R(cx, s.x, s.y, s.w, s.h, hot ? '#2c1d46' : '#1d1330', 2, 8, selected ? '#ffe066' : '#33224d');
       if (!cx.isPix) { L(cx, [s.x + 7, s.y + 4, s.x + s.w - 7, s.y + 4], 2.5, 'rgba(0,0,0,0.4)'); L(cx, [s.x + 7, s.y + s.h - 3, s.x + s.w - 7, s.y + s.h - 3], 1.5, 'rgba(190,160,255,0.16)'); }
-      if (id && !G.fly.some(f => f.id === id)) { cx.save(); cx.translate(s.x + s.w / 2, s.y + s.h / 2 + 1); ICON[id](cx); cx.restore(); }
+      if (id && !G.fly.some(f => f.id === id) && !(G.sendFx && G.sendFx.item === id && G.sendFx.to === curId() && G.t - G.sendFx.t0 < 1350)) {
+        const lift = hot ? 4 : selected ? 2 + Math.sin(G.t * 0.006) * 2 : 0, sc = hot ? 1.1 : 1;
+        if ((hot || selected) && !cx.isPix) glow(s.x + s.w / 2, s.y + s.h / 2, 34, selected ? '#ffe066' : '#c8b0ff', 0.35);
+        cx.save(); cx.translate(s.x + s.w / 2, s.y + s.h / 2 + 1 - lift); cx.scale(sc, sc);
+        if (!cx.isPix) { const k = VS * DPR; cx.shadowColor = 'rgba(0,0,0,0.5)'; cx.shadowBlur = (3 + lift) * k; cx.shadowOffsetY = (2 + lift) * k; }
+        ICON[id](cx); cx.restore();
+      }
     }
     cx.globalAlpha = 1;
   }
@@ -1575,7 +1608,42 @@ function drawUI() {
     txt(cx, ERA[HOME_ERA[p.id]].label, p.x, p.y + 58, '600 10px "Baloo 2", sans-serif', '#8a7aa8');
   }
 }
+// Zeitportal am Klo (im Raum) und der Flug des Gegenstands zum Porträt des Empfängers (über der Leiste)
+function drawSendPortal() {
+  const f = G.sendFx; if (!f || viewRoomId() !== f.room) return;
+  const k = (G.t - f.t0) / 1500; if (k > 1) return;
+  const a = Math.sin(Math.min(1, k * 1.4) * Math.PI), rot = G.t * 0.006;
+  glow(f.x, f.y, f.h * 0.9, f.col, 0.7 * a); glow(f.x, f.y, f.h * 0.45, '#ffffff', 0.5 * a);
+  cx.save(); cx.globalAlpha = a; cx.translate(f.x, f.y);
+  for (let i = 0; i < 5; i++) {   // wirbelnde Ringe
+    cx.rotate(rot + i * 1.25);
+    S(cx, null, 3 - i * 0.4, () => cx.ellipse(0, 0, f.h * (0.2 + i * 0.09), f.h * (0.08 + i * 0.035), 0, 0.3, Math.PI * 1.4), i % 2 ? '#ffffff' : f.col);
+  }
+  cx.restore();
+  for (let i = 0; i < 10; i++) { const q = (G.t * 0.0015 + i / 10) % 1, ang = i * 2.4 + G.t * 0.004; E(cx, f.x + Math.cos(ang) * f.h * 0.5 * (1 - q), f.y + Math.sin(ang) * f.h * 0.3 * (1 - q), 2, 2, '#ffffff', 0); }
+}
+function drawSendFly() {
+  const f = G.sendFx; if (!f) return;
+  const k = (G.t - f.t0 - 450) / 900; if (k < 0) return;
+  if (k > 1) {   // Ankunft: Lichtring am Porträt
+    const q = (k - 1) / 0.6; if (q > 1) { G.sendFx = null; return; }
+    const p = UI.ports.find(p => p.id === f.to); if (!p) return;
+    glow(p.x, p.y, 40 + q * 30, f.col, 0.6 * (1 - q));
+    cx.save(); cx.globalAlpha = 1 - q; E(cx, p.x, p.y, p.r + 4 + q * 26, p.r + 4 + q * 26, null, 3, 0, f.col); cx.restore();
+    return;
+  }
+  const p = UI.ports.find(p => p.id === f.to); if (!p) return;
+  const e = k * k * (3 - 2 * k), x0 = f.x, y0 = f.y - 30, cx1 = (x0 + p.x) / 2, cy1 = Math.min(y0, p.y) - 160;
+  const bx = (1 - e) * (1 - e) * x0 + 2 * (1 - e) * e * cx1 + e * e * p.x, by = (1 - e) * (1 - e) * y0 + 2 * (1 - e) * e * cy1 + e * e * p.y;
+  for (let i = 1; i <= 5; i++) {   // Leuchtspur
+    const e2 = Math.max(0, e - i * 0.04), tx = (1 - e2) * (1 - e2) * x0 + 2 * (1 - e2) * e2 * cx1 + e2 * e2 * p.x, ty = (1 - e2) * (1 - e2) * y0 + 2 * (1 - e2) * e2 * cy1 + e2 * e2 * p.y;
+    glow(tx, ty, 16 - i * 2, f.col, 0.5 - i * 0.08);
+  }
+  glow(bx, by, 26, f.col, 0.7);
+  cx.save(); cx.translate(bx, by); const sc = 1.3 - 0.4 * e; cx.scale(sc, sc); cx.rotate(k * Math.PI * 2); ICON[f.item](cx); cx.restore();
+}
 function drawFly() {
+  drawSendFly();
   G.fly = G.fly.filter(f => G.t - f.t0 < 700);
   for (const f of G.fly) {
     const idx = inv().indexOf(f.id); if (idx < 0) continue;
@@ -1957,15 +2025,26 @@ function endClick(x, y) { if (G.endBtn && inRect(x, y, G.endBtn)) { G.saved = nu
 const ROCK = { lanes: [400, 500, 600], cols: ['#7dff7a', '#ffe066', '#ff7ad9'], top: 70, hitY: 500, look: 1.6, keyLabels: ['A / ←', 'S / ↓', 'D / →'], padLabels: ['X', 'A', 'B'] };
 const RK = { notes: [], score: 0, combo: 0, best: 0, hits: 0, fx: [], done: false, flash: [0, 0, 0], btns: [], start: 0, lastHit: 0 };
 function rockLane(n) { return /^(E4|G4)$/.test(n) ? 0 : /^(A4|B4)$/.test(n) ? 1 : 2; }
+const ROCK_KEY = 'tentakel-toast-rock-v1', ROCK_DIFF = { leicht: { look: 2.0, label: 'Leicht' }, normal: { look: 1.6, label: 'Normal' }, schwer: { look: 1.25, label: 'Schwer' } };
+function rockBest() { try { return JSON.parse(localStorage.getItem(ROCK_KEY) || '{}') || {}; } catch (e) { return {}; } }
+// Auswahl des Schwierigkeitsgrads; die Bühne läuft schon im Hintergrund
 function startRock() {
   G.menu = null; G.screen = 'rock';
-  Object.assign(RK, { score: 0, combo: 0, best: 0, hits: 0, fx: [], done: false, flash: [0, 0, 0], btns: [], lastHit: 0 });
-  RK.notes = Sound.chart.map(c => ({ note: c.note, len: c.len || 0, lane: rockLane(c.note), t: c.beat * 0.5, state: 0 }));
-  Sound.ambience([]); Sound.play(null); Sound.play('rock'); Sound.setReverb(1.1, 0.12);
+  Object.assign(RK, { phase: 'select', notes: [], score: 0, combo: 0, best: 0, hits: 0, fx: [], done: false, flash: [0, 0, 0], btns: [], lastHit: 0, record: false });
+  Sound.ambience([]); Sound.play(null); Sound.setReverb(1.1, 0.12);
+}
+function beginRock(diff) {
+  RK.phase = 'play'; RK.diff = diff; ROCK.look = ROCK_DIFF[diff].look;
+  let notes = Sound.chart.map(c => ({ note: c.note, len: c.len || 0, lane: rockLane(c.note), t: c.beat * 0.5, state: 0 }));
+  if (diff === 'leicht') notes = notes.filter(n => n.len || Math.abs(n.t * 2 - Math.round(n.t * 2)) < 0.01);   // nur Noten auf vollen Schlägen
+  if (diff === 'schwer') notes = notes.concat(notes.filter((n, i) => i % 3 === 1 && !n.len).map(n => ({ ...n, t: n.t + 0.25, lane: (n.lane + 1) % 3 }))).sort((a, b) => a.t - b.t);
+  RK.notes = notes;
+  Sound.play(null); Sound.play('rock');
   RK.start = G.t + 150;
 }
 function rockTime() { const ac = Sound.ctx; return ac && Sound.songT0 && Sound.current === 'rock' ? ac.currentTime - Sound.songT0 : (G.t - RK.start) / 1000; }
 function rockHit(lane) {
+  if (RK.phase === 'select') { beginRock(['leicht', 'normal', 'schwer'][lane]); return; }
   if (RK.done) return;
   RK.flash[lane] = G.t;
   const now = rockTime();
@@ -1981,13 +2060,15 @@ function rockHit(lane) {
   } else { RK.combo = 0; Sound.sfx('miss'); }
 }
 function updateRock() {
-  if (G.screen !== 'rock' || RK.done) return;
+  if (G.screen !== 'rock' || RK.done || RK.phase !== 'play') return;
   const now = rockTime();
   for (const n of RK.notes) if (!n.state && now - n.t > 0.18) { n.state = 2; RK.combo = 0; RK.fx.push({ text: 'Daneben', x: ROCK.lanes[n.lane], y: ROCK.hitY - 40, t0: G.t, col: '#ff8a8a' }); }
   if (now > 33.5) {
     RK.done = true;
     const pct = RK.hits / RK.notes.length;
     if (pct >= 0.8) unlock('rockstar');
+    const best = rockBest();
+    if (RK.score > (best[RK.diff] || 0)) { best[RK.diff] = RK.score; RK.record = true; try { localStorage.setItem(ROCK_KEY, JSON.stringify(best)); } catch (e) { /* ok */ } }
     Sound.sfx('cheer');
   }
   RK.fx = RK.fx.filter(f => G.t - f.t0 < 700);
@@ -2041,8 +2122,24 @@ function drawRock() {
   if (RK.combo > 2) txt(cx, `${RK.combo}er-Kombo · x${1 + Math.min(3, Math.floor(RK.combo / 8))}`, W - 24, 70, '800 15px "Baloo 2", sans-serif', '#ffffff', 'right', 4, '#0b0610');
   R(cx, 300, 18, 360, 10, 'rgba(255,255,255,0.12)', 0, 5); R(cx, 300, 18, 360 * Math.max(0, Math.min(1, now / 32)), 10, '#a6ff8f', 0, 5);
   if (now < 1.2) txt(cx, now < 0 ? 'Bereit?' : 'Los!', W / 2, 230, '400 54px "Titan One", sans-serif', '#ffe066', 'center', 9, '#0b0610');
-  // Ergebnis
+  // Auswahl des Schwierigkeitsgrads
   RK.btns = [];
+  if (RK.phase === 'select') {
+    cx.fillStyle = 'rgba(8,3,18,0.6)'; cx.fillRect(0, 0, W, H);
+    R(cx, W / 2 - 250, 110, 500, 360, '#1f1432', 3, 18, '#7a5ab8');
+    txt(cx, 'Tentakel-Rock', W / 2, 166, '400 38px "Titan One", sans-serif', '#a6ff8f', 'center', 6, '#0b0610');
+    txt(cx, 'Triff die Noten im Takt – du spielst die Lead-Gitarre!', W / 2, 198, '700 16px "Baloo 2", sans-serif', '#e6dcff');
+    const best = rockBest();
+    ['leicht', 'normal', 'schwer'].forEach((d, i) => {
+      const b = { id: d, x: W / 2 - 160, y: 222 + i * 62, w: 320, h: 50 };
+      RK.btns.push(b);
+      button(b, `${ROCK_DIFF[d].label}${best[d] ? '   ·   Rekord ' + best[d] : ''}`, inRect(G.mouse.x, G.mouse.y, b), d === 'normal');
+      txt(cx, G.pointer === 'pad' ? ROCK.padLabels[i] : ROCK.keyLabels[i].split(' ')[0], b.x - 26, b.y + 31, '800 16px "Baloo 2", sans-serif', ROCK.cols[i], 'center', 4, '#0b0610');
+    });
+    const bb = { id: 'back', x: W / 2 - 90, y: 412, w: 180, h: 38 }; RK.btns.push(bb); button(bb, 'Zurück zum Spiel', inRect(G.mouse.x, G.mouse.y, bb));
+    return;
+  }
+  // Ergebnis
   if (RK.done) {
     cx.fillStyle = 'rgba(8,3,18,0.72)'; cx.fillRect(0, 0, W, H);
     const pct = RK.hits / RK.notes.length, rank = pct >= 0.95 ? 'Legende des Tentakel-Rock!' : pct >= 0.8 ? 'Rockstar!' : pct >= 0.55 ? 'Garagenband' : 'Nochmal üben, Mann.';
@@ -2050,12 +2147,14 @@ function drawRock() {
     txt(cx, rank, W / 2, 180, '400 34px "Titan One", sans-serif', '#ffd23a', 'center', 6, '#2a0a3a');
     txt(cx, `${RK.hits} von ${RK.notes.length} Tönen · ${Math.round(pct * 100)} %`, W / 2, 224, '800 20px "Baloo 2", sans-serif', '#ffffff');
     txt(cx, `Punkte: ${RK.score} · beste Kombo: ${RK.best}`, W / 2, 254, '700 17px "Baloo 2", sans-serif', '#d7c6ff');
-    if (pct >= 0.8) txt(cx, 'Erfolg: Tentakel-Rockstar', W / 2, 284, '800 15px "Baloo 2", sans-serif', '#a6ff8f');
+    txt(cx, RK.record ? `Neuer Rekord (${ROCK_DIFF[RK.diff].label})!` : `Rekord (${ROCK_DIFF[RK.diff].label}): ${rockBest()[RK.diff] || 0}`, W / 2, 284, '800 16px "Baloo 2", sans-serif', RK.record ? '#ffe066' : '#c3b2ff');
+    if (pct >= 0.8) txt(cx, 'Erfolg: Tentakel-Rockstar', W / 2, 310, '800 15px "Baloo 2", sans-serif', '#a6ff8f');
     RK.btns = [{ id: 'again', label: 'Nochmal', x: W / 2 - 200, y: 340, w: 180, h: 44 }, { id: 'back', label: 'Zurück zum Spiel', x: W / 2 + 20, y: 340, w: 180, h: 44 }];
     for (const b of RK.btns) button(b, b.label, inRect(G.mouse.x, G.mouse.y, b));
   }
 }
 function rockClick(x, y) {
+  if (RK.phase === 'select') { const b = RK.btns.find(b => inRect(x, y, b)); if (b) { Sound.sfx('click'); if (b.id === 'back') endRock(); else beginRock(b.id); } return; }
   if (RK.done) { const b = RK.btns.find(b => inRect(x, y, b)); if (!b) return; Sound.sfx('click'); if (b.id === 'again') startRock(); else endRock(); return; }
   const i = ROCK.lanes.findIndex(lx => Math.abs(x - lx) < 70);
   if (i >= 0 && y > ROCK.top - 30) rockHit(i);
@@ -2085,7 +2184,7 @@ function update(dt) {
   if (G.screen === 'game' && G.state && !G.menu) G.state.stats.ms += dt;
   G.hover = null;
   if (G.screen === 'game' && G.pointer === 'mouse' && !G.busy) {
-    const u = G.mouse.y >= SH ? hitUI(G.mouse.x, G.mouse.y) : null, key = u && u.type === 'verb' ? u.id : null;
+    const u = G.mouse.y >= SH ? hitUI(G.mouse.x, G.mouse.y) : null, key = u && u.type === 'verb' ? u.id : u && u.type === 'inv' && inv()[u.idx] ? 'inv' + u.idx : null;
     if (key && key !== G.lastVerbHover) Sound.sfx('hover');
     G.lastVerbHover = key;
   }
