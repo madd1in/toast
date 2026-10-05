@@ -11,13 +11,16 @@ const Sound = (() => {
   const verbCache = {};
   let musicOn = true, ducked = false, retro = false;
   let cur = null, wanted = null, loopEnd = 0, loops = [];
-  let ambList = [], ambWanted = [], ambCount = 0;
+  let ambList = [], ambWanted = [], ambCount = 0, offline = false;
+  const pending = [];
+  // Aufräumen nach Ablauf von Audio-Zeit (offline läuft die Audio-Zeit nicht in Echtzeit)
+  function later(fn, sec) { if (offline) pending.push({ at: ac.currentTime + sec, fn }); else setTimeout(fn, sec * 1000); }
 
-  function init() {
-    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+  function init(useCtx) {
+    if (ac) { if (!offline && ac.state === 'suspended') ac.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    ac = new AC();
+    if (!AC && !useCtx) return;
+    ac = useCtx || new AC(); offline = !!useCtx;
     // Tiefpass hinter dem Master: dämpft alles, solange das Pausenmenü offen ist
     muffleF = ac.createBiquadFilter(); muffleF.type = 'lowpass'; muffleF.frequency.value = muffled ? 650 : 20000; muffleF.Q.value = 0.7; muffleF.connect(ac.destination);
     master = ac.createGain(); master.gain.value = 0.8; master.connect(muffleF);
@@ -33,7 +36,7 @@ const Sound = (() => {
     musicSend = ac.createGain(); musicSend.gain.value = 0.06; musicSend.connect(verb);
     sfxBus.connect(verbSend); ambBus.connect(verbSend); musicBus.connect(musicSend);
     setReverb(verbWanted[0], verbWanted[1]);
-    setInterval(tick, 100);
+    if (!offline) setInterval(tick, 100);
     if (wanted) { const w = wanted; wanted = null; play(w); }
     ambience(ambWanted);
   }
@@ -217,6 +220,7 @@ const Sound = (() => {
   function tick() {
     if (!ac) return;
     const now = ac.currentTime;
+    for (let i = pending.length - 1; i >= 0; i--) if (pending[i].at <= now) { const f = pending[i].fn; pending.splice(i, 1); f(); }
     if (cur && now > loopEnd - 0.8) scheduleLoop(Math.max(loopEnd, now + 0.05));
     for (const a of ambList) {
       if (a.next < now) a.next = now + 0.05;
@@ -225,7 +229,7 @@ const Sound = (() => {
     }
   }
   function stopMusic() {
-    if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.08); const g = l.g; setTimeout(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 700); }
+    if (ac) for (const l of loops) { l.g.gain.setTargetAtTime(0, ac.currentTime, 0.08); const g = l.g; later(() => { try { g.disconnect(); } catch (e) { /* ok */ } }, 0.7); }
     loops = []; cur = null;
   }
   function play(name) {
@@ -297,7 +301,7 @@ const Sound = (() => {
     const p = ac.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(sfxBus);
     const keep = sfxBus; sfxBus = p;
     try { fn(); } finally { sfxBus = keep; }
-    setTimeout(() => { try { p.disconnect(); } catch (e) { /* ok */ } }, 4000);
+    later(() => { try { p.disconnect(); } catch (e) { /* ok */ } }, 4);
   }
   function sfx(name, pan) { if (ac) { const f = SFX[name]; if (f) panned(pan, () => f(ac.currentTime + 0.01)); } listeners.forEach(fn => fn(name)); }
   function onSfx(fn) { listeners.push(fn); }
@@ -329,7 +333,7 @@ const Sound = (() => {
     const lg = ac.createGain(); lg.gain.value = 0.9; lg.connect(musicBus);
     let t = ac.currentTime + 0.05; const spb = 0.42;
     for (const e of parse(s[1]).ev) inst(s[0], e.n, t + e.b * spb, e.len * spb, lg);
-    setTimeout(() => { try { lg.disconnect(); } catch (e) { /* ok */ } }, 4000);
+    later(() => { try { lg.disconnect(); } catch (e) { /* ok */ } }, 4);
   }
   function muffle(on) {
     if (muffled === on) return; muffled = on;
@@ -351,7 +355,10 @@ const Sound = (() => {
     if (ac && cur) { const c = cur; stopMusic(); cur = c; scheduleLoop(ac.currentTime + 0.1); }
   }
 
-  return { init, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get ctx() { return ac; }, get out() { return master; } };
+  // Für Trailer-Aufnahmen: Klang in einen OfflineAudioContext rendern, getaktet über tick()
+  function initOffline(ctx) { init(ctx); }
+
+  return { init, initOffline, tick, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------

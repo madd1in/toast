@@ -1124,9 +1124,55 @@ function drawBg(room) {
   let c = bgCache[key];
   if (!c || c._s !== s) {
     c = document.createElement('canvas'); c.width = Math.ceil(W * s); c.height = Math.ceil(SH * s); c._s = s;
-    const g = c.getContext('2d'); g.setTransform(s, 0, 0, s, 0, 0); room.draw(g); bgCache[key] = c;
+    const g = c.getContext('2d'); g.setTransform(s, 0, 0, s, 0, 0); room.draw(g); finishBg(g, c, room); bgCache[key] = c;
   }
   cx.drawImage(c, 0, 0, W, SH);
+}
+// Malerische Nachbearbeitung des Raumhintergrunds (einmal pro Raum und Auflösung):
+// weiches Leuchten, Licht-Verlauf von der Lichtquelle, Malgrund-Textur
+let paperTex = null;
+function paperCanvas() {
+  if (paperTex) return paperTex;
+  const n = 256, c = document.createElement('canvas'); c.width = c.height = n;
+  const x = c.getContext('2d'), img = x.createImageData(n, n);
+  const octs = [[4, 0.42], [16, 0.3], [64, 0.18], [256, 0.1]].map(([f, w]) => ({ f, w, a: Float32Array.from({ length: f * f }, () => Math.random()) }));
+  const smp = (o, u, v) => {
+    const fx = u * o.f, fy = v * o.f, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, f = o.f;
+    const at = (i, j) => o.a[((j % f + f) % f) * f + ((i % f + f) % f)];
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    return (at(x0, y0) * (1 - sx) + at(x0 + 1, y0) * sx) * (1 - sy) + (at(x0, y0 + 1) * (1 - sx) + at(x0 + 1, y0 + 1) * sx) * sy;
+  };
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    let v = 0; for (const o of octs) v += smp(o, i / n, j / n) * o.w;
+    const k = (j * n + i) * 4, g = Math.max(0, Math.min(255, 128 + (v - 0.5) * 120));
+    img.data[k] = img.data[k + 1] = img.data[k + 2] = g; img.data[k + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  return (paperTex = c);
+}
+function finishBg(g, c, room) {
+  if (!HDS.on) return;
+  const fx = ROOM_FX[room.id] || {}, lt = fx.light;
+  g.save();
+  if (BLOOM_OK) {
+    // Orton-Effekt: unscharfe Kopie per soft-light gibt Tiefe und ein weiches, gemaltes Leuchten
+    const t = document.createElement('canvas'); t.width = Math.ceil(c.width / 4); t.height = Math.ceil(c.height / 4);
+    const tg = t.getContext('2d'); tg.filter = 'blur(5px)'; tg.drawImage(c, 0, 0, t.width, t.height);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.5; g.drawImage(t, 0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'screen'; g.globalAlpha = 0.1; g.drawImage(t, 0, 0, c.width, c.height);
+    g.setTransform(c._s, 0, 0, c._s, 0, 0);
+  }
+  if (lt) {
+    const [side, key, fill] = lt, gx = side < 0 ? W * 0.12 : W * 0.88;
+    const rg = g.createRadialGradient(gx, -60, 30, gx, -60, W * 1.15);
+    rg.addColorStop(0, hexA(key, 0.55)); rg.addColorStop(0.45, hexA(key, 0.06)); rg.addColorStop(1, hexA(fill, 0.6));
+    g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 1; g.fillStyle = rg; g.fillRect(0, 0, W, SH);
+  }
+  const pat = g.createPattern(paperCanvas(), 'repeat');
+  if (pat.setTransform) pat.setTransform(new DOMMatrix().scale(0.6));
+  g.globalCompositeOperation = 'overlay'; g.globalAlpha = 0.2; g.fillStyle = pat; g.fillRect(0, 0, W, SH);
+  g.restore();
 }
 function drawActor(a, room) {
   const sc = roomScale(room, a.y) * (a.scaleMul || 1), lt = !cx.isPix && (ROOM_FX[room.id] || {}).light, sx = lt ? -lt[0] * 7 * sc : 0;
@@ -1398,39 +1444,93 @@ function drawCursor() {
 
 // ---------- Titel & Ende ----------
 function drawMansion(c, t) {
-  const body = '#2a1238', trim = '#3d1c52', win = (i) => (Math.sin(t * 0.002 + i * 1.7) > -0.6 ? '#ffd25a' : '#a07020');
+  const body = '#2e1440', trim = '#45205e', lit = i => Math.sin(t * 0.002 + i * 1.7) > -0.6, win = i => (lit(i) ? '#ffd25a' : '#8a5a2a');
   P(c, [70, 600, 470, 600, 462, 330, 78, 338], body, 4);
   P(c, [60, 344, 480, 336, 400, 250, 150, 262], trim, 4);
+  for (let y = 274; y < 336; y += 13) {   // Dachziegel-Reihen
+    const xl = 150 + (y - 262) / 82 * -90, xr = 400 + (y - 250) / 86 * 80;
+    L(c, [xl + 4, y, xr - 4, y], 1.5, 'rgba(10,2,20,0.35)');
+  }
   P(c, [110, 340, 180, 338, 176, 170, 116, 176], body, 4);
   P(c, [100, 182, 192, 176, 150, 92], trim, 4);
   P(c, [330, 336, 420, 334, 424, 190, 334, 196], body, 4);
   P(c, [320, 202, 436, 194, 384, 112], trim, 4);
+  L(c, [384, 112, 384, 84], 2.5, '#1a0c26'); P(c, [384, 86, 404, 92, 384, 98], '#c89a3a', 2);   // Wetterfahne
   R(c, 252, 210, 24, 60, body, 4);
-  for (let i = 0; i < 3; i++) R(c, 126, 196 + i * 46, 36, 30, win(i), 3, 3);
-  for (let i = 0; i < 2; i++) R(c, 356, 216 + i * 52, 44, 32, win(i + 4), 3, 3);
-  for (let i = 0; i < 4; i++) R(c, 110 + i * 88, 380, 50, 50, win(i + 7), 3, 4);
-  for (let i = 0; i < 4; i++) R(c, 110 + i * 88, 470, 50, 50, win(i + 12), 3, 4);
-  R(c, 236, 530, 70, 70, '#5a2a1e', 4, 6);
-  for (let i = 0; i < 3; i++) { const k = ((t * 0.0003) + i / 3) % 1; c.save(); c.globalAlpha = (1 - k) * 0.5; E(c, 264 + Math.sin(t * 0.002 + i) * 10, 200 - k * 90, 10 + k * 18, 7 + k * 12, '#7a5a9a', 0); c.restore(); }
+  const wins = [];
+  for (let i = 0; i < 3; i++) wins.push([126, 196 + i * 46, 36, 30, i]);
+  for (let i = 0; i < 2; i++) wins.push([356, 216 + i * 52, 44, 32, i + 4]);
+  for (let i = 0; i < 4; i++) wins.push([110 + i * 88, 380, 50, 50, i + 7]);
+  for (let i = 0; i < 4; i++) wins.push([110 + i * 88, 470, 50, 50, i + 12]);
+  for (const [x, y, w, h, i] of wins) {
+    R(c, x, y, w, h, win(i), 3, 4);
+    L(c, [x + w / 2, y + 2, x + w / 2, y + h - 2], 2, 'rgba(40,16,30,0.55)'); L(c, [x + 2, y + h / 2, x + w - 2, y + h / 2], 2, 'rgba(40,16,30,0.55)');
+  }
+  if (!c.isPix) {   // warmes Licht strahlt aus den Fenstern
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (const [x, y, w, h, i] of wins) {
+      if (!lit(i)) continue;
+      const mx = x + w / 2, my = y + h / 2, r = Math.max(w, h) * 1.3, g = c.createRadialGradient(mx, my, 4, mx, my, r);
+      g.addColorStop(0, 'rgba(255,190,90,0.32)'); g.addColorStop(1, 'rgba(255,190,90,0)'); c.fillStyle = g; c.fillRect(mx - r, my - r, r * 2, r * 2);
+    }
+    c.restore();
+  }
+  // Mondlicht auf den rechten Kanten
+  for (const pts of [[462, 330, 470, 600], [400, 250, 480, 336], [176, 170, 180, 338], [150, 92, 192, 176], [424, 190, 420, 334], [384, 112, 436, 194]]) L(c, pts, 3, 'rgba(214,190,255,0.24)');
+  R(c, 236, 530, 70, 70, '#6a3220', 4, 6); R(c, 246, 540, 22, 50, '#4a2014', 2, 3); R(c, 274, 540, 22, 50, '#4a2014', 2, 3);
+  for (const lx of [222, 320]) {   // Laternen neben der Tür
+    R(c, lx - 6, 534, 12, 18, '#ffcf6a', 2, 3);
+    if (!c.isPix) { const g = c.createRadialGradient(lx, 543, 2, lx, 543, 40); g.addColorStop(0, 'rgba(255,200,110,0.45)'); g.addColorStop(1, 'rgba(255,200,110,0)'); c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.fillRect(lx - 40, 503, 80, 80); c.restore(); }
+  }
+  for (let i = 0; i < 3; i++) { const k = ((t * 0.0003) + i / 3) % 1; c.save(); c.globalAlpha = (1 - k) * 0.5; E(c, 264 + Math.sin(t * 0.002 + i) * 10, 200 - k * 90, 10 + k * 18, 7 + k * 12, 'rgba(122,90,154,0.9)', 0); c.restore(); }
+}
+// Hügelkamm mit Tannen-Silhouetten (Ebenen für Tiefe)
+function ridge(base, amp, col, seed, pineH) {
+  const ry = x => base + Math.sin(x * 0.008 + seed) * amp + Math.sin(x * 0.021 + seed * 2) * amp * 0.45;
+  S(cx, col, 0, () => { cx.moveTo(-4, H + 4); for (let x = -4; x <= W + 8; x += 16) cx.lineTo(x, ry(x)); cx.lineTo(W + 8, H + 4); cx.closePath(); });
+  for (let i = 0; i < 34; i++) {
+    const x = ((i * 97 + seed * 131) % (W + 40)) - 20, y = ry(x) + 2, h = pineH * (0.6 + ((i * 53) % 10) / 14);
+    P(cx, [x - h * 0.32, y, x, y - h, x + h * 0.32, y], col, 0);
+  }
+}
+function fog(y, alpha, speed, off) {
+  for (let i = 0; i < 6; i++) {
+    const x = ((G.t * speed + i * 260 + off) % 1500) - 270, yy = y + Math.sin(i * 1.7 + off) * 8;
+    cx.save(); cx.translate(x, yy); cx.scale(1, 0.13);
+    const g = cx.createRadialGradient(0, 0, 0, 0, 0, 210); g.addColorStop(0, `rgba(206,176,236,${alpha})`); g.addColorStop(1, 'rgba(206,176,236,0)');
+    cx.fillStyle = g; cx.fillRect(-210, -210, 420, 420); cx.restore();
+  }
+}
+const TITLE_LIGHT = [1, '#e0d2ff', '#10081f'];
+function titleActor(id, x, y, sc, dir, seed) {
+  const base = ACT[id], a = { ...base, x, y, dir, walking: false, talking: false, target: null, seed };
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.beginPath(); cx.ellipse(x - 6 * sc, y + 2, 34 * sc * (base.shadowW || 1), 7 * sc, 0, 0, Math.PI * 2); cx.fill();
+  if (cx.isPix) { cx.save(); cx.translate(x, y); cx.scale(sc * dir, sc); CHAR[base.kind](cx, a, G.t); cx.restore(); }
+  else drawActorLit(a, sc, TITLE_LIGHT, 0);
 }
 function drawTitle() {
   const t = G.t;
-  cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#0f0622'], [0.55, '#3a1458'], [1, '#7a2f6a']]); cx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 70; i++) { const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.001 + i)); E(cx, (i * 173) % W, (i * 89) % 380, 1.4, 1.4, `rgba(255,255,255,${a})`, 0); }
+  cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#090320'], [0.45, '#27104a'], [0.75, '#561e62'], [1, '#9a426c']]); cx.fillRect(0, 0, W, H);
+  // Milchstraße und Sterne
+  for (let i = 0; i < 160; i++) {
+    const k = (i * 0.618) % 1, x = k * W, y = 60 + (1 - k) * 260 + Math.sin(i * 12.9) * 46;
+    E(cx, x, y, 0.9, 0.9, `rgba(230,210,255,${0.12 + 0.18 * Math.abs(Math.sin(i * 3.1))})`, 0);
+  }
+  for (let i = 0; i < 70; i++) { const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.001 + i)); E(cx, (i * 173) % W, (i * 89) % 380, 1.4, 1.4, i % 9 === 0 ? `rgba(255,220,180,${a})` : `rgba(255,255,255,${a})`, 0); }
   for (let i = 0; i < 8; i++) {   // ein paar größere Funkelsterne
     const x = 40 + (i * 389 + 70) % (W - 80), y = 26 + (i * 127) % 320, tw = Math.sin(t * 0.0035 + i * 2.1);
     if (tw < 0.25) continue;
     cx.globalAlpha = Math.min(1, tw * 1.3); L(cx, [x - 5, y, x + 5, y], 1.5, '#ffffff'); L(cx, [x, y - 5, x, y + 5], 1.5, '#ffffff'); E(cx, x, y, 1.4, 1.4, '#ffffff', 0); cx.globalAlpha = 1;
   }
-  const mg = cx.createRadialGradient(800, 150, 30, 800, 150, 150);
-  mg.addColorStop(0, 'rgba(255,236,190,0.3)'); mg.addColorStop(1, 'rgba(255,236,190,0)');
-  cx.fillStyle = mg; cx.fillRect(650, 0, 300, 300);
-  E(cx, 800, 150, 70, 70, '#ffe9b0', 4, 0, '#c8a060'); E(cx, 780, 130, 12, 9, '#f2d898', 0); E(cx, 826, 172, 9, 7, '#f2d898', 0);
-  for (let i = 0; i < 3; i++) {   // Wolken ziehen langsam vor dem Mond vorbei
-    const wx = ((t * (0.01 + i * 0.004) + i * 470) % 1500) - 260, wy = 110 + i * 46, s = 1 + i * 0.25;
-    cx.save(); cx.globalAlpha = 0.78 - i * 0.12;
-    for (const [dx, dy, rx, ry] of [[0, 0, 70, 20], [-46, 6, 44, 15], [48, 5, 50, 16], [10, -12, 40, 17]]) E(cx, wx + dx * s, wy + dy * s, rx * s, ry * s, '#3b1d5a', 0);
-    for (const [dx, dy, rx, ry] of [[10, -15, 34, 9], [-40, 1, 30, 7]]) E(cx, wx + dx * s, wy + dy * s, rx * s, ry * s, 'rgba(255,226,170,0.16)', 0);
+  // Mond mit Hof
+  for (const [r, a] of [[230, 0.16], [140, 0.22]]) { const mg = cx.createRadialGradient(800, 140, 40, 800, 140, r); mg.addColorStop(0, `rgba(255,236,196,${a})`); mg.addColorStop(1, 'rgba(255,236,196,0)'); cx.fillStyle = mg; cx.fillRect(800 - r, 140 - r, r * 2, r * 2); }
+  E(cx, 800, 140, 66, 66, '#fff0c4', 3, 0, '#d8b070');
+  for (const [x, y, rx, ry] of [[778, 118, 13, 10], [826, 160, 10, 8], [812, 116, 6, 5], [784, 166, 7, 6]]) E(cx, x, y, rx, ry, 'rgba(226,196,140,0.55)', 0);
+  for (let i = 0; i < 3; i++) {   // Wolken ziehen vor dem Mond vorbei, Unterkante vom Mond angeleuchtet
+    const wx = ((t * (0.01 + i * 0.004) + i * 470) % 1500) - 260, wy = 104 + i * 46, s = 1 + i * 0.25;
+    cx.save(); cx.globalAlpha = 0.85 - i * 0.12;
+    for (const [dx, dy, rx, ry] of [[0, 0, 70, 20], [-46, 6, 44, 15], [48, 5, 50, 16], [10, -12, 40, 17]]) E(cx, wx + dx * s, wy + dy * s, rx * s, ry * s, '#3e1f5e', 0);
+    for (const [dx, dy, rx, ry] of [[4, 12, 60, 6], [-40, 14, 30, 4]]) E(cx, wx + dx * s, wy + dy * s, rx * s, ry * s, 'rgba(255,214,170,0.22)', 0);
     cx.restore();
   }
   const sk = (t % 5600) / 800;   // Sternschnuppe alle paar Sekunden
@@ -1441,27 +1541,66 @@ function drawTitle() {
     cx.beginPath(); cx.moveTo(Math.max(sx, ex - 90), Math.max(sy, ey - 32)); cx.lineTo(ex, ey); cx.stroke(); E(cx, ex, ey, 2.2, 2.2, '#ffffff', 0);
     cx.restore();
   }
-  cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore();
-  // Vordergrund-Hügel, damit das Haus im Gras sitzt
-  S(cx, grad(cx, 0, 480, 0, H, [[0, '#244a30'], [1, '#0e2416']]), 0, () => { cx.moveTo(-4, 566); cx.quadraticCurveTo(260, 522, 500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
-  S(cx, 'rgba(8,16,10,0.55)', 0, () => { cx.moveTo(-4, 596); cx.quadraticCurveTo(300, 566, 620, 588); cx.quadraticCurveTo(820, 600, 964, 580); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
-  for (let i = 0; i < 26; i++) {   // Grasbüschel
-    const gx = (i * 167 + 30) % W, gy = 562 + ((i * 71) % 36);
-    L(cx, [gx - 4, gy, gx - 6, gy - 8], 2, '#3f7a48'); L(cx, [gx, gy, gx, gy - 11], 2, '#4a8a52'); L(cx, [gx + 4, gy, gx + 6, gy - 8], 2, '#3f7a48');
+  // Landschaft in Ebenen: ferne Hügel, Nebel, nähere Hügel
+  ridge(432, 16, '#3c1d5e', 1, 30);
+  fog(470, 0.26, 0.006, 0);
+  ridge(478, 12, '#26123f', 4, 40);
+  // Fledermäuse um den Turm
+  for (let i = 0; i < 3; i++) {
+    const x = 374 + Math.cos(t * 0.0011 + i * 2.1) * (80 + i * 14), y = 150 + Math.sin(t * 0.0017 + i) * 40, wy = Math.sin(t * 0.022 + i * 3) * 5;
+    L(cx, [x - 9, y - wy, x - 4, y, x, y - 2, x + 4, y, x + 9, y - wy], 2.2, '#12081c');
   }
-  const ta = { talking: false, walking: false, phase: 0, seed: 0 };
-  cx.save(); cx.translate(500, 600); cx.scale(1.25, 1.25); CHAR.purple(cx, ta, t); cx.restore();
-  cx.save(); cx.translate(40, 600); cx.scale(-1.05, 1.05); CHAR.green(cx, { ...ta, seed: 2 }, t); cx.restore();
-  const title = 'TENTAKEL-TOAST';
-  cx.font = '400 74px "Titan One", sans-serif';
-  const tw = cx.measureText(title).width; let x = W / 2 - tw / 2;
+  cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore();
+  fog(552, 0.2, 0.009, 400);
+  // Vordergrund-Hügel
+  S(cx, grad(cx, 0, 520, 0, H, [[0, '#2a5236'], [1, '#0c2214']]), 0, () => { cx.moveTo(-4, 566); cx.quadraticCurveTo(260, 522, 500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
+  S(cx, 'rgba(210,190,255,0.12)', 0, () => { cx.moveTo(500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 552); cx.quadraticCurveTo(740, 598, 500, 564); cx.closePath(); });
+  // die drei Helden im Mondlicht, gegenüber Lila Tentakel; Grüner Tentakel links
+  titleActor('green', 46, 604, 1.05, -1, 2);
+  titleActor('bernard', 292, 590, 0.6, 1, 1);
+  titleActor('hoagie', 352, 592, 0.6, 1, 3);
+  titleActor('laverne', 410, 588, 0.6, 1, 5);
+  titleActor('lila', 512, 604, 1.2, -1, 0);
+  // Gras und Glühwürmchen
+  for (let i = 0; i < 40; i++) {
+    const gx = (i * 167 + 30) % W, gy = 566 + ((i * 71) % 34), sw = Math.sin(t * 0.002 + i) * 2;
+    L(cx, [gx - 4, gy, gx - 6 + sw, gy - 9], 2, '#3f7a48'); L(cx, [gx, gy, gx + sw, gy - 12], 2, '#4f9458'); L(cx, [gx + 4, gy, gx + 6 + sw, gy - 9], 2, '#3f7a48');
+  }
+  if (!cx.isPix) {
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 12; i++) {
+      const x = (i * 211 + Math.sin(t * 0.0007 + i) * 60 + 960) % W, y = 520 + Math.sin(t * 0.0011 + i * 2) * 34, a = 0.5 + 0.5 * Math.sin(t * 0.006 + i * 5);
+      const g = cx.createRadialGradient(x, y, 0, x, y, 12); g.addColorStop(0, `rgba(226,255,140,${0.55 * a})`); g.addColorStop(1, 'rgba(226,255,140,0)');
+      cx.fillStyle = g; cx.fillRect(x - 12, y - 12, 24, 24);
+    }
+    cx.restore();
+    const vg = cx.createRadialGradient(W / 2, H * 0.45, 300, W / 2, H * 0.5, 720); vg.addColorStop(0, 'rgba(8,2,18,0)'); vg.addColorStop(1, 'rgba(8,2,18,0.5)');
+    cx.fillStyle = vg; cx.fillRect(0, 0, W, H);
+  }
+  // Logo: dunkler Hof, Tiefe, Verlauf und ein Glanzlicht, das über die Buchstaben wandert
+  if (!cx.isPix) { const lg = cx.createRadialGradient(W / 2, 100, 40, W / 2, 100, 380); lg.addColorStop(0, 'rgba(14,4,30,0.5)'); lg.addColorStop(1, 'rgba(14,4,30,0)'); cx.fillStyle = lg; cx.fillRect(0, 0, W, 260); }
+  const title = 'TENTAKEL-TOAST', font = '400 74px "Titan One", sans-serif';
+  cx.font = font;
+  const tw = cx.measureText(title).width, gl = ((t * 0.0045) % 26) - 6; let x = W / 2 - tw / 2;
   for (let i = 0; i < title.length; i++) {
-    const ch = title[i], w = cx.measureText(ch).width, y = 108 + Math.sin(t * 0.004 + i * 0.6) * 6;
+    const ch = title[i], w = cx.measureText(ch).width, y = 106 + Math.sin(t * 0.004 + i * 0.6) * 6, hl = Math.max(0, 1 - Math.abs(gl - i) / 1.6);
     cx.save(); cx.translate(x + w / 2, y); cx.rotate(Math.sin(t * 0.003 + i) * 0.05);
-    txt(cx, ch, 0, 0, '400 74px "Titan One", sans-serif', grad(cx, 0, -60, 0, 0, [[0, '#ffe36b'], [1, '#ff8a3d']]), 'center', 12, '#2a0a3a');
+    txt(cx, ch, 0, 8, font, '#6a1838', 'center', 12, '#2a0a3a');
+    txt(cx, ch, 0, 0, font, grad(cx, 0, -60, 0, 0, [[0, mix('#fff0a0', '#ffffff', hl)], [0.5, mix('#ffd04a', '#fff6d0', hl * 0.8)], [1, '#ff7a30']]), 'center', 12, '#2a0a3a');
     cx.restore(); x += w;
   }
-  txt(cx, 'Ein inoffizielles Day-of-the-Tentacle-Fanspiel', W / 2, 150, '700 20px "Baloo 2", sans-serif', '#f3e6ff', 'center', 5, '#2a0a3a');
+  for (const [sx, sy, ph] of [[178, 52, 0], [790, 70, 2], [700, 34, 4], [256, 132, 1]]) {   // Funkeln am Logo
+    const k = Math.sin(t * 0.004 + ph * 1.7); if (k < 0.2) continue;
+    const r = 3 + k * 6; cx.globalAlpha = k; L(cx, [sx - r, sy, sx + r, sy], 2, '#fff6d0'); L(cx, [sx, sy - r, sx, sy + r], 2, '#fff6d0'); cx.globalAlpha = 1;
+  }
+  // Untertitel auf einem Banner
+  const sub = 'Ein inoffizielles Day-of-the-Tentacle-Fanspiel';
+  cx.font = '700 19px "Baloo 2", sans-serif';
+  const sw2 = cx.measureText(sub).width + 50, x0 = W / 2 - sw2 / 2, x1 = W / 2 + sw2 / 2;
+  P(cx, [x0 - 28, 140, x0 + 6, 138, x0 + 6, 168, x0 - 28, 170, x0 - 16, 154], '#5a1446', 2.5);
+  P(cx, [x1 + 28, 140, x1 - 6, 138, x1 - 6, 168, x1 + 28, 170, x1 + 16, 154], '#5a1446', 2.5);
+  P(cx, [x0, 132, x1, 132, x1, 162, x0, 162], '#8a2a6a', 3);
+  txt(cx, sub, W / 2, 153, '700 19px "Baloo 2", sans-serif', '#fff0fa', 'center', 4, '#3a0a2a');
   const bx = 596, bw = 300, btns = [];
   if (G.saved) btns.push({ id: 'cont', label: 'Weiterspielen', big: true });
   btns.push({ id: 'new', label: G.saved ? 'Neues Spiel' : 'Spiel starten', big: !G.saved });
@@ -1472,12 +1611,15 @@ function drawTitle() {
   if (fsAvailable) btns.push({ id: 'fs', label: 'Vollbild beim Start: ' + (G.settings.fullscreen ? 'an' : 'aus') });
   let y = (G.saved ? 236 : 262) - (G.hasSaves ? 22 : 0);
   G.titleBtns = btns.map(b => { const r = { ...b, x: bx, y, w: bw, h: b.big ? 50 : 34 }; y += r.h + 10; return r; });
+  const p0 = G.titleBtns[0].y - 18;
+  R(cx, bx - 18, p0, bw + 36, y + 30 - p0, 'rgba(20,9,38,0.72)', 2.5, 18, '#7a5ab8');
+  L(cx, [bx - 4, p0 + 3, bx + bw + 4, p0 + 3], 1.5, 'rgba(255,255,255,0.14)');
   for (const b of G.titleBtns) {
     const hot = inRect(G.mouse.x, G.mouse.y, b);
     b.hs = (b.hs || 1) + ((hot ? 1.045 : 1) - (b.hs || 1)) * 0.25;
     cx.save(); cx.translate(b.x + b.w / 2, b.y + b.h / 2); cx.scale(b.hs, b.hs); cx.translate(-b.x - b.w / 2, -b.y - b.h / 2);
     if (hot) R(cx, b.x - 2, b.y - 2, b.w + 4, b.h + 4, 'rgba(255,224,102,0.16)', 0, 14);
-    R(cx, b.x, b.y, b.w, b.h, b.big ? (hot ? '#ffe066' : '#ffd23a') : (hot ? '#3a2758' : 'rgba(30,18,52,0.85)'), 3, 12, b.big ? OUT : (hot ? '#ffe066' : '#6a52a0'));
+    R(cx, b.x, b.y, b.w, b.h, b.big ? (hot ? '#ffe066' : '#ffd23a') : (hot ? '#3a2758' : '#251640'), 3, 12, b.big ? '#5a2a10' : (hot ? '#ffe066' : '#6a52a0'));
     txt(cx, b.label, b.x + b.w / 2, b.y + b.h / 2 + (b.big ? 8 : 6), b.big ? '400 22px "Titan One", sans-serif' : '700 16px "Baloo 2", sans-serif', b.big ? '#2a0a3a' : (hot ? '#ffe066' : '#e6dcff'));
     cx.restore();
   }

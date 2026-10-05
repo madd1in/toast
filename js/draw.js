@@ -17,13 +17,45 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 }
 
 function pth(c, p) { c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); c.closePath(); }
-function fs(c, fill, lw, stroke) {
-  if (fill) { c.fillStyle = fill; c.fill(); }
-  if (lw) { c.lineWidth = lw; c.strokeStyle = stroke || OUT; c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(); }
+// HD-Feinschliff: einfarbige Flächen bekommen einen Licht-Verlauf (oben hell, unten dunkler),
+// Konturen die abgedunkelte Flächenfarbe statt Schwarz – weg vom flachen Malprogramm-Look.
+// Der Pixel-Modus (c.isPix) schattiert selbst und bleibt unberührt.
+const HDS = { on: true };
+const shadeMemo = new Map();
+function shadeOf(col) {
+  let s = shadeMemo.get(col);
+  if (!s) {
+    const h = col.length === 4 ? '#' + col[1] + col[1] + col[2] + col[2] + col[3] + col[3] : col;
+    s = [mix(h, '#fff6e6', 0.17), h, mix(h, '#160a1e', 0.24), mix(h, '#160a1e', 0.64)];
+    shadeMemo.set(col, s);
+  }
+  return s;
 }
-function P(c, pts, fill, lw = 3, stroke) { pth(c, pts); fs(c, fill, lw, stroke); }
-function R(c, x, y, w, h, fill, lw = 3, r = 0, stroke) { c.beginPath(); if (r) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); fs(c, fill, lw, stroke); }
-function E(c, x, y, rx, ry, fill, lw = 3, rot = 0, stroke) { c.beginPath(); c.ellipse(x, y, Math.abs(rx), Math.abs(ry), rot, 0, Math.PI * 2); fs(c, fill, lw, stroke); }
+const isHex = f => typeof f === 'string' && f[0] === '#' && (f.length === 7 || f.length === 4);
+function fs(c, fill, lw, stroke, box) {
+  const hd = HDS.on && !c.isPix && isHex(fill);
+  if (fill) {
+    if (hd && box && (box[3] - box[1] > 5 || box[2] - box[0] > 5)) {
+      const s = shadeOf(fill), g = c.createLinearGradient(box[0], box[1], box[0] + (box[2] - box[0]) * 0.25, box[3]);
+      g.addColorStop(0, s[0]); g.addColorStop(0.45, s[1]); g.addColorStop(1, s[2]);
+      c.fillStyle = g;
+    } else c.fillStyle = fill;
+    c.fill();
+  }
+  if (lw) {
+    c.lineWidth = hd && !stroke ? lw * 0.82 : lw;
+    c.strokeStyle = stroke || (hd ? shadeOf(fill)[3] : OUT);
+    c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke();
+  }
+}
+function P(c, pts, fill, lw = 3, stroke) {
+  pth(c, pts);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < pts.length; i += 2) { const x = pts[i], y = pts[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  fs(c, fill, lw, stroke, [x0, y0, x1, y1]);
+}
+function R(c, x, y, w, h, fill, lw = 3, r = 0, stroke) { c.beginPath(); if (r) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); fs(c, fill, lw, stroke, [x, y, x + w, y + h]); }
+function E(c, x, y, rx, ry, fill, lw = 3, rot = 0, stroke) { rx = Math.abs(rx); ry = Math.abs(ry); c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); fs(c, fill, lw, stroke, [x - rx, y - ry, x + rx, y + ry]); }
 function L(c, pts, lw = 3, stroke) {
   c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]);
   c.lineWidth = lw; c.strokeStyle = stroke || OUT; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke();

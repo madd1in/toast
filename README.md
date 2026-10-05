@@ -34,11 +34,12 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - 10 Erfolge, Fortschrittsanzeige, Statistik am Ende, Hotspot-Anzeige, Tipp-System
 - Prozedurale Grafik (Canvas 2D) und Musik (WebAudio-Synthesizer) mit eigenen Themen pro Zeitalter, Umgebungsgeräuschen, Schritten je nach Boden und Plapperstimmen pro Figur
 - Lebendige Szene: Laufstaub je nach Untergrund, weiche Schatten unter Möbeln, Lichtstimmung pro Raum und sanftes Klick-Feedback
+- **Gemalter HD-Look:** Jede Fläche bekommt automatisch einen Licht-Verlauf, Konturen sind fein und farbig statt schwarz, Raumhintergründe bekommen weiches Leuchten, Licht-Verlauf und Maltextur
 - **HD-Licht:** Figuren bekommen pro Raum eine Licht- und Schattenseite mit Randlicht, dazu Bloom auf hellen Stellen, Kaminflackern, flackernde Laborröhren und ein Gewitter über Lilas Palast
 - Schwebeteilchen pro Raum: Staub im Lampenlicht, fallendes Herbstlaub 1776, Glühwürmchen im Zukunftsgarten (sie weichen dir aus), magische Funken im Palast
 - Raumklang: eigener Hall pro Raum (vom trockenen Garten bis zum hallenden Thronsaal), Schritte und Stimmen im Stereo-Panorama
 - NPCs murmeln nebenbei vor sich hin, und wer zu lange herumsteht, bekommt einen Spruch von der eigenen Figur
-- Spiegelungen auf Fliesen und Marmor, leichtes Atmen im Stand, Dialog-Kamera, die bei Gesprächen sanft heranzoomt, Funkenregen beim Aufheben, Gräser im Vordergrund der Gärten, ziehende Wolken und Sternschnuppen im Titelbild
+- Spiegelungen auf Fliesen und Marmor, leichtes Atmen im Stand, Dialog-Kamera, die bei Gesprächen sanft heranzoomt, Funkenregen beim Aufheben, Gräser im Vordergrund der Gärten, neues Titelbild mit Hügel-Ebenen, Nebel, leuchtender Villa, Fledermäusen und den drei Helden im Mondlicht
 - **Adaptive Musik:** Mit jedem gelösten Rätsel kommen neue Instrumente dazu; jede Figur hat ein kurzes Erkennungsmotiv beim Gesprächsbeginn; im Pausenmenü klingt alles gedämpft
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
 - **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG
