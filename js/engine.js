@@ -740,7 +740,7 @@ async function goRoom(id, roomId, x, y, dir = 1) {
   if (PLAYERS.includes(id) && G.state) markVisit(roomId);
   if (view) G.viewRoomLast = null;
   if (view) {
-    G.first = null; G.parts.length = 0; G.ripples.length = 0; music(); irisAt(a); await fadeTo(0, 320, 'iris');
+    G.first = null; G.parts.length = 0; G.ripples.length = 0; if (G.sign && G.sign.room !== roomId) G.sign = null; music(); irisAt(a); await fadeTo(0, 320, 'iris');
     showSign(roomId);
     const r = ROOMS[roomId]; if (r.onEnter) await r.onEnter();
   }
@@ -755,7 +755,7 @@ async function switchChar(ch) {
     G.warpLabel = `${ACT[ch].name} · ${ERA[HOME_ERA[ch]].label}`; G.warpCol = ERA[HOME_ERA[ch]].col;
     Sound.sfx('warp');
     await fadeTo(1, 330, 'warp');
-    G.state.cur = ch; G.parts.length = 0; G.ripples.length = 0; music();
+    G.state.cur = ch; G.parts.length = 0; G.ripples.length = 0; G.sign = null; music();
     await wait(260);
     await fadeTo(0, 330, 'warp');
     showSign(me().room);
