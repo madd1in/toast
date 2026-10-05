@@ -42,6 +42,9 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - Spiegelungen auf Fliesen und Marmor, leichtes Atmen im Stand, Dialog-Kamera, die bei Gesprächen sanft heranzoomt, Funkenregen beim Aufheben, Gräser im Vordergrund der Gärten, neues Titelbild mit Hügel-Ebenen, Nebel, leuchtender Villa, Fledermäusen und den drei Helden im Mondlicht
 - **Neue Musik:** Tavernen-Gigue im Gasthaus 1776, Bossa-Lounge in der Lobby, neue Instrumente (Streicher, Blech, E-Piano, Laute, Fiedel), Schlagzeug mit Hi-Hats, Klatschen und Bodhrán, Instrumente im Stereo-Bild verteilt, Kompressor auf der Summe
 - **Musikbox** im Menü (Extras): alle Stücke anhören
+- **Minispiel „Gut-O-Mat“** (Menü → Extras): Toast-Timing in fünf Runden – die Nadel im goldbraunen Bereich stoppen, Dr. Fred kommentiert, Rekord und Erfolg „Toast-Meister“
+- **Kapitel-Titelkarten** mit Kinobalken und Fanfare nach jedem gelösten Rätsel; im Titelbild saust ab und zu das Chrono-Klo über den Himmel
+- Einstellung **Hotspot-Hilfe**: dezente, pulsierende Markierungen an allem Benutzbaren; das gewählte Verb leuchtet in der Satzzeile
 - **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, drei Schwierigkeitsgrade mit Bestenliste, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
 - **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
 - **Großes Finale:** Feuerwerk, Konfetti, alle Figuren auf dem Hügel, Abspann und eine größere Abspannmusik

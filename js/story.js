@@ -67,6 +67,17 @@ const NPCS = ['drfred', 'green', 'gertrude', 'hancock', 'wache', 'lila'];
 const MILESTONES = ['kaffee', 'brot', 'tree', 'zelle', 'cellIn', 'breadIn', 'toast', 'guardGone'];
 function milestoneDone(m) { const f = fl(); return !!(m === 'breadIn' ? (f.breadIn || f.toast) : f[m]); }
 function progress() { return MILESTONES.filter(milestoneDone).length; }
+// Kapitel-Titelkarten: erscheinen, sobald ein Meilenstein erreicht ist
+const CHAPTERS = {
+  brot: 'Das Freundlichkeits-Brot', tree: 'Ein Baum für die Zukunft', zelle: 'Strom aus der Laterne', cellIn: 'Der Gut-O-Mat hat Saft',
+  breadIn: 'Brot im Schlitz', toast: 'Der Gut-Toast', kaffee: 'Koffein für die Wache', guardGone: 'Der Weg zum Thron',
+};
+// Dr. Fred kommentiert das Gut-O-Mat-Minispiel
+const TOAST_LINES = {
+  raw: ['Das ist kein Toast, das ist ein warmes Brot mit Hoffnungen.', 'Blass! Wie ein Labor ohne Explosionen.'],
+  good: ['Goldbraun! Die Wissenschaft hat gesiegt!', 'Perfekt. Ich nenne ihn: Toast Nummer Eins!', 'Exzellent! Fast so gut wie meine Haare.'],
+  burnt: ['Verkohlt! Gut, dass der Feuerlöscher schon kaputt war.', 'Das ist jetzt Kunst. Abstrakte Kohle.'],
+};
 // Notizbuch im Menü: Meilensteine in Story-Reihenfolge
 const NOTES = [
   ['brot', 'Gertrude hat das Freundlichkeits-Brot gebacken.'],
@@ -119,6 +130,7 @@ const ACH = [
   { id: 'neugier', name: 'Neugiernase', desc: '25 verschiedene Dinge angeschaut.' },
   { id: 'kristalle', name: 'Kristallklar', desc: 'Alle sechs Chrono-Kristalle eingesammelt.' },
   { id: 'rockstar', name: 'Tentakel-Rockstar', desc: 'Im Minispiel mindestens 80 % der Töne getroffen.' },
+  { id: 'toastmeister', name: 'Toast-Meister', desc: 'Im Gut-O-Mat-Minispiel mindestens 400 Punkte geröstet.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
 

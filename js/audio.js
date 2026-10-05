@@ -415,6 +415,10 @@ const Sound = (() => {
     open: t => { nz(t, 0.18, 0.18, sfxBus, { type: 'bandpass', f: 600, q: 2 }); osc('triangle', 220, t, 0.25, 0.06, sfxBus, { f2: 330, decay: true }); },
     whoosh: t => { nz(t, 1.1, 0.12, sfxBus, { type: 'bandpass', f: 400, f2: 2600, q: 2.5, attack: 0.35 }); osc('sawtooth', 90, t + 0.1, 0.9, 0.02, sfxBus, { f2: 220, lp: 600, attack: 0.3 }); },
     hover: t => osc('sine', 1900, t, 0.025, 0.012, sfxBus, { decay: true }),
+    chapter: t => {
+      [['C4', 'E4', 'G4'], ['D4', 'F4', 'A4'], ['E4', 'G4', 'C5']].forEach((ch, i) => ch.forEach(n => osc('sawtooth', freq(n), t + i * 0.16, i === 2 ? 0.9 : 0.15, 0.03, sfxBus, { lp: 600, lp2: 2600, lpT: 0.08, attack: 0.02 })));
+      osc('sine', freq('C6'), t + 0.32, 1.2, 0.05, sfxBus, { decay: true }); nz(t + 0.32, 1.0, 0.06, sfxBus, { type: 'highpass', f: 6000 });
+    },
     photo: t => { nz(t, 0.05, 0.3, sfxBus, { type: 'highpass', f: 3000 }); nz(t + 0.09, 0.08, 0.22, sfxBus, { type: 'bandpass', f: 1500, q: 2 }); },
     crystal: t => { ['E6', 'B5', 'G#6', 'E7'].forEach((n, i) => osc('sine', freq(n), t + i * 0.07, 0.5, 0.05, sfxBus, { decay: true })); osc('triangle', freq('E5'), t, 0.8, 0.04, sfxBus, { decay: true }); },
     sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },

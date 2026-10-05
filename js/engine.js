@@ -688,6 +688,7 @@ function irisAt(a) { const room = ROOMS[a.room]; G.irisX = a.x; G.irisY = a.y - 
 // ---------- Räume, Figuren, Zeitreise-Post ----------
 function music() {
   if (G.screen === 'rock') return Sound.play('rock');
+  if (G.screen === 'toaster') return Sound.play('lounge');
   if (G.screen === 'title' || G.screen === 'end') { Sound.ambience([]); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
   const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
   Sound.play(fx.music || r.theme || ERA[r.era].theme);
@@ -940,6 +941,7 @@ function onClick(x, y, right) {
   if (G.screen === 'title') return titleClick(x, y);
   if (G.screen === 'end') return endClick(x, y);
   if (G.screen === 'rock') return rockClick(x, y);
+  if (G.screen === 'toaster') return toasterClick(x, y);
   if (G.screen !== 'game') return;
   if (G.menu) return menuClick(x, y);
   if (fsAvailable && inRect(x, y, UI.fs, 4)) { toggleFullscreen(); return; }
@@ -1017,6 +1019,12 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('keydown', e => {
   firstInteraction();
   const k = e.key;
+  if (G.screen === 'toaster') {
+    e.preventDefault();
+    if (k === 'Escape') endToaster();
+    else if ((k === ' ' || k === 'Enter') && !e.repeat) { if (TS.phase === 'done') startToaster(); else toasterPress(); }
+    return;
+  }
   if (G.screen === 'rock') {
     e.preventDefault();
     if (e.repeat) return;
@@ -1126,6 +1134,9 @@ function pollPad(dt) {
       if (down(0)) { const b = G.titleBtns.find(b => inRect(G.mouse.x, G.mouse.y, b)); if (b) titleClick(G.mouse.x, G.mouse.y); else snapNav(0, 1); }
       if (down(9)) titleDefault();
     }
+  } else if (G.screen === 'toaster') {
+    if (down(0)) { if (TS.phase === 'done') startToaster(); else toasterPress(); }
+    if (down(1) || down(9)) endToaster();
   } else if (G.screen === 'rock') {
     if (RK.done) { if (down(0)) startRock(); if (down(1) || down(9)) endRock(); }
     else { if (down(2) || down(14)) rockHit(0); if (down(0) || down(13)) rockHit(1); if (down(1) || down(15)) rockHit(2); if (down(9)) endRock(); }
@@ -1156,7 +1167,7 @@ function menuItems() {
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
   if (G.menu === 'album') return [back];
-  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
+  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
   if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
@@ -1168,6 +1179,7 @@ function menuItems() {
     { id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') },
     { id: 'babble', label: 'Plapperstimmen: ' + (G.settings.babble ? 'an' : 'aus') },
     { id: 'tspeed', label: 'Textgeschwindigkeit: ' + (G.settings.textSpeed || 'normal') },
+    { id: 'hotspots', label: 'Hotspot-Hilfe: ' + (G.settings.hotspots ? 'an' : 'aus') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
     fsAvailable && { id: 'fs', label: 'Vollbild: ' + (isFullscreen() ? 'an' : 'aus') },
     back,
@@ -1191,6 +1203,7 @@ function menuClick(x, y) {
   else if (b.id === 'music') toggleMusic();
   else if (b.id === 'voice') toggleVoice();
   else if (b.id === 'babble') { G.settings.babble = !G.settings.babble; saveSettings(); }
+  else if (b.id === 'hotspots') { G.settings.hotspots = !G.settings.hotspots; saveSettings(); }
   else if (b.id === 'tspeed') { const o = ['langsam', 'normal', 'schnell']; G.settings.textSpeed = o[(o.indexOf(G.settings.textSpeed || 'normal') + 1) % 3]; saveSettings(); }
   else if (b.id === 'retro') toggleRetro();
   else if (b.id === 'fs') { G.settings.fullscreen = !isFullscreen(); saveSettings(); toggleFullscreen(); }
@@ -1200,6 +1213,7 @@ function menuClick(x, y) {
   else if (b.id === 'export') exportSave();
   else if (b.id === 'import') importSave();
   else if (b.id === 'rock') startRock();
+  else if (b.id === 'toaster') startToaster();
   else if (b.id.startsWith('jb_')) { G.jbOn = true; Sound.play(b.id.slice(3)); }
   else if (b.id.startsWith('ph_')) { G.albumView = +b.id.slice(3); Sound.sfx('page'); }
   else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album'].includes(b.id)) {
@@ -1223,7 +1237,12 @@ function save() {
   const p = progress();
   if (p > (G.state.progress || 0)) {
     G.state.progress = p; Sound.setIntensity(p / MILESTONES.length);
-    if (!G.fast) { Sound.sfx('solve'); note(`Rätsel gelöst! Fortschritt: ${p} von ${MILESTONES.length}`); }
+    if (!G.fast) {
+      const seen = G.state.cards || (G.state.cards = {}), m = MILESTONES.find(m => milestoneDone(m) && !seen[m]);
+      if (m) seen[m] = 1;
+      G.chapterCard = { n: p, title: (m && CHAPTERS[m]) || 'Rätsel gelöst', t0: G.t };
+      Sound.sfx('chapter');
+    }
   }
   try { localStorage.setItem(SAVE_KEY, snapshot()); } catch (e) { /* Speicher nicht verfügbar – Spiel läuft trotzdem */ }
 }
@@ -1533,6 +1552,8 @@ function drawScene() {
   drawLightFx(!cx.isPix);
   if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
   drawReveal(room);
+  drawHotspotHelp(room);
+  drawChapterCard();
   drawTransition();
   cx.save(); camApply(); drawBark(); drawSpeech(); cx.restore();
   if (G.photoFlash && G.t - G.photoFlash < 260) { cx.fillStyle = `rgba(255,255,255,${(0.7 * (1 - (G.t - G.photoFlash) / 260)).toFixed(3)})`; cx.fillRect(0, 0, W, SH); }
@@ -1583,7 +1604,12 @@ function drawUIBack() {
 function drawUI() {
   drawUIBack();
   const mx = G.mouse.x, my = G.mouse.y;
-  txt(cx, G.busy || G.dialog ? '' : sentence(), 366, 462, '600 19px "Baloo 2", sans-serif', '#d7c6ff');
+  if (!G.busy && !G.dialog) {
+    const full = sentence(), verb = VERB_LABEL[G.verb || 'walk'], rest = full.slice(verb.length), f = '600 19px "Baloo 2", sans-serif';
+    cx.font = f; const w1 = cx.measureText(verb).width, w2 = cx.measureText(rest).width, x0 = 366 - (w1 + w2) / 2;
+    txt(cx, verb, x0, 462, '800 19px "Baloo 2", sans-serif', G.verb ? '#ffe066' : '#b8a4e8', 'left');
+    txt(cx, rest, x0 + w1, 462, f, G.hover || G.first ? '#ffffff' : '#d7c6ff', 'left');
+  }
   button(UI.klo, 'Klo-Post', inRect(mx, my, UI.klo), G.verb === 'give' && !G.first);
   button(UI.pixel, G.settings.retro ? 'HD' : 'Pixel', inRect(mx, my, UI.pixel), G.settings.retro);
   button(UI.reveal, 'Zeigen', inRect(mx, my, UI.reveal), G.t < G.reveal);
@@ -1663,6 +1689,29 @@ function drawSendFly() {
   }
   glow(bx, by, 26, f.col, 0.7);
   cx.save(); cx.translate(bx, by); const sc = 1.3 - 0.4 * e; cx.scale(sc, sc); cx.rotate(k * Math.PI * 2); ICON[f.item](cx); cx.restore();
+}
+// filmische Kapitelkarte: schwarze Balken fahren ein, Titel in der Mitte
+function drawChapterCard() {
+  const c = G.chapterCard; if (!c) return;
+  const k = (G.t - c.t0) / 3200; if (k > 1) { G.chapterCard = null; return; }
+  const a = Math.min(1, k * 6, (1 - k) * 5), bar = 52 * a;
+  cx.fillStyle = 'rgba(6,2,12,0.92)'; cx.fillRect(0, 0, W, bar); cx.fillRect(0, SH - bar, W, bar);
+  cx.save(); cx.globalAlpha = a;
+  glow(W / 2, SH / 2 - 10, 260, '#ffd23a', 0.25);
+  R(cx, W / 2 - 300, SH / 2 - 62, 600, 104, 'rgba(18,8,32,0.82)', 2, 16, '#ffd23a');
+  txt(cx, `Kapitel ${c.n} von ${MILESTONES.length}`, W / 2, SH / 2 - 28, '800 15px "Baloo 2", sans-serif', '#c3b2ff', 'center', 3, '#0b0610');
+  const sl = (1 - Math.min(1, k * 5)) * 30;
+  txt(cx, c.title, W / 2 + sl, SH / 2 + 18, '400 34px "Titan One", sans-serif', '#ffd23a', 'center', 7, '#2a0a3a');
+  L(cx, [W / 2 - 240, SH / 2 + 30, W / 2 - 60, SH / 2 + 30], 2, 'rgba(255,210,58,0.6)'); L(cx, [W / 2 + 60, SH / 2 + 30, W / 2 + 240, SH / 2 + 30], 2, 'rgba(255,210,58,0.6)');
+  cx.restore();
+}
+// Hotspot-Hilfe: dezente, pulsierende Punkte an allem, was man benutzen kann (Einstellung)
+function drawHotspotHelp(room) {
+  if (!G.settings.hotspots || G.t < G.reveal || G.busy || G.dialog) return;
+  const pulse = 0.5 + 0.5 * Math.sin(G.t * 0.004);
+  for (const o of room.objs) if (isVisible(o)) { const [x, y] = hotspotCenter(o); cx.globalAlpha = 0.35 + pulse * 0.25; E(cx, x, y, 4, 4, o.exit ? '#7fe8ff' : '#ffe066', 1.5, 0, '#1b1020'); }
+  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) { cx.globalAlpha = 0.35 + pulse * 0.25; E(cx, a.x, a.y - a.h * roomScale(room, a.y) * 0.55, 4, 4, '#ff9ad9', 1.5, 0, '#1b1020'); }
+  cx.globalAlpha = 1;
 }
 function drawFly() {
   drawSendFly();
@@ -1878,6 +1927,14 @@ function drawTitle() {
     L(cx, [x - 9, y - wy, x - 4, y, x, y - 2, x + 4, y, x + 9, y - wy], 2.2, '#12081c');
   }
   cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore();
+  const fk = (t % 17000) / 3600;   // ab und zu saust das Chrono-Klo durch die Zeit
+  if (fk < 1) {
+    const kx = -90 + fk * (W + 180), ky = 262 - Math.sin(fk * Math.PI) * 70;
+    for (let i = 1; i <= 8; i++) glow(kx - i * 26, ky + i * 6, 24 - i * 1.5, ['#ff5fa8', '#ffd23a', '#7fe8ff', '#a6ff8f'][i % 4], 0.7 - i * 0.07);
+    cx.save(); cx.translate(kx, ky); cx.rotate(Math.sin(t * 0.006) * 0.25 + 0.2); cx.scale(1.6, 1.6);
+    R(cx, -11, -16, 22, 32, '#7a3ab8', 2, 4); S(cx, '#9a5ad8', 2, () => cx.ellipse(0, -16, 13, 7, 0, Math.PI, 0)); E(cx, 0, -4, 3.5, 3.5, '#ffe066', 0);
+    cx.restore();
+  }
   if (!cx.isPix) fog(552, 0.2, 0.009, 400);
   // Vordergrund-Hügel
   S(cx, grad(cx, 0, 520, 0, H, [[0, '#2a5236'], [1, '#0c2214']]), 0, () => { cx.moveTo(-4, 566); cx.quadraticCurveTo(260, 522, 500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
@@ -2119,7 +2176,7 @@ function updateRock() {
   }
   RK.fx = RK.fx.filter(f => G.t - f.t0 < 700);
 }
-function endRock() { G.screen = 'game'; music(); }
+function endRock() { G.screen = G.state ? 'game' : 'title'; music(); }
 function drawRock() {
   const t = G.t, now = rockTime(), beat = now / 0.5, bp = 1 - (beat - Math.floor(beat)), hd = !cx.isPix;
   // Bühne: Rückwand, Lautsprecher, wandernde Scheinwerfer, Publikum
@@ -2206,6 +2263,101 @@ function rockClick(x, y) {
   if (i >= 0 && y > ROCK.top - 30) rockHit(i);
 }
 
+// ---------- Minispiel: Gut-O-Mat (Toast-Timing) ----------
+// Eine Nadel pendelt über die Röstskala; wer sie im goldbraunen Bereich stoppt, bekommt die meisten Punkte.
+const TOASTER_KEY = 'tentakel-toast-toaster-v1';
+const TS = { round: 0, rounds: 5, score: 0, results: [], phase: 'play', pos: 0, dir: 1, speed: 0, stopT: 0, line: '', btns: [] };
+function startToaster() {
+  G.menu = null; G.screen = 'toaster';
+  Object.assign(TS, { round: 1, score: 0, results: [], phase: 'play', pos: 0, dir: 1, speed: 0.55, stopT: 0, line: 'Halte die Nadel im goldbraunen Bereich an!', btns: [], record: false });
+  Sound.ambience([]); Sound.play('lounge'); Sound.setReverb(1.2, 0.12);
+}
+function toasterBest() { try { return +localStorage.getItem(TOASTER_KEY) || 0; } catch (e) { return 0; } }
+function toasterPress() {
+  if (TS.phase === 'play') {
+    TS.phase = 'stop'; TS.stopT = G.t;
+    const d = Math.abs(TS.pos - 0.62), pts = Math.max(0, Math.round(100 - d * 260));
+    TS.last = { pos: TS.pos, pts }; TS.score += pts; TS.results.push(pts);
+    const kind = TS.pos < 0.5 ? 'raw' : TS.pos > 0.76 ? 'burnt' : 'good';
+    TS.line = pick(TOAST_LINES[kind]); TS.kind = kind;
+    Sound.sfx('pop'); setTimeout(() => Sound.sfx(kind === 'good' ? 'ding' : 'bad'), 250);
+    if (G.settings.babble) for (let i = 0; i < 6; i++) setTimeout(() => Sound.blip(ACT.drfred.voice, 0.3), 300 + i * 110);
+  } else if (TS.phase === 'stop' && G.t - TS.stopT > 600) {
+    if (TS.round >= TS.rounds) {
+      TS.phase = 'done';
+      if (TS.score >= 400) unlock('toastmeister');
+      if (TS.score > toasterBest()) { TS.record = true; try { localStorage.setItem(TOASTER_KEY, String(TS.score)); } catch (e) { /* ok */ } }
+      Sound.sfx('cheer');
+    } else { TS.round++; TS.phase = 'play'; TS.pos = 0; TS.dir = 1; TS.speed = 0.55 + (TS.round - 1) * 0.22; TS.line = `Runde ${TS.round} – schneller!`; Sound.sfx('tick'); }
+  }
+}
+function updateToaster(dt) {
+  if (G.screen !== 'toaster' || TS.phase !== 'play') return;
+  TS.pos += TS.dir * TS.speed * dt / 1000;
+  if (TS.pos >= 1) { TS.pos = 1; TS.dir = -1; Sound.sfx('tick'); } else if (TS.pos <= 0) { TS.pos = 0; TS.dir = 1; Sound.sfx('tick'); }
+}
+function toastColor(p) {   // blass → goldbraun → verkohlt
+  return p < 0.62 ? mix('#f2e2b4', '#d08a3a', p / 0.62) : mix('#d08a3a', '#2a1a12', Math.min(1, (p - 0.62) / 0.38));
+}
+function drawToaster() {
+  const t = G.t, hd = !cx.isPix;
+  cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#1d2a3e'], [1, '#0c1220']]); cx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 12; i++) R(cx, i * 84, 360, 82, 82, i % 2 ? '#2a3a52' : '#24324a', 0, 0);   // Fliesen
+  R(cx, 0, 440, W, 160, '#3a2a22', 0, 0); R(cx, 0, 440, W, 10, '#5a4030', 0, 0);   // Tresen
+  // der Gut-O-Mat
+  const sh = TS.phase === 'play' ? Math.sin(t * 0.05) * TS.speed * 1.5 : 0;
+  cx.save(); cx.translate(480 + sh, 372);
+  R(cx, -170, -110, 340, 210, '#dfe4ea', 4, 46); R(cx, -120, -150, 90, 30, '#3a3a44', 3, 10); R(cx, 30, -150, 90, 30, '#3a3a44', 3, 10);
+  // Toast springt nach dem Stoppen heraus
+  const pop = TS.phase !== 'play' ? Math.sin(Math.min(1, (t - TS.stopT) / 400) * Math.PI / 2) : 0;
+  const col = toastColor(TS.phase === 'play' ? Math.min(0.5, TS.pos * 0.5) : TS.last ? TS.last.pos : 0);
+  for (const ox of [-75, 75]) {
+    cx.save(); cx.translate(ox, -150 - pop * 72);
+    S(cx, mix(col, '#3a1a08', 0.35), 3, () => { cx.moveTo(-34, 40); cx.lineTo(-34, -10); cx.quadraticCurveTo(-42, -40, -16, -40); cx.quadraticCurveTo(0, -52, 16, -40); cx.quadraticCurveTo(42, -40, 34, -10); cx.lineTo(34, 40); cx.closePath(); });   // Kruste
+    S(cx, col, 0, () => { cx.moveTo(-26, 34); cx.lineTo(-26, -8); cx.quadraticCurveTo(-32, -31, -12, -31); cx.quadraticCurveTo(0, -41, 12, -31); cx.quadraticCurveTo(32, -31, 26, -8); cx.lineTo(26, 34); cx.closePath(); });   // Krume
+    for (const [px, py] of [[-12, -12], [8, -4], [-4, 12], [14, 18], [-16, 22]]) E(cx, px, py, 1.6, 1.2, mix(col, '#3a1a08', 0.25), 0);
+    if (TS.phase !== 'play' && TS.kind === 'burnt' && hd) for (let i = 0; i < 3; i++) { const q = ((t * 0.0008) + i / 3) % 1; cx.globalAlpha = (1 - q) * 0.5; E(cx, Math.sin(i + t * 0.003) * 10, -50 - q * 80, 10 + q * 16, 7 + q * 10, '#5a5060', 0); cx.globalAlpha = 1; }
+    cx.restore();
+  }
+  R(cx, -170, -110, 340, 210, null, 4, 46);
+  // Röstskala mit Nadel
+  const gx = 0, gy = 40, r = 120;
+  const zones = [[0, 0.5, '#f2e2b4'], [0.5, 0.76, '#e0a040'], [0.76, 1, '#3a2418']];
+  for (const [a0, a1, zc] of zones) { cx.beginPath(); cx.arc(gx, gy, r, Math.PI + a0 * Math.PI, Math.PI + a1 * Math.PI); cx.lineWidth = 26; cx.strokeStyle = zc; cx.stroke(); }
+  cx.beginPath(); cx.arc(gx, gy, r, Math.PI, 2 * Math.PI); cx.lineWidth = 2; cx.strokeStyle = '#1b1020'; cx.stroke();
+  const golden = Math.PI + 0.62 * Math.PI; L(cx, [gx + Math.cos(golden) * (r - 18), gy + Math.sin(golden) * (r - 18), gx + Math.cos(golden) * (r + 18), gy + Math.sin(golden) * (r + 18)], 3, '#ffd23a');
+  const na = Math.PI + (TS.phase === 'play' ? TS.pos : TS.last ? TS.last.pos : 0) * Math.PI;
+  L(cx, [gx, gy, gx + Math.cos(na) * (r - 6), gy + Math.sin(na) * (r - 6)], 5, '#c8322e'); E(cx, gx, gy, 10, 10, '#3a3a44', 3);
+  txt(cx, 'GUT-O-MAT', 0, 82, '400 22px "Titan One", sans-serif', '#7a3ab8', 'center', 0);
+  cx.restore();
+  // Dr. Fred schaut zu und kommentiert
+  const fa = { ...ACT.drfred, x: 120, y: 470, dir: 1, walking: false, talking: TS.phase === 'stop' && t - TS.stopT < 1100, seed: 4 };
+  if (hd) drawActorLit(fa, 1.15, [1, '#fff0d0', '#10182a'], 0); else { cx.save(); cx.translate(fa.x, fa.y); cx.scale(1.15, 1.15); CHAR.drfred(cx, fa, t); cx.restore(); }
+  // Anzeige
+  txt(cx, 'GUT-O-MAT', 24, 44, '400 30px "Titan One", sans-serif', '#ffd23a', 'left', 6, '#0b0610');
+  txt(cx, `Runde ${Math.min(TS.round, TS.rounds)} von ${TS.rounds} · Punkte ${TS.score}`, W - 24, 44, '800 18px "Baloo 2", sans-serif', '#ffffff', 'right', 4, '#0b0610');
+  txt(cx, TS.line, W / 2, 84, '700 20px "Baloo 2", sans-serif', TS.phase === 'stop' ? ACT.drfred.color : '#e6dcff', 'center', 5, '#0b0610');
+  if (TS.phase === 'stop' && TS.last) txt(cx, `+${TS.last.pts}`, 480 + 150, 250, '400 40px "Titan One", sans-serif', TS.last.pts >= 85 ? '#ffe066' : TS.last.pts >= 50 ? '#c8f0ff' : '#ff8a8a', 'center', 7, '#0b0610');
+  txt(cx, TS.phase === 'play' ? 'Leertaste / Klick / A: Stopp!' : TS.phase === 'stop' ? 'Weiter mit Leertaste / Klick / A' : '', W / 2, 580, '700 15px "Baloo 2", sans-serif', '#c3b2ff', 'center', 4, '#0b0610');
+  TS.btns = [];
+  if (TS.phase === 'done') {
+    cx.fillStyle = 'rgba(8,3,18,0.72)'; cx.fillRect(0, 0, W, H);
+    R(cx, W / 2 - 230, 140, 460, 300, '#1f1432', 3, 18, '#7a5ab8');
+    const rank = TS.score >= 450 ? 'Toast-Großmeister!' : TS.score >= 400 ? 'Toast-Meister!' : TS.score >= 280 ? 'Ordentlicher Toast' : 'Eher Knäckebrot';
+    txt(cx, rank, W / 2, 196, '400 34px "Titan One", sans-serif', '#ffd23a', 'center', 6, '#2a0a3a');
+    txt(cx, `${TS.score} von ${TS.rounds * 100} Punkten · ${TS.results.join(' · ')}`, W / 2, 238, '800 18px "Baloo 2", sans-serif', '#ffffff');
+    txt(cx, TS.record ? 'Neuer Rekord!' : `Rekord: ${toasterBest()}`, W / 2, 268, '800 16px "Baloo 2", sans-serif', TS.record ? '#ffe066' : '#c3b2ff');
+    if (TS.score >= 400) txt(cx, 'Erfolg: Toast-Meister', W / 2, 294, '800 15px "Baloo 2", sans-serif', '#a6ff8f');
+    TS.btns = [{ id: 'again', label: 'Nochmal', x: W / 2 - 200, y: 350, w: 180, h: 44 }, { id: 'back', label: 'Zurück zum Spiel', x: W / 2 + 20, y: 350, w: 180, h: 44 }];
+    for (const b of TS.btns) button(b, b.label, inRect(G.mouse.x, G.mouse.y, b));
+  }
+}
+function toasterClick(x, y) {
+  if (TS.phase === 'done') { const b = TS.btns.find(b => inRect(x, y, b)); if (!b) return; Sound.sfx('click'); if (b.id === 'again') startToaster(); else endToaster(); return; }
+  toasterPress();
+}
+function endToaster() { G.screen = G.state ? 'game' : 'title'; music(); }
+
 // ---------- Hauptschleife ----------
 function update(dt) {
   pollPad(dt);
@@ -2215,7 +2367,7 @@ function update(dt) {
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
-  updateEnd(dt); updateRock();
+  updateEnd(dt); updateRock(); updateToaster(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
   updateParts(dt); updateMotes(dt); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
@@ -2247,6 +2399,7 @@ function update(dt) {
 function drawScreen() {
   if (G.screen === 'title') { drawTitle(); drawTitleBark(); if (!cx.isPix) drawBloom(0.2, H); if (G.menu) drawMenu(); }
   else if (G.screen === 'end') { drawEnd(); if (!cx.isPix) drawBloom(0.22, H); }
+  else if (G.screen === 'toaster') { drawToaster(); if (!cx.isPix) drawBloom(0.2, H); }
   else if (G.screen === 'rock') { drawRock(); if (!cx.isPix) drawBloom(0.25, H); }
   else if (G.screen === 'game') { drawScene(); drawUI(); drawFly(); if (G.menu) drawMenu(); }
   else {   // Ladebildschirm: hüpfender Toast mit Tentakel-Schatten
