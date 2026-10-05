@@ -470,6 +470,7 @@ CHAR.bernard = (c, a, t) => {
   R(c, 5, -137, 9, 13, '#5aa0e6', 2, 2);
   L(c, [7.5, -139, 7.5, -133], 2, '#d33'); L(c, [11, -140, 11, -133], 2, '#223');
   R(c, -3, -165, 9, 18, skin, 3, 3);
+  if (hd(c)) E(c, 3, -160.5, 7.5, 3.6, 'rgba(150,80,50,0.38)', 0);   // Schatten unterm Kinn
   if (hd(c)) E(c, 6.5, -156.5, 2, 2.6, skin, 1.4);   // Adamsapfel
   P(c, [-9, -151, -1, -143, 2, -150], '#ffffff', 2); P(c, [2, -150, 5, -143, 12, -151], '#ffffff', 2);   // Hemdkragen
   // Eierkopf: großer Hinterkopf, schmales Kinn
@@ -521,8 +522,10 @@ CHAR.hoagie = (c, a, t) => {
   E(c, 10, -66, 15, 4.5, skin, 2);
   if (hd(c)) for (let i = 0; i <= 8; i++) { const u = i / 8; E(c, 24 + u * 12, -64 + Math.sin(u * Math.PI) * 7, 1.4, 1.1, '#d0d0dc', 0.9, u, '#6a6a7a'); }   // Portemonnaie-Kette
   P(c, [-2, -126, 14, -126, 5, -110, 16, -110, -6, -86, 1, -104, -10, -104], '#f2f2f2', 2);
+  if (hd(c)) E(c, 10, -129, 17, 5, 'rgba(0,0,0,0.3)', 0);   // Kinnschatten auf dem Shirt
   // Kopf mit Hängebacken
   shape(c, skin, [-14, -175, 32, -126], () => { c.moveTo(-12, -150); c.quadraticCurveTo(-14, -173, 7, -174); c.quadraticCurveTo(29, -174, 31, -152); c.quadraticCurveTo(32, -134, 19, -129); c.quadraticCurveTo(3, -126, -6, -133); c.quadraticCurveTo(-12, -139, -12, -150); c.closePath(); });
+  if (hd(c)) E(c, 9, -159.5, 19, 3.2, 'rgba(90,40,30,0.3)', 0);   // Schatten der Kappe auf der Stirn
   E(c, 15, -140, 15, 9, 'rgba(70,45,45,0.22)', 0);
   S(c, '#c8322e', 3, () => { c.moveTo(-15, -158); c.quadraticCurveTo(-12, -184, 10, -183); c.quadraticCurveTo(30, -182, 29, -160); c.closePath(); });
   P(c, [-13, -162, -36, -157, -34, -150, -11, -155], '#9e2420');
@@ -585,12 +588,16 @@ CHAR.laverne = (c, a, t) => {
   R(c, -2, -158, 8, 16, skin, 3, 3);
   E(c, -3, -142, 7, 3.6, '#f6f0f0', 2); E(c, 9, -142, 7, 3.6, '#f6f0f0', 2);   // Bubikragen
   for (const y of [-130, -118, -106]) E(c, 2, y, 1.7, 1.7, '#2f7a48', 1);   // Knöpfe
+  if (hd(c)) E(c, 3.5, -148.5, 5.5, 2.6, 'rgba(150,90,80,0.38)', 0);   // Halsschatten
   // Gesicht mit spitzem Kinn
   shape(c, skin, [-11, -189, 24, -146], () => { c.moveTo(-10, -170); c.quadraticCurveTo(-10, -188, 6, -189); c.quadraticCurveTo(23, -189, 23, -171); c.quadraticCurveTo(22, -157, 13, -150); c.quadraticCurveTo(7, -146, 2, -150); c.quadraticCurveTo(-9, -157, -10, -170); c.closePath(); });
+  if (hd(c)) E(c, 7, -184.5, 15, 4, 'rgba(40,20,60,0.24)', 0);   // Haarschatten auf der Stirn
   P(c, [-12, -176, -14, -196, -2, -188, 2, -208, 10, -190, 20, -204, 22, -186, 32, -190, 24, -176, 14, -182, 4, -178], hair);
   if (blinking(a, t)) { E(c, 13, -170, 5.5, 6.5, skin, 2.5); E(c, 25, -170, 5, 6.5, skin, 2.5); L(c, [8, -170, 18, -170], 2.2); L(c, [21, -170, 30, -170], 2.2); }
   else {
-    E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5); pupil(c, a, t, 15, -169, 2); pupil(c, a, t, 27, -169, 2);
+    E(c, 13, -170, 5.5, 6.5, '#fff', 2.5); E(c, 25, -170, 5, 6.5, '#fff', 2.5);
+    if (hd(c)) { E(c, 13, -174, 4.6, 2.2, 'rgba(120,100,150,0.22)', 0); E(c, 25, -174, 4.2, 2.2, 'rgba(120,100,150,0.22)', 0); }   // gewölbte Augäpfel
+    pupil(c, a, t, 15, -169, 2); pupil(c, a, t, 27, -169, 2);
     brows(c, a, t, 13, 25, -179.5, 8, '#18141d', 2.2);
     if (hd(c)) {
       E(c, 14.2, -170, 0.85, 0.85, '#fff', 0); E(c, 26.2, -170, 0.85, 0.85, '#fff', 0);

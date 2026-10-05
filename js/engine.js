@@ -38,6 +38,9 @@ const G = {
 };
 let VH = SH;   // Höhe der Fläche, auf die Szenen-Overlays gezeichnet werden (moderne Ansicht: ganzer Bildschirm)
 let SSK = 1;   // Überabtastung der Szene in der modernen Ansicht (schärfere Vergrößerung)
+let UIS = 1;   // Schrift-/Bedienskalierung: auf Touch-Geräten und kleinen Bildschirmen größer
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+const uf = px => Math.round(px * UIS);
 const OBJ = {};
 
 // ---------- kleine Helfer ----------
@@ -50,7 +53,7 @@ function has(i, c = curId()) { return inv(c).includes(i); }
 function addItem(i, c = curId(), quiet) {
   if (!inv(c).includes(i)) inv(c).push(i);
   if (quiet) return;
-  Sound.sfx('pick');
+  Sound.sfx('pick'); if (ITEM_SFX[i]) setTimeout(() => Sound.sfx(ITEM_SFX[i]), 90);
   if (c === curId() && G.screen === 'game' && !G.fast) {
     const a = me(), room = ROOMS[viewRoomId()];
     const from = a.room === room.id ? [a.x, a.y - a.h * roomScale(room, a.y) * 0.6] : [W / 2, SH / 2];
@@ -58,6 +61,7 @@ function addItem(i, c = curId(), quiet) {
     puff(from[0], from[1], '#fff1a8', 10, { vy: 80, vx: 150, r: 2.2, max: 650, spread: 12 });
   }
 }
+const ITEM_SFX = { zucker: 'sugar', kaffee: 'slosh', wasser: 'slosh', muenze: 'coin', schaufel: 'clank', eimer: 'knock', apfel: 'thunk', lapfel: 'thunk', butzen: 'thunk', brot: 'page', zelle: 'zap', toast: 'pop', sticks: 'click2', altsticks: 'click2' };
 function takeItem(i, c = curId()) { const a = inv(c), k = a.indexOf(i); if (k >= 0) a.splice(k, 1); if (G.first === 'i:' + i) G.first = null; }
 function whereItem(i) { return PLAYERS.find(p => G.state.inv[p].includes(i)) || null; }
 function viewRoomId() { return G.viewRoom || me().room; }
@@ -116,13 +120,13 @@ function drawRipples() {
 // ---------- Raum-Atmosphäre: Hall, Licht auf Figuren, Bloom, Wetter, Schwebeteilchen ----------
 // light: [Seite der Hauptlichtquelle (-1 links, 1 rechts), Führungslicht, Schattenfarbe]
 const ROOM_FX = {
-  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic'], motes: 'dust', music: 'lounge' },
-  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
+  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic', 'air'], motes: 'dust', music: 'lounge' },
+  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps', 'hum'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
   gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire', music: 'tavern' },
   garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, amb: ['future', 'rain'], motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars', storm: true, rain: true },
   vorraum: { music: 'march', verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
-  thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
+  thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain', 'palace', 'air'], motes: 'magic', storm: true, reflect: 0.22 },
 };
 function roomFx() { return (G.state && ROOM_FX[viewRoomId()]) || {}; }
 function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -311,14 +315,15 @@ const inkBuf = document.createElement('canvas'), inkG = inkBuf.getContext('2d');
 const INK_DIRS = Array.from({ length: 12 }, (_, i) => [Math.cos(i * Math.PI / 6), Math.sin(i * Math.PI / 6)]);
 // Tusche-Kontur: die Silhouette der ganzen Figur rundum versetzt in Konturfarbe hinterlegen –
 // eine durchgehende Außenlinie statt einzeln umrandeter Teile
-function inkify(src, pw, ph, rad) {
+function inkify(src, pw, ph, rad, side = 0) {
   if (inkBuf.width < pw || inkBuf.height < ph) { inkBuf.width = Math.max(inkBuf.width, pw); inkBuf.height = Math.max(inkBuf.height, ph); }
   if (rimBuf.width < pw || rimBuf.height < ph) { rimBuf.width = Math.max(rimBuf.width, pw); rimBuf.height = Math.max(rimBuf.height, ph); }
   const r = rimG; r.setTransform(1, 0, 0, 1, 0, 0); r.globalAlpha = 1; r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, ph);
   r.drawImage(src, 0, 0, pw, ph, 0, 0, pw, ph); r.globalCompositeOperation = 'source-in'; r.fillStyle = OUT; r.fillRect(0, 0, pw, ph); r.globalCompositeOperation = 'source-over';
   const g = inkG; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, pw, ph);
   const dirs = G.quality < 1 ? INK_DIRS.filter((_, i) => i % 3 === 0) : INK_DIRS;
-  for (const [dx, dy] of dirs) g.drawImage(rimBuf, 0, 0, pw, ph, dx * rad, dy * rad, pw, ph);
+  // Schattenseite und unten dicker, Lichtseite dünner – wie eine Tuschefeder
+  for (const [dx, dy] of dirs) { const w = side ? Math.max(0.55, Math.min(1.6, 1 - side * dx * 0.45 + dy * 0.2)) : 1; g.drawImage(rimBuf, 0, 0, pw, ph, dx * rad * w, dy * rad * w, pw, ph); }
   g.drawImage(src, 0, 0, pw, ph, 0, 0, pw, ph);
   return inkBuf;
 }
@@ -347,6 +352,8 @@ function drawActorLit(a, sc, lt, refl) {
   const vg = g.createLinearGradient(0, oy - a.h * k, 0, oy);
   vg.addColorStop(0, hexA(key, 0.12)); vg.addColorStop(0.3, hexA(key, 0)); vg.addColorStop(0.8, 'rgba(10,0,24,0)'); vg.addColorStop(1, 'rgba(10,0,24,0.28)');
   g.fillStyle = vg; g.fillRect(0, 0, pw, ph);
+  const floorCol = DUST[(ROOMS[a.room] || {}).floor];
+  if (floorCol) { const bg = g.createLinearGradient(0, oy - 34 * k, 0, oy); bg.addColorStop(0, hexA(floorCol, 0)); bg.addColorStop(1, hexA(floorCol, 0.26)); g.fillStyle = bg; g.fillRect(0, oy - 34 * k, pw, 34 * k); }   // Bodenreflex
   if (G.quality >= 1) {
     // Silhouette minus leicht verschobene Silhouette = die Kante, die zur Lichtquelle zeigt
     const r = rimG, d = Math.max(2, 5.5 * k);
@@ -370,7 +377,7 @@ function drawActorLit(a, sc, lt, refl) {
     g.globalCompositeOperation = 'overlay'; g.globalAlpha = 0.28; g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
   }
   g.globalCompositeOperation = 'source-over';
-  const out = inkify(actBuf, pw, ph, Math.max(1.5, 2.3 * k));
+  const out = inkify(actBuf, pw, ph, Math.max(1.5, 2.3 * k), side);
   if (refl) {
     // Spiegelbild: an der Fußlinie gespiegelt und nach unten ausgeblendet
     const r = rimG, fh = Math.ceil(fade * k);
@@ -533,10 +540,33 @@ function drawCrystal(room) {
 // Foto-Taste: aktuelles Bild als PNG speichern
 const ALBUM_KEY = 'tentakel-toast-fotos-v1', ALBUM_MAX = 12, albumImgs = [];
 function albumList() { try { return JSON.parse(localStorage.getItem(ALBUM_KEY) || '[]') || []; } catch (e) { return []; } }
-function albumAdd() {
+// Foto im Look der Epoche: Gegenwart mit Datumsstempel, 1776 in Sepia, Zukunft mit Neon und Scanlines
+function photoCanvas() {
+  const era = G.state && G.screen === 'game' ? ROOMS[viewRoomId()].era : null, w = cv.width, h = cv.height, s = w / W;
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+  if (BLOOM_OK && era === 'past') g.filter = 'sepia(0.8) contrast(1.06) brightness(1.03)';
+  else if (BLOOM_OK && era === 'future') g.filter = 'saturate(1.4) hue-rotate(-14deg) contrast(1.08)';
+  g.drawImage(cv, 0, 0); g.filter = 'none';
+  g.setTransform(s, 0, 0, s, 0, 0);
+  if (era === 'past') {
+    const vg = g.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 620); vg.addColorStop(0, 'rgba(60,30,10,0)'); vg.addColorStop(1, 'rgba(60,30,10,0.55)');
+    g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    txt(g, 'Anno 1776', W - 24, H - 22, 'italic 400 30px Georgia, serif', 'rgba(255,240,210,0.85)', 'right', 4, 'rgba(60,30,10,0.6)');
+  } else if (era === 'future') {
+    g.fillStyle = 'rgba(0,0,0,0.12)'; for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 1.5);
+    g.strokeStyle = '#7fe8ff'; g.lineWidth = 3;
+    for (const [x, y, dx, dy] of [[16, 16, 1, 1], [W - 16, 16, -1, 1], [16, H - 16, 1, -1], [W - 16, H - 16, -1, -1]]) { g.beginPath(); g.moveTo(x, y + dy * 34); g.lineTo(x, y); g.lineTo(x + dx * 34, y); g.stroke(); }
+    txt(g, '● ZUKUNFT · LIVE', W - 30, H - 24, '700 20px "Pixelify Sans", monospace', '#ff5fa8', 'right', 4, 'rgba(10,0,30,0.7)');
+  } else if (era === 'present') {
+    const d = new Date(), st = `'${String(d.getFullYear()).slice(2)} ${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}`;
+    txt(g, st, W - 28, H - 24, '700 26px "Pixelify Sans", monospace', '#ffab3a', 'right', 3, 'rgba(80,20,0,0.5)');   // Datumsstempel wie bei alten Kameras
+  }
+  return c;
+}
+function albumAdd(src) {
   try {
     const c = document.createElement('canvas'); c.width = 384; c.height = 240;
-    c.getContext('2d').drawImage(cv, 0, 0, c.width, c.height);
+    c.getContext('2d').drawImage(src || cv, 0, 0, c.width, c.height);
     const list = albumList(); list.unshift({ src: c.toDataURL('image/jpeg', 0.72), at: Date.now(), room: G.state ? viewRoomId() : G.screen });
     while (list.length > ALBUM_MAX) list.pop();
     localStorage.setItem(ALBUM_KEY, JSON.stringify(list)); albumImgs.length = 0;
@@ -545,9 +575,11 @@ function albumAdd() {
 function albumImage(i, src) { let im = albumImgs[i]; if (!im) { im = albumImgs[i] = new Image(); im.src = src; } return im; }
 function takePhoto() {
   if (!cv.toBlob) return;
-  G.photoFlash = G.t; Sound.sfx('photo');
-  albumAdd();
-  cv.toBlob(b => {
+  Sound.sfx('photo');
+  G.photoMode = true; try { render(); } finally { G.photoMode = false; }   // sauberes Bild ohne Bedienleiste und Zeiger
+  const pc = photoCanvas(); G.photoFlash = G.t;
+  albumAdd(pc);
+  pc.toBlob(b => {
     if (!b) return;
     const a = document.createElement('a'); a.href = URL.createObjectURL(b);
     a.download = `tentakel-toast-foto-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`;
@@ -581,8 +613,8 @@ function drawBark(scr) {
   const b = G.bark; if (!b || G.speech) return;
   const room = ROOMS[viewRoomId()], a = b.a; if (a.room !== room.id) return;
   const sc = roomScale(room, a.y) * (a.scaleMul || 1);
-  cx.font = '700 17px "Baloo 2", system-ui, sans-serif';
-  const lines = wrap(b.text, 300), lh = 19, maxW = Math.max(...lines.map(l => cx.measureText(l).width));
+  const bsz = uf(17); cx.font = `700 ${bsz}px "Baloo 2", system-ui, sans-serif`;
+  const lines = wrap(b.text, 300 * Math.min(UIS, 1.25)), lh = bsz + 2, maxW = Math.max(...lines.map(l => cx.measureText(l).width));
   let [ax, ay] = [a.x, a.y - a.h * sc - 10]; if (scr) [ax, ay] = scrPt(ax, ay);
   const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, ax)), y = Math.max(lines.length * lh + 4, ay);
   cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, (b.until - G.t) / 300, (G.t - b.start) / 200)) * 0.92;
@@ -616,6 +648,8 @@ function resize() {
   cv.style.width = Math.floor(W * VS) + 'px'; cv.style.height = Math.floor(H * VS) + 'px';
   cv.width = Math.round(W * VS * DPR); cv.height = Math.round(H * VS * DPR);
   for (const k in bgCache) delete bgCache[k];
+  UIS = Math.max(COARSE || G.pointer === 'touch' ? 1.25 : 1, Math.min(1.45, 0.8 / VS));
+  if (typeof layoutHud === 'function') layoutHud();
 }
 function roomScale(room, y) { const k = Math.max(0, Math.min(1, (y - room.yTop) / (room.yBot - room.yTop))); return room.sMin + (room.sMax - room.sMin) * k; }
 function inPoly(x, y, poly) {
@@ -777,6 +811,7 @@ async function switchChar(ch) {
     G.state.cur = ch; G.parts.length = 0; G.ripples.length = 0; G.sign = null; music();
     await wait(260);
     await fadeTo(0, 330, 'warp');
+    Sound.sting(ch);
     showSign(me().room);
     if (ARRIVALS[ch] && !fl()['arr_' + ch]) { fl()['arr_' + ch] = true; await ARRIVALS[ch](); }
   } finally { G.busy--; if (!G.busy) G.skipAll = false; }
@@ -1067,7 +1102,7 @@ cv.addEventListener('pointerdown', e => {
   const p = toLogical(e);
   G.mouse.x = p.x; G.mouse.y = p.y;
   if (e.pointerType === 'mouse') { G.pointer = 'mouse'; onClick(p.x, p.y, e.button === 2); return; }
-  G.pointer = 'touch';
+  if (G.pointer !== 'touch') { G.pointer = 'touch'; resize(); }
   firstInteraction();
   if (G.screen === 'rock') { onClick(p.x, p.y, false); return; }   // Rhythmus braucht den Moment des Antippens
   touch = { x: p.x, y: p.y, long: false };
@@ -1429,9 +1464,10 @@ function drawBg(room) {
   if (cx.isPix) return cx.blitRoom(room);
   const s = VS * DPR * SSK, key = room.id;
   let c = bgCache[key];
-  if (!c || c._s !== s) {
+  // neu zeichnen bei anderer Auflösung – oder wenn der Browser den Puffer verworfen hat (Speicherdruck auf Mobilgeräten)
+  if (!c || c._s !== s || (c._g.isContextLost && c._g.isContextLost())) {
     c = document.createElement('canvas'); c.width = Math.ceil(W * s); c.height = Math.ceil(SH * s); c._s = s;
-    const g = c.getContext('2d'); g.setTransform(s, 0, 0, s, 0, 0);
+    const g = c._g = c.getContext('2d'); g.setTransform(s, 0, 0, s, 0, 0);
     HDS.deco = HDS.shadow = true; HDS.scale = s;
     try { room.draw(g); } finally { HDS.deco = HDS.shadow = false; }
     finishBg(g, c, room); bgCache[key] = c;
@@ -1519,8 +1555,8 @@ function wrap(text, maxW) {
 function drawSpeech(scr) {
   const sp = G.speech; if (!sp) return;
   const room = ROOMS[viewRoomId()];
-  cx.font = '800 21px "Baloo 2", system-ui, sans-serif';
-  const lines = wrap(sp.text, 400), lh = 23;
+  const fsz = uf(21); cx.font = `800 ${fsz}px "Baloo 2", system-ui, sans-serif`;
+  const lines = wrap(sp.text, 400 * Math.min(UIS, 1.25)), lh = fsz + 2;
   let x = W / 2, y = 36 + lines.length * lh, col = '#ffffff';
   if (sp.a) {
     col = sp.a.color;
@@ -1673,10 +1709,10 @@ function drawScene() {
 // Hinweiszeile oben und Erfolgs-Toast (im Spiel und auf dem Titelbildschirm)
 function drawToasts() {
   if (G.note && G.t < G.note.until) {
-    cx.font = '700 15px "Baloo 2", sans-serif';
-    const w = cx.measureText(G.note.text).width + 30;
-    R(cx, W / 2 - w / 2, 10, w, 30, 'rgba(20,10,32,0.88)', 2, 15, '#7dff7a');
-    txt(cx, G.note.text, W / 2, 30, '700 15px "Baloo 2", sans-serif', '#d8ffd2');
+    const nz = uf(15), nf = `700 ${nz}px "Baloo 2", sans-serif`; cx.font = nf;
+    const w = Math.min(W - 20, cx.measureText(G.note.text).width + 30), nh = nz * 2;
+    R(cx, W / 2 - w / 2, 10, w, nh, 'rgba(20,10,32,0.88)', 2, nh / 2, '#7dff7a');
+    txt(cx, G.note.text, W / 2, 10 + nh * 0.68, nf, '#d8ffd2');
   }
   if (G.achToast && G.t < G.achToast.until) {
     const k = Math.min(1, (G.achToast.until - G.t) / 300, (G.t - (G.achToast.until - 4200)) / 300), x = W - 344 + (1 - k) * 60, y = 48;
@@ -1690,7 +1726,8 @@ function drawToasts() {
 }
 function button(r, label, hot, active) {
   R(cx, r.x, r.y, r.w, r.h, hot ? '#3a2758' : '#24173a', 2, 8, active ? '#ffe066' : '#4a3672');
-  txt(cx, label, r.x + r.w / 2, r.y + r.h / 2 + 5, '700 14px "Baloo 2", sans-serif', hot || active ? '#ffe066' : '#d7c6ff');
+  const bz = Math.min(uf(14), Math.round(r.h * 0.5));
+  txt(cx, label, r.x + r.w / 2, r.y + r.h / 2 + bz * 0.36, `700 ${bz}px "Baloo 2", sans-serif`, hot || active ? '#ffe066' : '#d7c6ff');
 }
 function drawUIBack() {
   if (cx.isPix) { cx.fillStyle = '#150c20'; cx.fillRect(0, SH, W, H - SH); cx.fillStyle = '#2c1c44'; cx.fillRect(0, SH, W, 2); return; }
@@ -1910,7 +1947,7 @@ function drawMenu() {
   }
 }
 function drawCursor() {
-  if (G.pointer === 'touch' || G.mouse.x < 0) return;
+  if (G.pointer === 'touch' || G.mouse.x < 0 || G.photoMode) return;
   const { x, y } = G.mouse, pad = G.pointer === 'pad';
   const inSc = G.screen === 'game' && (modernUI() ? G.inScene : y < SH);
   const hot = G.screen === 'game' ? (G.hover || (modernUI() ? (G.coin ? G.coin.items.some(b => inRect(x, y, b)) : hitHUD(x, y)) : y >= SH && hitUI(x, y))) : G.titleBtns.some(b => inRect(x, y, b));
@@ -2762,19 +2799,23 @@ function drawSceneOverlays() {
       button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
       txt(cx, 'Klick: nächste Zeile', UI.skip.x + UI.skip.w / 2, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
     }
-    if (fsAvailable) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
+    if (fsAvailable && !G.photoMode) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
   } finally { VH = SH; }
 }
 
 // Leiste: Symbol-Knöpfe oben rechts, Tasche unten links, Gesichter unten rechts, Inventar blendet sich ein
-const HUD = {
-  bag: { x: 12, y: H - 60, w: 52, h: 50 },
-  ports: PLAYERS.map((id, i) => ({ id, x: W - 122 + i * 45, y: H - 33, r: 19 })),
-  btns: [['klo', 'Klo-Post (K)'], ['reveal', 'Zeigen (Tab)'], ['hint', 'Tipp (H)'], ['menu', 'Menü (Esc)']].map(([id, tip], i) => ({ id, tip, x: W - 232 + i * 46, y: 8, w: 40, h: 32 })),
-};
+const HUD = { bag: null, ports: [], btns: [] };
+const HUD_BTNS = [['klo', 'Klo-Post (K)'], ['reveal', 'Zeigen (Tab)'], ['pixel', 'Pixel-Grafik (P)'], ['hint', 'Tipp (H)'], ['menu', 'Menü (Esc)']];
+function layoutHud() {   // auf Touch-Geräten größere Ziele
+  const s = Math.min(UIS, 1.35), bw = Math.round(40 * s), bh = Math.round(32 * s), r = Math.round(19 * s), n = HUD_BTNS.length;
+  HUD.bag = { x: 12, y: H - 10 - Math.round(50 * s), w: Math.round(52 * s), h: Math.round(50 * s) };
+  HUD.ports = PLAYERS.map((id, i) => ({ id, x: W - 12 - r - (2 - i) * (2 * r + 7), y: H - 14 - r, r }));
+  HUD.btns = HUD_BTNS.map(([id, tip], i) => ({ id, tip, x: W - 54 - (n - i) * (bw + 6), y: 8, w: bw, h: bh }));
+}
+layoutHud();
 const easeOut = k => 1 - Math.pow(1 - k, 3);
-function hudShelf() { return { x: 74, y: H - 68 + (1 - easeOut(G.hudK)) * 86, w: W - 74 - 152, h: 60 }; }
-function hudSlots() { const s = hudShelf(); return Array.from({ length: 12 }, (_, i) => ({ i, x: s.x + 8 + i * 60, y: s.y + 4, w: 56, h: 52 })); }
+function hudShelf() { const x = HUD.bag.x + HUD.bag.w + 10, right = HUD.ports[0].x - HUD.ports[0].r - 12; return { x, y: H - 68 + (1 - easeOut(G.hudK)) * 86, w: right - x, h: 60 }; }
+function hudSlots() { const s = hudShelf(), sw = Math.min(60, (s.w - 16) / 12); return Array.from({ length: 12 }, (_, i) => ({ i, x: s.x + 8 + i * sw, y: s.y + 4, w: sw - 4, h: 52 })); }
 function portPos(id) { return modernUI() ? HUD.ports.find(p => p.id === id) : UI.ports.find(p => p.id === id); }
 function flyTarget(idx) {
   if (!modernUI()) { const s = UI.inv[idx]; return [s.x + s.w / 2, s.y + s.h / 2]; }
@@ -2804,6 +2845,7 @@ function hudIcon(b, hot) {
   if (b.id === 'menu') for (const d of [-6, 0, 6]) L(cx, [x - 9, y + d, x + 9, y + d], 2.4, col);
   else if (b.id === 'hint') txt(cx, '?', x, y + 8, '400 22px "Titan One", sans-serif', col);
   else if (b.id === 'reveal') { E(cx, x, y, 11, 6.5, null, 2.2, 0, col); E(cx, x, y, 3.5, 3.5, col, 0); }
+  else if (b.id === 'pixel') { for (const [dx, dy, on] of [[-8, -8, 1], [0, -8, 0], [-8, 0, 0], [0, 0, 1]]) R(cx, x + dx, y + dy, 7, 7, on ? col : null, 1.6, 1, col); if (G.settings.retro) E(cx, x + 10, y - 9, 2.5, 2.5, '#7dff7a', 0); }
   else if (b.id === 'klo') { R(cx, x - 8, y - 10, 9, 9, null, 2, 2, col); S(cx, null, 2.2, () => { cx.moveTo(x - 10, y + 1); cx.lineTo(x + 10, y + 1); cx.quadraticCurveTo(x + 8, y + 9, x, y + 10); cx.quadraticCurveTo(x - 8, y + 9, x - 10, y + 1); }, col); }
 }
 function drawHUD() {
@@ -2814,7 +2856,7 @@ function drawHUD() {
   for (const b of HUD.btns) {
     const hot = !dim && inRect(mx, my, b);
     hudIcon(b, hot || (b.id === 'reveal' && G.t < G.reveal) || (b.id === 'klo' && G.verb === 'give' && !G.first));
-    if (hot) txt(cx, b.tip, b.x + b.w / 2, b.y + b.h + 16, '700 12px "Baloo 2", sans-serif', '#fff6d0', 'center', 4, '#0b0610');
+    if (hot) txt(cx, b.tip, Math.min(W - 60, b.x + b.w / 2), b.y + b.h + uf(16), `700 ${uf(12)}px "Baloo 2", sans-serif`, '#fff6d0', 'center', 4, '#0b0610');
   }
   // Tasche unten links mit Anzahl
   const bg = HUD.bag, bh = inRect(mx, my, bg) || G.invPin, n = inv().length;
@@ -2830,7 +2872,7 @@ function drawHUD() {
     if ((isCur || hot) && !cx.isPix) glow(p.x, p.y, 34, isCur ? '#ffe066' : '#c8b0ff', 0.35);
     drawPortrait(cx, p.id, p.x, p.y, p.r, ERA[HOME_ERA[p.id]].bg, G.t, !!(G.speech && G.speech.a && G.speech.a.id === p.id));
     E(cx, p.x, p.y, p.r, p.r, null, isCur || fla || hot ? 3 : 2, 0, fla && Math.floor(G.t / 200) % 2 ? '#7dff7a' : isCur ? '#ffe066' : hot ? '#ffffff' : mix(ERA[HOME_ERA[p.id]].col, '#241739', 0.3));
-    if (hot) txt(cx, G.first && G.first[0] === 'i' ? `An ${ACT[p.id].name} schicken` : `${ACT[p.id].name} · ${ERA[HOME_ERA[p.id]].label}`, Math.min(W - 70, p.x), p.y - 30, '800 13px "Baloo 2", sans-serif', '#fff6d0', 'center', 4, '#0b0610');
+    if (hot) txt(cx, G.first && G.first[0] === 'i' ? `An ${ACT[p.id].name} schicken` : `${ACT[p.id].name} · ${ERA[HOME_ERA[p.id]].label}`, Math.min(W - 70, p.x), p.y - p.r - 11, `800 ${uf(13)}px "Baloo 2", sans-serif`, '#fff6d0', 'center', 4, '#0b0610');
   }
   // Inventarleiste
   if (G.hudK > 0.02) {
@@ -2859,12 +2901,12 @@ function drawHUD() {
     G.dialog.opts.forEach((o, i) => {
       const yy = y0 + i * lh, on = i === hi;
       if (on) R(cx, 24, yy - lh * 0.72, W - 48, lh - 2, 'rgba(255,224,102,0.1)', 0, 10);
-      txt(cx, (on ? '›  ' : '·  ') + o.text, 44, yy, '700 20px "Baloo 2", sans-serif', on ? '#ffe066' : '#d7c6ff', 'left', 4, '#0b0610');
+      txt(cx, (on ? '›  ' : '·  ') + o.text, 44, yy, `700 ${uf(20)}px "Baloo 2", sans-serif`, on ? '#ffe066' : '#d7c6ff', 'left', 4, '#0b0610');
     });
   }
   if (G.coin) drawCoin();
 }
-function dialogLayout() { const n = G.dialog ? G.dialog.opts.length : 0, lh = 32; return { y0: H - 20 - (n - 1) * lh, lh }; }
+function dialogLayout() { const n = G.dialog ? G.dialog.opts.length : 0, lh = Math.round(32 * UIS); return { y0: H - 20 - (n - 1) * lh, lh }; }
 
 // Aktionsmenü (Rechtsklick / langes Tippen): nur die Aktionen, die bei diesem Ding etwas bewirken können
 function verbsFor(key) {
@@ -2883,11 +2925,11 @@ function verbsFor(key) {
 }
 function openCoin(x, y, key) {
   const vs = verbsFor(key); if (!vs.length) return;
-  cx.font = '800 15px "Baloo 2", sans-serif';
-  const n = vs.length, rad = n <= 2 ? 44 : 64;
+  cx.font = `800 ${uf(15)}px "Baloo 2", sans-serif`;
+  const n = vs.length, rad = (n <= 2 ? 44 : 64) * Math.min(UIS, 1.3);
   const ccx = Math.max(110, Math.min(W - 110, x)), ccy = Math.max(90, Math.min(H - 70, y));
   const items = vs.map((v, i) => {
-    const a = -Math.PI / 2 + (i / n) * Math.PI * 2, label = key[0] === 'c' && v === 'use' ? 'Streicheln' : VERB_LABEL[v], w = cx.measureText(label).width + 26, h = 30;
+    const a = -Math.PI / 2 + (i / n) * Math.PI * 2, label = key[0] === 'c' && v === 'use' ? 'Streicheln' : VERB_LABEL[v], w = cx.measureText(label).width + 26, h = Math.round(30 * Math.min(UIS, 1.3));
     return { v, label, x: ccx + Math.cos(a) * rad * 1.25 - w / 2, y: ccy + Math.sin(a) * rad - h / 2, w, h };
   });
   G.coin = { x: ccx, y: ccy, key, items, t0: G.t };
@@ -2899,12 +2941,12 @@ function drawCoin() {
   if (!cx.isPix) glow(c.x, c.y, 120, '#000000', 0);
   E(cx, c.x, c.y, 9, 9, 'rgba(14,7,26,0.86)', 2, 0, '#ffe066');
   const n = c.items.length, ny = c.y + (n === 1 ? 34 : n === 2 ? 76 : n === 3 ? 62 : 92);
-  txt(cx, nameOf(c.key), c.x, ny, '800 15px "Baloo 2", sans-serif', '#ffe066', 'center', 4, '#0b0610');
+  txt(cx, nameOf(c.key), c.x, c.y + (ny - c.y) * Math.min(UIS, 1.3), `800 ${uf(15)}px "Baloo 2", sans-serif`, '#ffe066', 'center', 4, '#0b0610');
   for (const b of c.items) {
     const hot = inRect(mx, my, b), bx = c.x + (b.x - c.x) * k, by = c.y + (b.y - c.y) * k;
     L(cx, [c.x, c.y, bx + b.w / 2, by + b.h / 2], 1.5, 'rgba(255,224,102,0.35)');
     R(cx, bx, by, b.w, b.h, hot ? '#ffe066' : 'rgba(30,18,50,0.94)', 2, 15, hot ? '#fff6d0' : 'rgba(255,224,102,0.7)');
-    txt(cx, b.label, bx + b.w / 2, by + 20, '800 15px "Baloo 2", sans-serif', hot ? '#2a0a3a' : '#fff6d0');
+    txt(cx, b.label, bx + b.w / 2, by + b.h * 0.67, `800 ${uf(15)}px "Baloo 2", sans-serif`, hot ? '#2a0a3a' : '#fff6d0');
   }
   cx.restore();
 }
@@ -2927,6 +2969,7 @@ function modernClick(x, y, right) {
     if (u.type === 'hint') { if (!G.busy) showHint(); return; }
     if (u.type === 'reveal') return toggleReveal();
     if (u.type === 'klo') return quickKlo();
+    if (u.type === 'pixel') return toggleRetro();
     if (u.type === 'bag') { G.invPin = !G.invPin; Sound.sfx('click'); return; }
     if (G.busy) return;
     if (u.type === 'inv') { const it = inv()[u.idx]; if (!it) return; if (right) { G.first = null; G.verb = null; return openCoin(x, y, 'i:' + it); } return modernItemClick(it); }
@@ -2957,9 +3000,9 @@ function drawTip(x, y, inSc) {
   else if (G.hover && (inSc || G.hover[0] === 'i')) label = nameOf(G.hover);
   if (G.hover && inSc && !G.verb && !G.first) { const v = defaultVerb(G.hover); if (v) verbBadge(x, y, v); }
   if (!label) return;
-  cx.font = '800 15px "Baloo 2", sans-serif';
+  const tz = uf(15); cx.font = `800 ${tz}px "Baloo 2", sans-serif`;
   const w = cx.measureText(label).width, tx = Math.max(w / 2 + 8, Math.min(W - w / 2 - 8, x)), ty = Math.max(24, y - 22);
-  txt(cx, label, tx, ty, '800 15px "Baloo 2", sans-serif', G.first ? '#ffffff' : '#ffe066', 'center', 4, '#0b0610');
+  txt(cx, label, tx, ty, `800 ${tz}px "Baloo 2", sans-serif`, G.first ? '#ffffff' : '#ffe066', 'center', 4, '#0b0610');
 }
 function navTargetsModern() {
   if (G.coin) return G.coin.items.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
@@ -3053,7 +3096,7 @@ function fireLight(a) {
 // unscharfe dunkle Silhouetten am Bildrand bewegen sich beim Kameraschwenk schneller als die Szene – Tiefe
 // x im Vordergrund-Raum: nur sichtbar, wenn die Kamera an den jeweiligen Raumrand fährt
 const FG_PROPS = {
-  lobby: [['plant', -14], ['lamp', 982]], labor: [['crates', -18], ['pipe', 990]], gasthaus: [['chair', -10], ['barrel', 984]],
+  lobby: [['plant', -14], ['lamp', 982]], labor: [['flask', -16], ['pipe', 990]], gasthaus: [['chair', -10], ['barrel', 984]],
   garten1776: [['post', 986]], fgarten: [['alien', 988]], vorraum: [['curtain', -30], ['curtain', 990, -1]], thron: [['curtain', -30], ['curtain', 990, -1]],
 };
 const FG_PAR = 1.38, fgCache = {};
@@ -3064,8 +3107,9 @@ function fgShape(c, kind) {
     for (const [x, y, rx, ry, r] of [[-30, -78, 30, 9, -0.9], [26, -84, 32, 9, 0.8], [-6, -112, 10, 34, 0.15], [-40, -104, 26, 8, -1.2], [36, -110, 28, 8, 1.1], [8, -90, 30, 9, 0.4]]) F(() => c.ellipse(x, y, rx, ry, r, 0, Math.PI * 2));
   } else if (kind === 'lamp') {
     F(() => c.rect(-3, -150, 6, 150)); F(() => { c.moveTo(-26, -150); c.lineTo(-16, -190); c.lineTo(16, -190); c.lineTo(26, -150); c.closePath(); }); F(() => c.ellipse(0, -2, 24, 6, 0, 0, Math.PI * 2));
-  } else if (kind === 'crates') {
-    F(() => c.rect(-40, -60, 80, 60)); F(() => c.rect(-26, -108, 60, 48));
+  } else if (kind === 'flask') {   // Rundkolben auf Stativ
+    F(() => c.rect(-44, -8, 88, 8)); F(() => c.rect(30, -190, 6, 190)); F(() => c.rect(-6, -150, 40, 5));
+    F(() => c.ellipse(-4, -68, 38, 40, 0, 0, Math.PI * 2)); F(() => c.rect(-12, -150, 16, 50)); F(() => c.ellipse(-4, -152, 12, 4, 0, 0, Math.PI * 2));
   } else if (kind === 'pipe') {
     F(() => c.rect(-9, -440, 18, 440)); F(() => c.ellipse(0, -120, 22, 22, 0, 0, Math.PI * 2)); F(() => c.rect(-60, -76, 60, 14));
   } else if (kind === 'chair') {
@@ -3161,7 +3205,7 @@ function drawScreen() {
   else if (G.screen === 'end') { drawEnd(); if (!cx.isPix) drawBloom(0.22, H); }
   else if (G.screen === 'toaster') { drawToaster(); if (!cx.isPix) drawBloom(0.2, H); }
   else if (G.screen === 'rock') { drawRock(); if (!cx.isPix) drawBloom(0.25, H); }
-  else if (G.screen === 'game') { if (modernUI()) { drawSceneModern(); drawHUD(); } else { drawScene(); drawUI(); } drawFly(); if (G.menu) drawMenu(); }
+  else if (G.screen === 'game') { if (modernUI()) { drawSceneModern(); if (!G.photoMode) drawHUD(); } else { drawScene(); drawUI(); } if (!G.photoMode) drawFly(); if (G.menu) drawMenu(); }
   else {   // Ladebildschirm: hüpfender Toast mit Tentakel-Schatten
     cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#0c0420'], [1, '#2a0f4a']]); cx.fillRect(0, 0, W, H);
     const t = G.t, y = H / 2 - 20 - Math.abs(Math.sin(t * 0.006)) * 26, sq = 1 + Math.max(0, Math.cos(t * 0.012)) * 0.06;

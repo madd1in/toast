@@ -305,6 +305,8 @@ const Sound = (() => {
     drip: t => { osc('sine', 1400 + Math.random() * 700, t, 0.09, 0.03, ambBus, { f2: 500, decay: true }); return 1.5 + Math.random() * 3.5; },
     owl: t => { if (Math.random() < 0.65) { osc('sine', 392, t, 0.42, 0.026, ambBus, { f2: 345, attack: 0.06 }); osc('sine', 370, t + 0.62, 0.2, 0.018, ambBus, { f2: 335, attack: 0.04 }); osc('sine', 380, t + 0.9, 0.55, 0.022, ambBus, { f2: 322, attack: 0.07 }); } return 9 + Math.random() * 13; },
     snore: t => { nz(t, 1.3, 0.045, ambBus, { type: 'bandpass', f: 300, f2: 520, q: 2, attack: 0.6 }); osc('sawtooth', 62, t + 1.45, 1.1, 0.028, ambBus, { f2: 48, lp: 380, q: 4, vib: 9, attack: 0.15 }); return 4.2 + Math.random() * 1.2; },
+    hum: t => { osc('sine', 60, t, 4.2, 0.016, ambBus, { attack: 0.8, release: 0.8 }); osc('sine', 120, t, 4.2, 0.008, ambBus, { attack: 0.8, release: 0.8 }); if (Math.random() < 0.25) nz(t + Math.random() * 2, 0.6, 0.01, ambBus, { type: 'highpass', f: 6000 }); return 3.4; },   // Laborbrummen
+    air: t => { nz(t, 4.4, 0.018, ambBus, { type: 'lowpass', f: 380, attack: 1.4, release: 1.4 }); return 3.6; },   // leise Lüftung / Raumton
     wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt
@@ -447,6 +449,11 @@ const Sound = (() => {
     cluck: t => { [0, 0.11, 0.2, 0.46].forEach((d, i) => osc('square', i === 3 ? 520 : 780, t + d, i === 3 ? 0.2 : 0.06, 0.035, sfxBus, { f2: i === 3 ? 950 : 560, lp: 2400, decay: true })); },
     botbeep: t => { [1320, 1760, 1175, 1568].forEach((f, i) => osc('square', f, t + i * 0.075, 0.06, 0.03, sfxBus, { decay: true })); },
     shelf: t => nz(t, 0.22, 0.035, sfxBus, { type: 'bandpass', f: 900, f2: 2400, q: 1.5, attack: 0.06 }),
+    sugar: t => { for (let i = 0; i < 7; i++) nz(t + i * 0.035 + Math.random() * 0.02, 0.018, 0.06, sfxBus, { type: 'highpass', f: 5000 + Math.random() * 3000 }); },
+    slosh: t => { nz(t, 0.35, 0.12, sfxBus, { type: 'bandpass', f: 600, f2: 1400, q: 2.5, attack: 0.05 }); nz(t + 0.18, 0.25, 0.08, sfxBus, { type: 'bandpass', f: 1200, f2: 500, q: 2.5 }); },
+    clank: t => { osc('square', 620, t, 0.18, 0.04, sfxBus, { f2: 590, lp: 3200, decay: true }); osc('triangle', 1870, t, 0.35, 0.03, sfxBus, { decay: true }); nz(t, 0.03, 0.12, sfxBus, { type: 'highpass', f: 3000 }); },
+    knock: t => { [0, 0.09].forEach(d => { nz(t + d, 0.05, 0.18, sfxBus, { type: 'bandpass', f: 420, q: 3 }); osc('sine', 190, t + d, 0.08, 0.08, sfxBus, { f2: 140, decay: true }); }); },
+    thunk: t => { osc('sine', 260, t, 0.12, 0.1, sfxBus, { f2: 150, decay: true }); nz(t, 0.04, 0.08, sfxBus, { type: 'lowpass', f: 900 }); },
     sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },
   };
   const listeners = [];
@@ -504,6 +511,8 @@ const Sound = (() => {
   const STING = {
     drfred: ['bell', 'C5:0.25 E5:0.25 G5:0.25 C6:0.5'], green: ['arp', 'E4:0.25 G4:0.25 B4:0.5'], gertrude: ['harp', 'G4:0.5 B4:0.5 D5:1'],
     hancock: ['clar', 'D4:0.5 G4:0.5 B4:1'], wache: ['tuba', 'G2:0.5 D2:1'], lila: ['organ', 'C4+Eb4:0.5 B3+D4:1'],
+    // Erkennungsmotive der drei Helden beim Figurenwechsel
+    bernard: ['epiano', 'C5:0.25 E5:0.25 G5:0.25 B5:0.25 C6:0.5'], hoagie: ['guitar', 'E3:0.25 E3:0.25 G3:0.25 A3:0.75'], laverne: ['bell', 'A4:0.25 C5:0.25 E5:0.25 G#5:0.75'],
   };
   function sting(id) {
     const s = STING[id]; if (!ac || !s) return;
