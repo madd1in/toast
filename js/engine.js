@@ -21,6 +21,7 @@ const ERA = {
 };
 const HOME_ERA = { bernard: 'present', hoagie: 'past', laverne: 'future' };
 const SAVE_KEY = 'tentakel-toast-save-v1', SET_KEY = 'tentakel-toast-settings-v1', ACH_KEY = 'tentakel-toast-erfolge-v1';
+const SLOT_KEY = 'tentakel-toast-platz-', SLOTS = 3;
 
 const G = {
   t: 0, last: 0, state: null, screen: 'loading',
@@ -30,6 +31,8 @@ const G = {
   mouse: { x: W / 2, y: SH / 2 }, pointer: 'mouse', flash: {}, fast: false, skipAll: false,
   settings: { music: true, voice: false, babble: true, fullscreen: true, retro: false }, titleBtns: [], menuBtns: [], saved: null,
   reveal: 0, fly: [], shake: { until: 0, mag: 0 }, ach: {}, achToast: null, nextBlip: 0, fsTried: false,
+  parts: [], ripples: [], quality: 1, fpsAvg: 16.7, fpsGate: 0,
+  motes: [], moteKind: null, storm: null, neon: null, bark: null, barkNext: 0, idleSince: 0, lastClick: null,
 };
 const OBJ = {};
 
@@ -69,6 +72,220 @@ function nameOf(key) {
 function isVisible(o) { return !o.visible || o.visible(); }
 function hotspotCenter(o) { const [x, y, w, h] = o.rect; return [x + w / 2, y + Math.min(h / 2, 90)]; }
 
+// ---------- Partikel & Klick-Ringe ----------
+const DUST = { wood: '#b08752', tile: '#a8b4cc', grass: '#8fd06a', marble: '#e2d4f4', carpet: '#9a8878' };
+function puff(x, y, col, n = 3, o = {}) {
+  if (G.quality < 1) n = Math.ceil(n / 2);
+  for (let i = 0; i < n && G.parts.length < 90; i++) G.parts.push({
+    x: x + (Math.random() - 0.5) * (o.spread || 16), y: y - Math.random() * 3,
+    vx: (Math.random() - 0.5) * (o.vx || 26), vy: -(o.vy || 12) - Math.random() * 14,
+    r: (o.r || 2.6) * (0.6 + Math.random() * 0.8), life: 0, max: (o.max || 480) * (0.7 + Math.random() * 0.6), col,
+  });
+}
+function updateParts(dt) {
+  for (let i = G.parts.length - 1; i >= 0; i--) {
+    const p = G.parts[i];
+    if ((p.life += dt) >= p.max) { G.parts.splice(i, 1); continue; }
+    p.x += p.vx * dt / 1000; p.vy += 60 * dt / 1000; p.y += p.vy * dt / 1000;
+    if (p.y > SH + 8) G.parts.splice(i, 1);
+  }
+}
+function drawParts() {
+  for (const p of G.parts) {
+    const k = 1 - p.life / p.max;
+    cx.globalAlpha = k * 0.65;
+    E(cx, p.x, p.y, p.r * (0.6 + 0.4 * k), p.r * 0.7 * (0.6 + 0.4 * k), p.col, 0);
+  }
+  cx.globalAlpha = 1;
+}
+function drawRipples() {
+  for (const r of G.ripples) {
+    const k = (G.t - r.t) / 430; if (k >= 1) continue;
+    cx.globalAlpha = (1 - k) * 0.8;
+    E(cx, r.x, r.y, 7 + k * 24, 3 + k * 9, null, 2.5, 0, '#ffe9a0');
+  }
+  cx.globalAlpha = 1;
+}
+
+// ---------- Raum-Atmosphäre: Hall, Licht auf Figuren, Bloom, Wetter, Schwebeteilchen ----------
+// light: [Seite der Hauptlichtquelle (-1 links, 1 rechts), Führungslicht, Schattenfarbe]
+const ROOM_FX = {
+  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, motes: 'dust' },
+  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, motes: 'dust', flicker: 'neon' },
+  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, motes: 'warm', flicker: 'fire' },
+  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind'], motes: 'leaf' },
+  fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, motes: 'firefly' },
+  vorraum: { verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain'], motes: 'magic', storm: true },
+  thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain'], motes: 'magic', storm: true },
+};
+function roomFx() { return (G.state && ROOM_FX[viewRoomId()]) || {}; }
+function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+function panX(x) { return Math.max(-0.8, Math.min(0.8, (x / W) * 2 - 1)); }
+function panOf(a) { return a && G.state && a.room === viewRoomId() ? panX(a.x) : null; }
+
+const MOTES = {
+  dust: { n: 22, make: m => Object.assign(m, { x: Math.random() * W, y: 20 + Math.random() * SH * 0.8, vx: (Math.random() - 0.5) * 7, vy: (Math.random() - 0.5) * 4, r: 0.9 + Math.random() * 1.3, col: '#fff2d6' }) },
+  warm: { n: 20, make: m => Object.assign(m, { x: Math.random() * W, y: 40 + Math.random() * SH * 0.8, vx: (Math.random() - 0.5) * 6, vy: -3 - Math.random() * 5, r: 0.9 + Math.random() * 1.4, col: '#ffd59a' }) },
+  magic: { n: 18, make: m => Object.assign(m, { x: Math.random() * W, y: SH * (0.4 + Math.random() * 0.6), vx: (Math.random() - 0.5) * 8, vy: -8 - Math.random() * 14, r: 1 + Math.random() * 1.6, col: Math.random() < 0.5 ? '#e6a8ff' : '#ffd6ff', glow: 1 }) },
+  firefly: { n: 16, make: m => Object.assign(m, { x: Math.random() * W, y: SH * (0.35 + Math.random() * 0.55), vx: 0, vy: 0, r: 1.6, col: '#e8ff8a', glow: 1 }) },
+  leaf: { n: 12, make: (m, init) => Object.assign(m, { x: init ? Math.random() * W : Math.random() * W - 160, y: init ? Math.random() * SH : -12, vx: 20, vy: 22 + Math.random() * 16, r: 4 + Math.random() * 2.5, rot: Math.random() * 6.3, spin: (Math.random() - 0.5) * 4, col: pick(['#e0782e', '#c8501e', '#e8b040', '#a8401a']) }) },
+};
+function updateMotes(dt) {
+  const kind = G.screen === 'game' ? roomFx().motes : null, def = MOTES[kind];
+  if (G.moteKind !== kind) {
+    G.motes = []; G.moteKind = kind;
+    if (def) for (let i = 0; i < def.n; i++) G.motes.push(def.make({ life: Math.random() * 6000, max: 5000 + Math.random() * 6000, seed: Math.random() * 100 }, true));
+  }
+  if (!def) return;
+  const s = dt / 1000, p = me();
+  for (const m of G.motes) {
+    m.life += dt;
+    if (kind === 'firefly') {
+      // ziellos herumschwirren und der Spielfigur ausweichen
+      m.vx += (Math.sin(G.t * 0.0013 + m.seed) * 30 - m.vx) * s; m.vy += (Math.cos(G.t * 0.0017 + m.seed * 1.3) * 18 - m.vy) * s;
+      if (p.room === viewRoomId()) { const dx = m.x - p.x, dy = m.y - (p.y - 70), d = Math.hypot(dx, dy) || 1; if (d < 95) { m.vx += dx / d * 240 * s; m.vy += dy / d * 240 * s; } }
+    } else if (kind === 'leaf') { m.rot += m.spin * s; m.vx = 18 + Math.sin(G.t * 0.0009 + m.seed) * 26; }
+    else m.vx += (Math.random() - 0.5) * 4 * s;
+    m.x += m.vx * s; m.y += m.vy * s;
+    const out = m.x < -40 || m.x > W + 40 || m.y < -40 || m.y > SH + 20;
+    if (out || (kind !== 'leaf' && m.life > m.max)) { m.life = 0; m.max = 5000 + Math.random() * 6000; def.make(m, false); }
+  }
+}
+function drawMotes() {
+  const kind = G.moteKind; if (!MOTES[kind]) return;
+  for (const m of G.motes) {
+    if (kind === 'leaf') {
+      cx.save(); cx.translate(m.x, m.y); cx.rotate(m.rot); cx.scale(1, 0.45 + 0.55 * Math.abs(Math.sin(m.rot * 1.7)));
+      E(cx, 0, 0, m.r, m.r * 0.5, m.col, 1.2, 0, 'rgba(40,16,8,0.7)'); L(cx, [-m.r, 0, m.r, 0], 1, 'rgba(60,24,8,0.6)');
+      cx.restore(); continue;
+    }
+    let a = Math.sin(Math.PI * Math.min(1, m.life / m.max));
+    if (kind === 'firefly') a *= 0.55 + 0.45 * Math.sin(G.t * 0.006 + m.seed * 7);
+    if (a <= 0.02) continue;
+    if (m.glow) {
+      const rr = m.r * 7, g = cx.createRadialGradient(m.x, m.y, 0, m.x, m.y, rr);
+      g.addColorStop(0, hexA(m.col, 0.5 * a)); g.addColorStop(1, hexA(m.col, 0));
+      cx.globalCompositeOperation = 'lighter'; cx.fillStyle = g; cx.fillRect(m.x - rr, m.y - rr, rr * 2, rr * 2); cx.globalCompositeOperation = 'source-over';
+    }
+    cx.globalAlpha = a * (m.glow ? 1 : 0.55); E(cx, m.x, m.y, m.r, m.r, m.col, 0); cx.globalAlpha = 1;
+  }
+}
+
+// Gewitter über Lilas Palast, flackernde Laborröhren, Kaminfeuer im Gasthaus
+function updateWeather() {
+  const fx = G.screen === 'game' ? roomFx() : {};
+  if (fx.storm && !G.menu) {
+    const st = G.storm || (G.storm = { next: G.t + 5000 + Math.random() * 7000, flash: -1e9, thunder: 0 });
+    if (G.t >= st.next) { st.flash = G.t; st.thunder = G.t + 500 + Math.random() * 1400; st.next = G.t + 16000 + Math.random() * 22000; }
+    if (st.thunder && G.t >= st.thunder) { st.thunder = 0; Sound.sfx('thunder', (Math.random() - 0.5) * 1.2); rumble(500, 0.3, 0.2); }
+  } else G.storm = null;
+  if (fx.flicker === 'neon') {
+    const ne = G.neon || (G.neon = { next: G.t + 8000 + Math.random() * 10000, start: -1e9 });
+    if (G.t >= ne.next) { ne.start = G.t; ne.next = G.t + 14000 + Math.random() * 20000; }
+  } else G.neon = null;
+}
+function drawLightFx(hd) {
+  const fx = roomFx();
+  if (hd && fx.flicker === 'fire') {
+    const n = Math.sin(G.t * 0.013) * 0.5 + Math.sin(G.t * 0.031 + 1) * 0.3 + Math.sin(G.t * 0.071 + 2) * 0.2;
+    cx.save(); cx.globalCompositeOperation = 'soft-light'; cx.globalAlpha = 0.1 + n * 0.06; cx.fillStyle = '#ff9a40'; cx.fillRect(0, 0, W, SH); cx.restore();
+  }
+  if (G.neon) {
+    const k = G.t - G.neon.start;
+    if ((k > 0 && k < 60) || (k > 130 && k < 180) || (k > 280 && k < 330)) { cx.fillStyle = 'rgba(0,10,20,0.38)'; cx.fillRect(0, 0, W, SH); }
+  }
+  if (G.storm) {
+    const k = G.t - G.storm.flash;
+    const a = k < 0 ? 0 : k < 70 ? 0.5 : k < 140 ? 0.08 : k < 230 ? 0.36 : k < 900 ? 0.36 * (1 - (k - 230) / 670) : 0;
+    if (a > 0) {
+      cx.save(); if (hd) cx.globalCompositeOperation = 'screen';
+      cx.fillStyle = `rgba(214,226,255,${(hd ? a : a * 0.6).toFixed(3)})`; cx.fillRect(0, 0, W, SH); cx.restore();
+    }
+  }
+}
+
+// Bloom: helle Stellen der fertigen Szene verkleinert, weichgezeichnet und per "screen" wieder darüber
+const bloomC = document.createElement('canvas'), bloomG = bloomC.getContext('2d');
+bloomC.width = 240; bloomC.height = 110;
+const BLOOM_OK = typeof CanvasRenderingContext2D !== 'undefined' && 'filter' in CanvasRenderingContext2D.prototype;
+function drawBloom(alpha, h = SH) {
+  if (!BLOOM_OK || !alpha || G.quality < 1) return;
+  const bw = bloomC.width, bh = Math.round(bw * h / W);
+  if (bloomC.height !== bh) bloomC.height = bh;
+  bloomG.globalCompositeOperation = 'copy';
+  bloomG.filter = 'brightness(0.7) contrast(3) saturate(1.3) blur(3px)';
+  bloomG.drawImage(cv, 0, 0, cv.width, Math.round(cv.height * h / H), 0, 0, bw, bh);
+  bloomG.filter = 'none';
+  cx.save(); cx.globalCompositeOperation = 'screen'; cx.globalAlpha = alpha; cx.drawImage(bloomC, 0, 0, W, h); cx.restore();
+}
+
+// Figuren im HD-Modus: erst in einen Puffer zeichnen, dann Licht-/Schattenseite, Bodenschatten und Randlicht auftragen
+const actBuf = document.createElement('canvas'), actG = actBuf.getContext('2d');
+const rimBuf = document.createElement('canvas'), rimG = rimBuf.getContext('2d');
+function drawActorLit(a, sc, lt) {
+  const bs = Math.min(VS * DPR, G.quality < 1 ? 1.5 : 3), k = sc * bs, top = a.h + 90, bot = 30;
+  const pw = Math.ceil(270 * k), ph = Math.ceil((top + bot) * k);
+  if (actBuf.width < pw || actBuf.height < ph) { actBuf.width = rimBuf.width = Math.max(actBuf.width, pw); actBuf.height = rimBuf.height = Math.max(actBuf.height, ph); }
+  const g = actG, ox = pw / 2, oy = top * k, [side, key, fill] = lt;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, pw, ph);
+  g.setTransform(k * (a.dir < 0 ? -1 : 1), 0, 0, k, ox, oy);
+  CHAR[a.kind](g, a, G.t);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  const half = (a.bw || 50) * 1.4 * k, hg = g.createLinearGradient(ox + side * half, 0, ox - side * half, 0);
+  hg.addColorStop(0, hexA(key, 0.26)); hg.addColorStop(0.42, hexA(key, 0)); hg.addColorStop(0.58, hexA(fill, 0)); hg.addColorStop(1, hexA(fill, 0.42));
+  g.fillStyle = hg; g.fillRect(0, 0, pw, ph);
+  const vg = g.createLinearGradient(0, oy - a.h * k, 0, oy);
+  vg.addColorStop(0, hexA(key, 0.12)); vg.addColorStop(0.3, hexA(key, 0)); vg.addColorStop(0.8, 'rgba(10,0,24,0)'); vg.addColorStop(1, 'rgba(10,0,24,0.28)');
+  g.fillStyle = vg; g.fillRect(0, 0, pw, ph);
+  if (G.quality >= 1) {
+    // Silhouette minus leicht verschobene Silhouette = die Kante, die zur Lichtquelle zeigt
+    const r = rimG, d = Math.max(2, 5.5 * k);
+    r.setTransform(1, 0, 0, 1, 0, 0); r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, ph);
+    r.drawImage(actBuf, 0, 0, pw, ph, 0, 0, pw, ph);
+    r.globalCompositeOperation = 'source-in'; r.fillStyle = key; r.fillRect(0, 0, pw, ph);
+    r.globalCompositeOperation = 'destination-out'; r.drawImage(actBuf, 0, 0, pw, ph, -side * d, d * 0.7, pw, ph);
+    g.globalAlpha = 0.42; g.drawImage(rimBuf, 0, 0, pw, ph, 0, 0, pw, ph); g.globalAlpha = 1;
+  }
+  g.globalCompositeOperation = 'source-over';
+  cx.drawImage(actBuf, 0, 0, pw, ph, a.x - ox / bs, a.y - oy / bs, pw / bs, ph / bs);
+}
+
+// ---------- Nebenbei-Sprüche: NPCs murmeln vor sich hin, gelangweilte Spielfiguren melden sich ----------
+function startBark(id, text) {
+  const a = ACT[id];
+  G.bark = { a, text, start: G.t, until: G.t + Math.max(2200, 1000 + text.length * 55), babbleEnd: G.t + Math.min(1800, text.length * 40) };
+  a.talking = true;
+}
+function endBark() { const b = G.bark; if (!b) return; G.bark = null; if (!G.speech || G.speech.a !== b.a) b.a.talking = false; }
+function updateBarks() {
+  if (G.screen !== 'game' || !G.state || G.fast) { endBark(); return; }
+  const b = G.bark;
+  if (b && (G.t >= b.until || G.speech || G.busy || G.dialog || b.a.room !== viewRoomId())) endBark();
+  else if (b && G.settings.babble && !Voice.on && G.t < b.babbleEnd && G.t >= G.nextBlip) { Sound.blip(b.a.voice, panOf(b.a)); G.nextBlip = G.t + 90 + Math.random() * 70; }
+  if (G.mouse.x !== G.lastMx || G.mouse.y !== G.lastMy || G.busy || G.speech || G.dialog || G.menu) { G.lastMx = G.mouse.x; G.lastMy = G.mouse.y; G.idleSince = G.t; }
+  const calm = !G.busy && !G.speech && !G.dialog && !G.menu && !G.inIntro && G.fade === 0 && !G.bark && !me().walking;
+  if (!calm) { G.barkNext = Math.max(G.barkNext, G.t + 5000); return; }
+  const p = me();
+  if (G.t - G.idleSince > 40000 && p.visible && IDLE[p.id]) { G.idleSince = G.t; startBark(p.id, pick(IDLE[p.id])); return; }
+  if (G.t < G.barkNext) return;
+  G.barkNext = G.t + 11000 + Math.random() * 9000;
+  const npcs = NPCS.filter(id => ACT[id].room === viewRoomId() && ACT[id].visible && BARKS[id]);
+  if (npcs.length) { const id = pick(npcs); startBark(id, pick(BARKS[id])); }
+}
+function drawBark() {
+  const b = G.bark; if (!b || G.speech) return;
+  const room = ROOMS[viewRoomId()], a = b.a; if (a.room !== room.id) return;
+  const sc = roomScale(room, a.y) * (a.scaleMul || 1);
+  cx.font = '700 17px "Baloo 2", system-ui, sans-serif';
+  const lines = wrap(b.text, 300), lh = 19, maxW = Math.max(...lines.map(l => cx.measureText(l).width));
+  const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, a.x)), y = Math.max(lines.length * lh + 4, a.y - a.h * sc - 10);
+  cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, (b.until - G.t) / 300, (G.t - b.start) / 200)) * 0.92;
+  cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round';
+  lines.forEach((l, i) => { const ly = y - (lines.length - 1 - i) * lh; cx.lineWidth = 4; cx.strokeStyle = '#0b0610'; cx.strokeText(l, x, ly); cx.fillStyle = a.color; cx.fillText(l, x, ly); });
+  cx.restore();
+}
+
 // ---------- Vollbild ----------
 const fsAvailable = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
 function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
@@ -90,7 +307,7 @@ const bgCache = {};
 function resize() {
   const vw = window.innerWidth, vh = window.innerHeight;
   VS = Math.max(0.2, Math.min(vw / W, vh / H));
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  DPR = Math.min(window.devicePixelRatio || 1, G.quality < 1 ? 1.3 : 2);
   cv.style.width = Math.floor(W * VS) + 'px'; cv.style.height = Math.floor(H * VS) + 'px';
   cv.width = Math.round(W * VS * DPR); cv.height = Math.round(H * VS * DPR);
   for (const k in bgCache) delete bgCache[k];
@@ -123,6 +340,7 @@ function walkTo(a, x, y, noClamp) {
   if (typeof a === 'string') a = ACT[a];
   if (!noClamp) [x, y] = clampWalk(ROOMS[a.room], x, y);
   if (a._res) { const r = a._res; a._res = null; r(false); }
+  a.run = false;
   if (G.fast || G.skipAll) { if (Math.abs(x - a.x) > 1) a.dir = x > a.x ? 1 : -1; a.x = x; a.y = y; a.target = null; a.walking = false; return Promise.resolve(true); }
   if (Math.hypot(x - a.x, y - a.y) < 2) { a.target = null; a.walking = false; return Promise.resolve(true); }
   return new Promise(res => { a.target = [x, y]; a._res = res; });
@@ -133,16 +351,19 @@ function updateActors(dt) {
     if (!a.target) continue;
     const room = ROOMS[a.room]; const sc = room ? roomScale(room, a.y) : 1;
     const [tx, ty] = a.target, dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
-    const sp = (a.speed || 170) * sc * dt / 1000;
+    const sp = (a.speed || 170) * (a.run ? 2.6 : 1) * sc * dt / 1000;
     if (Math.abs(dx) > 2) a.dir = dx > 0 ? 1 : -1;
     if (d <= sp) {
-      a.x = tx; a.y = ty; a.target = null; a.walking = false;
+      a.x = tx; a.y = ty; a.target = null; a.walking = false; a.run = false;
       const r = a._res; a._res = null; if (r) r(true);
     } else {
       a.x += dx / d * sp; a.y += dy / d * sp; a.walking = true;
       const before = Math.floor((a.phase || 0) / Math.PI);
-      a.phase = (a.phase || 0) + dt * 0.011;
-      if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) Sound.step(room.floor);
+      a.phase = (a.phase || 0) + dt * (a.run ? 0.02 : 0.011);
+      if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
+        Sound.step(room.floor, panX(a.x));
+        puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
+      }
     }
   }
 }
@@ -197,18 +418,18 @@ function irisAt(a) { const room = ROOMS[a.room]; G.irisX = a.x; G.irisY = a.y - 
 
 // ---------- Räume, Figuren, Zeitreise-Post ----------
 function music() {
-  if (G.screen === 'title') { Sound.ambience([]); return Sound.play('title'); }
-  if (G.screen === 'end') { Sound.ambience([]); return Sound.play('ending'); }
-  const r = ROOMS[viewRoomId()];
+  if (G.screen === 'title' || G.screen === 'end') { Sound.ambience([]); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
+  const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
   Sound.play(r.theme || ERA[r.era].theme);
-  Sound.ambience(r.amb || []);
+  Sound.ambience([...(r.amb || []), ...(fx.amb || [])]);
+  if (fx.verb) Sound.setReverb(fx.verb[0], fx.verb[1]);
 }
 async function goRoom(id, roomId, x, y, dir = 1) {
   const a = ACT[id], view = id === curId();
   if (view) { irisAt(a); await fadeTo(1, 280, 'iris'); }
   a.room = roomId; a.x = x; a.y = y; a.dir = dir; a.target = null; a.walking = false;
   if (view) {
-    G.first = null; music(); irisAt(a); await fadeTo(0, 320, 'iris');
+    G.first = null; G.parts.length = 0; G.ripples.length = 0; music(); irisAt(a); await fadeTo(0, 320, 'iris');
     const r = ROOMS[roomId]; if (r.onEnter) await r.onEnter();
   }
 }
@@ -222,7 +443,7 @@ async function switchChar(ch) {
     G.warpLabel = `${ACT[ch].name} · ${ERA[HOME_ERA[ch]].label}`; G.warpCol = ERA[HOME_ERA[ch]].col;
     Sound.sfx('warp');
     await fadeTo(1, 330, 'warp');
-    G.state.cur = ch; music();
+    G.state.cur = ch; G.parts.length = 0; G.ripples.length = 0; music();
     await wait(260);
     await fadeTo(0, 330, 'warp');
     if (ARRIVALS[ch] && !fl()['arr_' + ch]) { fl()['arr_' + ch] = true; await ARRIVALS[ch](); }
@@ -233,20 +454,49 @@ function cycleChar(d) { const i = PLAYERS.indexOf(curId()); switchChar(PLAYERS[(
 async function sendItem(item, to) {
   const from = curId();
   if (to === from) return say(from, 'Das hab ich doch schon.');
-  const room = ROOMS[me().room];
-  if (!room.klo) return say(from, KLO_NEEDED[from]);
   const it = ITEMS[item];
   if (it.nosend) return say(from, it.nosend);
+  // Klo-Schnellversand: ohne Klo im Raum geht's kurz zum Klo der eigenen Zeit und danach zurück
+  let room = ROOMS[me().room], back = null;
+  if (!room.klo) {
+    const kr = kloRoomOf(from); if (!kr) return say(from, KLO_NEEDED[from]);
+    const a = me(), kw = OBJ[kr.klo].walk; back = [a.room, a.x, a.y, a.dir];
+    await goRoom(from, kr.id, kw[0], kw[1], OBJ[kr.klo].face || a.dir);
+    room = kr;
+  }
   const k = OBJ[room.klo];
   await walkTo(me(), k.walk[0], k.walk[1]);
-  Sound.sfx('flush'); G.kloAnim = { obj: room.klo, t: G.t }; shake(700, 2.5);
+  Sound.sfx('flush', panX(me().x)); G.kloAnim = { obj: room.klo, t: G.t }; shake(700, 2.5);
   takeItem(item, from); addItem(item, to, true);
   G.flash[to] = G.t;
   G.state.stats.sent++; unlock('post');
   await wait(1000);
+  Sound.sfx('sparkle');
   note(`${it.name} ist bei ${ACT[to].name} (${ERA[HOME_ERA[to]].label}) angekommen.`);
   const hook = SEND_LINES[item];
   await say(from, hook ? hook(to) : pick([`Ab durch die Zeit, ${ACT[to].name}!`, 'Gute Reise!', `Post für ${ACT[to].name}! Per Klo-Express.`]));
+  if (back) await goRoom(from, ...back);
+}
+function kloRoomOf(c) { return Object.values(ROOMS).find(r => r.klo && r.era === HOME_ERA[c]); }
+// Taste K / Klo-Knopf / Stick-Klick: ausgewählten Gegenstand verschicken oder Auswahl starten
+async function quickKlo() {
+  if (G.screen !== 'game' || G.busy || G.dialog || G.menu || G.inIntro) return;
+  const sel = G.first && G.first[0] === 'i' ? G.first.slice(2) : null;
+  if (!sel) {
+    if (!inv().some(i => !ITEMS[i].nosend)) { note('Klo-Post: Nichts zum Verschicken dabei.'); return; }
+    G.verb = 'give'; G.first = null; Sound.sfx('click');
+    note('Klo-Post: Gegenstand wählen, dann ein Gesicht unten rechts');
+    return;
+  }
+  const others = PLAYERS.filter(c => c !== curId());
+  G.first = null; G.verb = null;
+  G.busy++;
+  try {
+    const to = await choose([...others.map(o => ({ id: o, text: `${ITEMS[sel].name} an ${ACT[o].name} schicken (${ERA[HOME_ERA[o]].label})` })), { id: 'no', text: 'Lieber doch nicht.' }]);
+    if (to !== 'no') await sendItem(sel, to);
+  } catch (e) { console.error(e); }
+  finally { G.busy--; if (!G.busy) G.skipAll = false; }
+  save();
 }
 async function useWithKlo(item) {
   const others = PLAYERS.filter(c => c !== curId());
@@ -348,7 +598,7 @@ const UI = {
   verbs: VERBS.map((v, i) => ({ id: v[0], label: v[1], x: 12 + (i % 3) * 102, y: 474 + Math.floor(i / 3) * 41, w: 100, h: 39 })),
   inv: Array.from({ length: 12 }, (_, i) => ({ i, x: 328 + (i % 6) * 74, y: 474 + Math.floor(i / 6) * 61, w: 70, h: 57 })),
   ports: PLAYERS.map((id, i) => ({ id, x: 814 + i * 54, y: 508, r: 23 })),
-  pixel: { x: 650, y: 445, w: 66, h: 22 }, reveal: { x: 722, y: 445, w: 76, h: 22 }, hint: { x: 804, y: 445, w: 62, h: 22 }, menu: { x: 872, y: 445, w: 78, h: 22 },
+  klo: { x: 562, y: 445, w: 82, h: 22 }, pixel: { x: 650, y: 445, w: 66, h: 22 }, reveal: { x: 722, y: 445, w: 76, h: 22 }, hint: { x: 804, y: 445, w: 62, h: 22 }, menu: { x: 872, y: 445, w: 78, h: 22 },
   skip: { x: W - 240, y: 10, w: 184, h: 30 }, fs: { x: W - 46, y: 8, w: 38, h: 32 },
 };
 const inRect = (x, y, r, pad = 0) => x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
@@ -357,6 +607,7 @@ function hitUI(x, y) {
   if (inRect(x, y, UI.hint)) return { type: 'hint' };
   if (inRect(x, y, UI.reveal)) return { type: 'reveal' };
   if (inRect(x, y, UI.pixel)) return { type: 'pixel' };
+  if (inRect(x, y, UI.klo)) return { type: 'klo' };
   for (const v of UI.verbs) if (inRect(x, y, v)) return { type: 'verb', id: v.id };
   for (const s of UI.inv) if (inRect(x, y, s)) return { type: 'inv', idx: s.i };
   for (const p of UI.ports) if (Math.hypot(x - p.x, y - p.y) <= p.r + 6 || (Math.abs(x - p.x) < 27 && y > p.y && y < p.y + 62)) return { type: 'port', id: p.id };
@@ -385,6 +636,7 @@ function dialogHit(x, y) {
 // ---------- Klick-Logik ----------
 function sceneClick(x, y, right) {
   const h = hitScene(x, y);
+  G.ripples.push({ x, y, t: G.t });
   if (right) { if (h) { const dv = defaultVerb(h); G.verb = null; G.first = null; runSentence(dv || 'look', h); } return; }
   if (!h) { G.first = null; G.verb = null; ++actToken; walkTo(me(), x, y); return; }
   if (G.first) { const v = G.verb, a = G.first; G.first = null; G.verb = null; return runSentence(v, a, h); }
@@ -422,12 +674,26 @@ function onClick(x, y, right) {
   if (u && u.type === 'hint') { if (!G.busy) showHint(); return; }
   if (u && u.type === 'reveal') { toggleReveal(); return; }
   if (u && u.type === 'pixel') { toggleRetro(); return; }
+  if (u && u.type === 'klo') { quickKlo(); return; }
   if (G.busy) return;
-  if (y < SH) return sceneClick(x, y, right);
+  if (y < SH) {
+    // Doppelklick/-tipp: rennen, Ausgänge sofort benutzen
+    const lc = G.lastClick, dbl = !right && lc && G.t - lc.t < 380 && Math.hypot(x - lc.x, y - lc.y) < 30;
+    G.lastClick = dbl ? null : { x, y, t: G.t };
+    sceneClick(x, y, right);
+    if (dbl) quickArrive(x, y);
+    return;
+  }
   if (!u) return;
   if (u.type === 'verb') { G.verb = u.id; G.first = null; Sound.sfx('click'); return; }
   if (u.type === 'inv') { const it = inv()[u.idx]; if (it) itemClick(it, right); return; }
   if (u.type === 'port') return portraitClick(u.id);
+}
+function quickArrive(x, y) {
+  const a = me(); if (!a.target) return;
+  const h = hitScene(x, y), o = h && h[0] === 'o' ? OBJ[h.slice(2)] : null;
+  if (o && o.exit) { a.x = a.target[0]; a.y = a.target[1]; return; }
+  a.run = true; puff(a.x, a.y, DUST[ROOMS[a.room].floor] || '#b0a8a0', 4, { vy: 14, r: 3, spread: 22 });
 }
 function onBack() {
   if (G.menu) { G.menu = G.menu === 'main' ? null : 'main'; return; }
@@ -476,8 +742,8 @@ window.addEventListener('keydown', e => {
   if (k === 'f' || k === 'F') { toggleFullscreen(); return; }
   if (k === 'F1' || k === 'p' || k === 'P') { e.preventDefault(); toggleRetro(); return; }
   if (k.startsWith('Arrow')) { e.preventDefault(); G.pointer = 'pad'; snapNav(k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0, k === 'ArrowUp' ? -1 : k === 'ArrowDown' ? 1 : 0); return; }
-  if (k === 'Enter') { e.preventDefault(); if (G.pointer === 'pad') onClick(G.mouse.x, G.mouse.y, false); else if (G.screen === 'title') titleDefault(); else if (G.speech) skipSpeech(); return; }
-  if (G.screen === 'title') { if (k === ' ') titleDefault(); return; }
+  if (k === 'Enter') { e.preventDefault(); if (G.pointer === 'pad') onClick(G.mouse.x, G.mouse.y, false); else if (G.screen === 'title') { if (!G.menu) titleDefault(); } else if (G.speech) skipSpeech(); return; }
+  if (G.screen === 'title') { if (k === 'Escape' && G.menu) G.menu = null; else if (k === ' ' && !G.menu) titleDefault(); return; }
   if (G.screen !== 'game') return;
   if (k === 'Escape') {
     if (G.menu) { G.menu = null; return; }
@@ -489,6 +755,7 @@ window.addEventListener('keydown', e => {
   if (k === 'Tab') { e.preventDefault(); toggleReveal(); return; }
   if (G.busy || G.dialog || G.menu) return;
   if (k === 'h' || k === 'H') return showHint();
+  if (k === 'k' || k === 'K') return quickKlo();
   const map = { 1: 'bernard', 2: 'hoagie', 3: 'laverne' };
   if (map[k]) return portraitClick(map[k]);
   const v = VERB_KEYS[k.toLowerCase()]; if (v) { G.verb = v; G.first = null; }
@@ -515,9 +782,9 @@ function rumble(ms, strong, weak) {
 const RUMBLE = { flush: [450, 0.6, 0.4], pop: [160, 0.5, 0.3], coin: [70, 0, 0.5], hearts: [380, 0.2, 0.5], zap: [200, 0.6, 0.2], dig: [260, 0.7, 0.2], bad: [220, 0.8, 0.1], run: [300, 0.3, 0.3], solve: [200, 0.2, 0.5], achieve: [180, 0.2, 0.6], warp: [300, 0.3, 0.6], riff: [600, 0.7, 0.7], door: [90, 0.4, 0] };
 Sound.onSfx(n => { const r = RUMBLE[n]; if (r) rumble(...r); });
 function navTargets() {
+  if (G.menu) return G.menuBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
   if (G.screen === 'title') return G.titleBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
   if (G.screen === 'end') return G.endBtn ? [[G.endBtn.x + G.endBtn.w / 2, G.endBtn.y + G.endBtn.h / 2]] : [];
-  if (G.menu) return G.menuBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
   if (G.dialog) return G.dialog.opts.map((o, i) => [60, 484 + i * 24]);
   if (G.screen !== 'game') return [];
   const T = [], room = ROOMS[viewRoomId()];
@@ -564,10 +831,13 @@ function pollPad(dt) {
     else if (now[i] && G.t > (PAD.hold[i] || Infinity)) { snapNav(dx, dy); PAD.hold[i] = G.t + 140; }
   });
   if (G.screen === 'title') {
-    if (down(0)) { const b = G.titleBtns.find(b => inRect(G.mouse.x, G.mouse.y, b)); if (b) titleClick(G.mouse.x, G.mouse.y); else snapNav(0, 1); }
-    if (down(9)) titleDefault();
+    if (G.menu) { if (down(0)) onClick(G.mouse.x, G.mouse.y, false); if (down(1) || down(9)) G.menu = null; }
+    else {
+      if (down(0)) { const b = G.titleBtns.find(b => inRect(G.mouse.x, G.mouse.y, b)); if (b) titleClick(G.mouse.x, G.mouse.y); else snapNav(0, 1); }
+      if (down(9)) titleDefault();
+    }
   } else if (G.screen === 'end') {
-    if (down(0) || down(9)) { G.saved = null; G.screen = 'title'; music(); }
+    if (down(0) || down(9)) { G.saved = null; G.hasSaves = anySave(); G.screen = 'title'; music(); }
   } else if (G.screen === 'game') {
     if (down(0)) onClick(G.mouse.x, G.mouse.y, false);
     if (down(2)) onClick(G.mouse.x, G.mouse.y, true);
@@ -579,7 +849,8 @@ function pollPad(dt) {
       const ids = [null, ...VERBS.map(v => v[0])], i = ids.indexOf(G.verb);
       G.verb = ids[(i + (down(7) ? 1 : -1) + ids.length) % ids.length]; G.first = null; Sound.sfx('tick');
     }
-    if (down(8) || down(10)) toggleReveal();
+    if (down(8)) toggleReveal();
+    if (down(10)) quickKlo();
     if (down(9)) { if (G.menu) G.menu = null; else if (!G.busy && !G.dialog) openMenu(); }
   }
   PAD.prev = now;
@@ -588,19 +859,32 @@ function pollPad(dt) {
 // ---------- Menü ----------
 function openMenu() { G.menu = 'main'; if (G.pointer === 'pad') { G.mouse.x = W / 2; G.mouse.y = 0; snapNav(0, 1); } }
 function menuItems() {
+  const back = { id: G.screen === 'game' ? 'main' : 'close', label: 'Zurück' };
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
-  if (G.menu === 'help' || G.menu === 'ach') return [{ id: 'main', label: 'Zurück' }];
-  return [
-    { id: 'close', label: 'Weiterspielen' },
+  if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
+  if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
+  if (G.menu === 'load') {
+    const auto = loadSave();
+    return [{ id: 'auto', label: 'Autosave: ' + slotLabel(auto), off: !auto }, ...slotItems('load'), { id: 'import', label: 'Aus Datei importieren' }, back];
+  }
+  if (G.menu === 'settings') return [
     { id: 'music', label: 'Musik: ' + (G.settings.music ? 'an' : 'aus') },
     { id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') },
     { id: 'babble', label: 'Plapperstimmen: ' + (G.settings.babble ? 'an' : 'aus') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
     fsAvailable && { id: 'fs', label: 'Vollbild: ' + (isFullscreen() ? 'an' : 'aus') },
+    back,
+  ].filter(Boolean);
+  return [
+    { id: 'close', label: 'Weiterspielen' },
+    { id: 'notes', label: 'Notizbuch' },
+    { id: 'save', label: 'Spiel speichern' },
+    { id: 'load', label: 'Spiel laden' },
+    { id: 'settings', label: 'Einstellungen' },
     { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` },
     { id: 'help', label: 'Steuerung & Hilfe' },
     { id: 'new', label: 'Neues Spiel' },
-  ].filter(Boolean);
+  ];
 }
 function menuClick(x, y) {
   const b = G.menuBtns.find(b => inRect(x, y, b)); if (!b) return;
@@ -611,7 +895,12 @@ function menuClick(x, y) {
   else if (b.id === 'babble') { G.settings.babble = !G.settings.babble; saveSettings(); }
   else if (b.id === 'retro') toggleRetro();
   else if (b.id === 'fs') { G.settings.fullscreen = !isFullscreen(); saveSettings(); toggleFullscreen(); }
-  else if (b.id === 'help' || b.id === 'ach' || b.id === 'main') G.menu = b.id;
+  else if (/^save\d$/.test(b.id)) saveSlot(+b.id.slice(4));
+  else if (/^load\d$/.test(b.id)) { if (!b.off) loadFrom(readSlot(+b.id.slice(4))); }
+  else if (b.id === 'auto') { if (!b.off) loadFrom(loadSave()); }
+  else if (b.id === 'export') exportSave();
+  else if (b.id === 'import') importSave();
+  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings'].includes(b.id)) G.menu = b.id;
   else if (b.id === 'new') G.menu = 'confirm';
   else if (b.id === 'yes') { G.menu = null; startNew(); }
 }
@@ -630,11 +919,54 @@ function save() {
     G.state.progress = p;
     if (!G.fast) { Sound.sfx('solve'); note(`Rätsel gelöst! Fortschritt: ${p} von ${MILESTONES.length}`); }
   }
-  try {
-    const s = G.state; s.actors = {};
-    for (const a of Object.values(ACT)) s.actors[a.id] = { room: a.room, x: Math.round(a.x), y: Math.round(a.y), dir: a.dir, visible: a.visible };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-  } catch (e) { /* Speicher nicht verfügbar – Spiel läuft trotzdem */ }
+  try { localStorage.setItem(SAVE_KEY, snapshot()); } catch (e) { /* Speicher nicht verfügbar – Spiel läuft trotzdem */ }
+}
+function snapshot() {
+  const s = G.state; s.actors = {};
+  for (const a of Object.values(ACT)) s.actors[a.id] = { room: a.room, x: Math.round(a.x), y: Math.round(a.y), dir: a.dir, visible: a.visible };
+  s.savedAt = Date.now();
+  return JSON.stringify(s);
+}
+function readSlot(n) { try { const raw = localStorage.getItem(SLOT_KEY + n); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+function anySave() { if (loadSave()) return true; for (let i = 1; i <= SLOTS; i++) if (readSlot(i)) return true; return false; }
+function slotLabel(s) {
+  if (!s) return 'leer';
+  const d = s.savedAt ? new Date(s.savedAt) : null;
+  const when = d ? d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' · ' : '';
+  return `${when}${ACT[s.cur] ? ACT[s.cur].name : '?'} · ${s.progress || 0}/${MILESTONES.length}`;
+}
+function slotItems(mode) {
+  return Array.from({ length: SLOTS }, (_, i) => { const s = readSlot(i + 1); return { id: mode + (i + 1), label: `Platz ${i + 1}: ${slotLabel(s)}`, off: mode === 'load' && !s }; });
+}
+function saveSlot(n) {
+  if (G.screen !== 'game' || !G.state) return;
+  if (G.busy) { note('Speichern geht erst nach der laufenden Szene.'); return; }
+  try { localStorage.setItem(SLOT_KEY + n, snapshot()); G.menu = null; Sound.sfx('pick'); note(`Spiel auf Platz ${n} gespeichert.`); }
+  catch (e) { note('Speichern nicht möglich – der Browser blockiert den Speicher.'); }
+}
+function loadFrom(s) {
+  if (G.busy) { note('Laden geht erst nach der laufenden Szene.'); return; }
+  if (!s || !s.flags || !s.inv || !ACT[s.cur]) { note('Dieser Spielstand ist leer oder beschädigt.'); return; }
+  G.menu = null; Sound.sfx('warp');
+  continueGame(s); save();
+  note(`Spielstand geladen: ${ACT[s.cur].name}, ${s.progress || 0} von ${MILESTONES.length} Rätseln.`);
+}
+function exportSave() {
+  if (!G.state || G.busy) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([snapshot()], { type: 'application/json' }));
+  a.download = `tentakel-toast-spielstand-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  note('Spielstand als Datei exportiert.');
+}
+function importSave() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    f.text().then(t => { let s = null; try { s = JSON.parse(t); } catch (e) { /* keine gültige Datei */ } loadFrom(s); });
+  };
+  inp.click();
 }
 function loadSave() { try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
 function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ok */ } }
@@ -653,6 +985,7 @@ function applyActors(map) {
 // ---------- Spielstart ----------
 function resetWorld() {
   G.verb = null; G.first = null; G.speech = null; G.dialog = null; G.caption = null; G.viewRoom = null; G.inIntro = false;
+  endBark(); G.barkNext = G.t + 8000; G.idleSince = G.t; G.lastClick = null;
   G.kloAnim = null; G.treeGrowT = 0; G.machineShake = 0; G.toastPop = 0; G.leverT = 0; G.flash = {}; G.note = null; G.fly = []; G.reveal = 0;
   for (const a of Object.values(ACT)) { a.nice = 0; a.talking = false; a.walking = false; a.target = null; a._res = null; a.speed = a.baseSpeed; }
 }
@@ -694,9 +1027,12 @@ function drawBg(room) {
   cx.drawImage(c, 0, 0, W, SH);
 }
 function drawActor(a, room) {
-  const sc = roomScale(room, a.y) * (a.scaleMul || 1);
+  const sc = roomScale(room, a.y) * (a.scaleMul || 1), lt = !cx.isPix && (ROOM_FX[room.id] || {}).light, sx = lt ? -lt[0] * 7 * sc : 0;
   cx.save(); cx.translate(a.x, a.y);
-  cx.fillStyle = 'rgba(0,0,0,0.25)'; cx.beginPath(); cx.ellipse(0, 2, 32 * sc * (a.shadowW || 1), 7 * sc, 0, 0, Math.PI * 2); cx.fill();
+  // zweiteiliger Schatten: weicher Saum + dunklerer Kontaktkern, im HD-Modus von der Lichtquelle weg verschoben
+  cx.fillStyle = 'rgba(0,0,0,0.16)'; cx.beginPath(); cx.ellipse(sx, 2, 34 * sc * (a.shadowW || 1), 8 * sc, 0, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.beginPath(); cx.ellipse(sx * 0.4, 2, 21 * sc * (a.shadowW || 1), 4.8 * sc, 0, 0, Math.PI * 2); cx.fill();
+  if (lt) { cx.restore(); drawActorLit(a, sc, lt); return; }
   cx.scale(sc * (a.dir < 0 ? -1 : 1), sc);
   CHAR[a.kind](cx, a, G.t);
   cx.restore();
@@ -731,6 +1067,20 @@ function drawVignette() {
   const g = cx.createRadialGradient(W / 2, SH * 0.55, 260, W / 2, SH * 0.55, 640);
   g.addColorStop(0, 'rgba(10,4,20,0)'); g.addColorStop(1, 'rgba(10,4,20,0.42)');
   cx.fillStyle = g; cx.fillRect(0, 0, W, SH);
+}
+// Farbstimmung pro Raum (nur HD-Modus): kühles Labor, warmes 1776, violette Zukunft
+const GRADE = {
+  lobby: ['#5a8ad0', 0.18], labor: ['#26b8b8', 0.14], gasthaus: ['#c8873a', 0.2],
+  garten1776: ['#ffcf80', 0.13], fgarten: ['#e050b0', 0.1], vorraum: ['#b08ad8', 0.14], thron: ['#a060e0', 0.14],
+};
+function drawGrade() {
+  const g = GRADE[viewRoomId()]; if (!g) return;
+  cx.save();
+  cx.globalCompositeOperation = 'soft-light';
+  cx.globalAlpha = g[1];
+  cx.fillStyle = g[0];
+  cx.fillRect(0, 0, W, SH);
+  cx.restore();
 }
 function drawReveal(room) {
   if (G.t > G.reveal) return;
@@ -787,10 +1137,14 @@ function drawScene() {
   const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible).sort((p, q) => p.y - q.y);
   for (const a of acts) drawActor(a, room);
   for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t);
+  if (!cx.isPix) drawMotes();
+  drawParts(); drawRipples();
   cx.restore();
-  if (!cx.isPix) drawVignette();
+  drawLightFx(!cx.isPix);
+  if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
   drawReveal(room);
   drawTransition();
+  drawBark();
   drawSpeech();
   if (G.caption) {
     cx.font = '400 26px "Titan One", sans-serif';
@@ -805,7 +1159,7 @@ function drawScene() {
     txt(cx, G.note.text, W / 2, 30, '700 15px "Baloo 2", sans-serif', '#d8ffd2');
   }
   if (G.achToast && G.t < G.achToast.until) {
-    const k = Math.min(1, (G.achToast.until - G.t) / 300, (G.t - (G.achToast.until - 4200)) / 300), x = W - 344, y = 48;
+    const k = Math.min(1, (G.achToast.until - G.t) / 300, (G.t - (G.achToast.until - 4200)) / 300), x = W - 344 + (1 - k) * 60, y = 48;
     cx.save(); cx.globalAlpha = Math.max(0, k);
     R(cx, x, y, 332, 60, 'rgba(24,14,40,0.94)', 2.5, 12, '#ffd23a');
     trophy(cx, x + 30, y + 30, 1.2);
@@ -829,6 +1183,7 @@ function drawUI() {
   cx.fillStyle = '#2c1c44'; cx.fillRect(0, SH, W, 2);
   const mx = G.mouse.x, my = G.mouse.y;
   txt(cx, G.busy || G.dialog ? '' : sentence(), 366, 462, '600 19px "Baloo 2", sans-serif', '#d7c6ff');
+  button(UI.klo, 'Klo-Post', inRect(mx, my, UI.klo), G.verb === 'give' && !G.first);
   button(UI.pixel, G.settings.retro ? 'HD' : 'Pixel', inRect(mx, my, UI.pixel), G.settings.retro);
   button(UI.reveal, 'Zeigen', inRect(mx, my, UI.reveal), G.t < G.reveal);
   button(UI.hint, 'Tipp', inRect(mx, my, UI.hint));
@@ -858,7 +1213,7 @@ function drawUI() {
   for (const p of UI.ports) {
     const isCur = p.id === curId(), fla = G.flash[p.id] && G.t - G.flash[p.id] < 2000;
     drawPortrait(cx, p.id, p.x, p.y, p.r, ERA[HOME_ERA[p.id]].bg);
-    const ring = fla && Math.floor(G.t / 200) % 2 ? '#7dff7a' : isCur ? '#ffe066' : '#4a3a6a';
+    const ring = fla && Math.floor(G.t / 200) % 2 ? '#7dff7a' : isCur ? '#ffe066' : mix(ERA[HOME_ERA[p.id]].col, '#241739', 0.35);
     E(cx, p.x, p.y, p.r, p.r, null, isCur || fla ? 3.5 : 2.5, 0, ring);
     txt(cx, ACT[p.id].name, p.x, p.y + 42, '800 13px "Baloo 2", sans-serif', isCur ? '#ffe066' : '#c3b2ff');
     txt(cx, ERA[HOME_ERA[p.id]].label, p.x, p.y + 58, '600 10px "Baloo 2", sans-serif', '#8a7aa8');
@@ -873,21 +1228,40 @@ function drawFly() {
     cx.save(); cx.translate(x, y); cx.scale(1.6 - 0.6 * e, 1.6 - 0.6 * e); cx.rotate(Math.sin(k * Math.PI * 2) * 0.3); ICON[f.id](cx); cx.restore();
   }
 }
+const HELP = [
+  'Maus: Verb anklicken, dann Gegenstand oder Person', 'Rechtsklick: Standard-Aktion · ohne Verb: hinlaufen',
+  'Doppelklick/-tipp: rennen · Ausgänge sofort benutzen', 'Touch: tippen · lange drücken = Standard-Aktion',
+  'Controller: Stick = Zeiger · Steuerkreuz = von Ziel zu Ziel', 'A Aktion · X Standard · B Zurück · Y Tipp · RS Pixel-Grafik',
+  'LB/RB Figur wechseln · LT/RT Verb wählen · LS Klo-Post', 'Ansicht/Tab/Leertaste: Hotspots · F Vollbild · F1/P Pixel-Grafik',
+  'Tastatur: Pfeile springen · Enter Aktion · 1–3 Figur · K Klo-Post', 'G Gib · N Nimm · B Benutze · S Schau an · R Rede mit',
+  'Klo-Post: Gegenstand wählen → Gesicht unten rechts (geht überall)',
+];
 function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
-  const extra = G.menu === 'help' ? 10 * 23 + 10 : G.menu === 'ach' ? ACH.length * 31 + 10 : G.menu === 'confirm' ? 24 : 0;
-  const bw = G.menu === 'help' || G.menu === 'ach' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
+  const extra = G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 31 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const bw = G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
-  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}` }[G.menu] || 'Pause';
+  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
   let y = by + 74;
   if (G.menu === 'main' && G.state) { txt(cx, `Fortschritt: ${progress()} von ${MILESTONES.length} Rätseln`, W / 2, y - 2, '600 13px "Baloo 2", sans-serif', '#a99ad0'); y += 10; }
   if (G.menu === 'confirm') { txt(cx, 'Der aktuelle Spielstand geht dabei verloren.', W / 2, y + 6, '600 15px "Baloo 2", sans-serif', '#c3b2ff'); y += 24; }
   if (G.menu === 'help') {
-    ['Maus: Verb anklicken, dann Gegenstand oder Person', 'Rechtsklick: Standard-Aktion · ohne Verb: hinlaufen', 'Touch: tippen · lange drücken = Standard-Aktion', 'Controller: Stick = Zeiger · Steuerkreuz = von Ziel zu Ziel', 'A Aktion · X Standard · B Zurück · Y Tipp · RS Pixel-Grafik', 'LB/RB Figur wechseln · LT/RT Verb wählen', 'Ansicht/Tab/Leertaste: Hotspots · F Vollbild · F1/P Pixel-Grafik', 'Tastatur: Pfeile springen · Enter Aktion · 1–3 Figur', 'G Gib · N Nimm · B Benutze · S Schau an · R Rede mit', 'Am Chrono-Klo: Gib → Gegenstand → Gesicht unten rechts']
-      .forEach((l, i) => txt(cx, l, W / 2, y + 12 + i * 23, '600 15px "Baloo 2", sans-serif', '#e6dcff'));
-    y += 10 * 23 + 10;
+    HELP.forEach((l, i) => txt(cx, l, W / 2, y + 12 + i * 23, '600 15px "Baloo 2", sans-serif', '#e6dcff'));
+    y += HELP.length * 23 + 10;
+  }
+  if (G.menu === 'notes' && G.state) {
+    NOTES.forEach(([m, text], i) => {
+      const done = milestoneDone(m), yy = y + 16 + i * 28;
+      if (done) L(cx, [bx + 40, yy - 5, bx + 46, yy + 1, bx + 58, yy - 11], 3, '#7dff7a'); else E(cx, bx + 49, yy - 5, 6, 6, null, 2, 0, '#6a5a88');
+      txt(cx, done ? text : '???', bx + 72, yy, '600 15px "Baloo 2", sans-serif', done ? '#e6dcff' : '#6a5a88', 'left');
+    });
+    y += NOTES.length * 28 + 8;
+    const st = G.state.stats;
+    txt(cx, `Spielzeit ${fmtTime(st.ms)} · Zeitreise-Sendungen: ${st.sent}`, W / 2, y + 10, '700 14px "Baloo 2", sans-serif', '#ffd23a');
+    txt(cx, 'Feststecken? Der Tipp-Knopf verrät den nächsten Schritt.', W / 2, y + 30, '600 13px "Baloo 2", sans-serif', '#a99ad0');
+    y += 42;
   }
   if (G.menu === 'ach') {
     ACH.forEach((a, i) => {
@@ -898,8 +1272,9 @@ function drawMenu() {
     });
     y += ACH.length * 31 + 10;
   }
-  G.menuBtns = items.map((it, i) => ({ id: it.id, x: W / 2 - 150, y: y + 6 + i * 46, w: 300, h: 38 }));
-  G.menuBtns.forEach((b, i) => button(b, items[i].label, inRect(G.mouse.x, G.mouse.y, b)));
+  const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
+  G.menuBtns = items.map((it, i) => ({ id: it.id, off: it.off, x: W / 2 - btnW / 2, y: y + 6 + i * 46, w: btnW, h: 38 }));
+  G.menuBtns.forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
 }
 function drawCursor() {
   if (G.pointer === 'touch' || G.mouse.x < 0) return;
@@ -938,8 +1313,23 @@ function drawTitle() {
   const t = G.t;
   cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#0f0622'], [0.55, '#3a1458'], [1, '#7a2f6a']]); cx.fillRect(0, 0, W, H);
   for (let i = 0; i < 70; i++) { const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.001 + i)); E(cx, (i * 173) % W, (i * 89) % 380, 1.4, 1.4, `rgba(255,255,255,${a})`, 0); }
+  for (let i = 0; i < 8; i++) {   // ein paar größere Funkelsterne
+    const x = 40 + (i * 389 + 70) % (W - 80), y = 26 + (i * 127) % 320, tw = Math.sin(t * 0.0035 + i * 2.1);
+    if (tw < 0.25) continue;
+    cx.globalAlpha = Math.min(1, tw * 1.3); L(cx, [x - 5, y, x + 5, y], 1.5, '#ffffff'); L(cx, [x, y - 5, x, y + 5], 1.5, '#ffffff'); E(cx, x, y, 1.4, 1.4, '#ffffff', 0); cx.globalAlpha = 1;
+  }
+  const mg = cx.createRadialGradient(800, 150, 30, 800, 150, 150);
+  mg.addColorStop(0, 'rgba(255,236,190,0.3)'); mg.addColorStop(1, 'rgba(255,236,190,0)');
+  cx.fillStyle = mg; cx.fillRect(650, 0, 300, 300);
   E(cx, 800, 150, 70, 70, '#ffe9b0', 4, 0, '#c8a060'); E(cx, 780, 130, 12, 9, '#f2d898', 0); E(cx, 826, 172, 9, 7, '#f2d898', 0);
   cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore();
+  // Vordergrund-Hügel, damit das Haus im Gras sitzt
+  S(cx, grad(cx, 0, 480, 0, H, [[0, '#244a30'], [1, '#0e2416']]), 0, () => { cx.moveTo(-4, 566); cx.quadraticCurveTo(260, 522, 500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
+  S(cx, 'rgba(8,16,10,0.55)', 0, () => { cx.moveTo(-4, 596); cx.quadraticCurveTo(300, 566, 620, 588); cx.quadraticCurveTo(820, 600, 964, 580); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
+  for (let i = 0; i < 26; i++) {   // Grasbüschel
+    const gx = (i * 167 + 30) % W, gy = 562 + ((i * 71) % 36);
+    L(cx, [gx - 4, gy, gx - 6, gy - 8], 2, '#3f7a48'); L(cx, [gx, gy, gx, gy - 11], 2, '#4a8a52'); L(cx, [gx + 4, gy, gx + 6, gy - 8], 2, '#3f7a48');
+  }
   const ta = { talking: false, walking: false, phase: 0, seed: 0 };
   cx.save(); cx.translate(500, 600); cx.scale(1.25, 1.25); CHAR.purple(cx, ta, t); cx.restore();
   cx.save(); cx.translate(40, 600); cx.scale(-1.05, 1.05); CHAR.green(cx, { ...ta, seed: 2 }, t); cx.restore();
@@ -956,24 +1346,31 @@ function drawTitle() {
   const bx = 596, bw = 300, btns = [];
   if (G.saved) btns.push({ id: 'cont', label: 'Weiterspielen', big: true });
   btns.push({ id: 'new', label: G.saved ? 'Neues Spiel' : 'Spiel starten', big: !G.saved });
+  if (G.hasSaves) btns.push({ id: 'load', label: 'Spielstand laden' });
   btns.push({ id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') });
   btns.push({ id: 'music', label: 'Musik: ' + (G.settings.music ? 'an' : 'aus') });
   btns.push({ id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') });
   if (fsAvailable) btns.push({ id: 'fs', label: 'Vollbild beim Start: ' + (G.settings.fullscreen ? 'an' : 'aus') });
-  let y = G.saved ? 236 : 262;
+  let y = (G.saved ? 236 : 262) - (G.hasSaves ? 22 : 0);
   G.titleBtns = btns.map(b => { const r = { ...b, x: bx, y, w: bw, h: b.big ? 50 : 34 }; y += r.h + 10; return r; });
   for (const b of G.titleBtns) {
     const hot = inRect(G.mouse.x, G.mouse.y, b);
+    b.hs = (b.hs || 1) + ((hot ? 1.045 : 1) - (b.hs || 1)) * 0.25;
+    cx.save(); cx.translate(b.x + b.w / 2, b.y + b.h / 2); cx.scale(b.hs, b.hs); cx.translate(-b.x - b.w / 2, -b.y - b.h / 2);
+    if (hot) R(cx, b.x - 2, b.y - 2, b.w + 4, b.h + 4, 'rgba(255,224,102,0.16)', 0, 14);
     R(cx, b.x, b.y, b.w, b.h, b.big ? (hot ? '#ffe066' : '#ffd23a') : (hot ? '#3a2758' : 'rgba(30,18,52,0.85)'), 3, 12, b.big ? OUT : (hot ? '#ffe066' : '#6a52a0'));
     txt(cx, b.label, b.x + b.w / 2, b.y + b.h / 2 + (b.big ? 8 : 6), b.big ? '400 22px "Titan One", sans-serif' : '700 16px "Baloo 2", sans-serif', b.big ? '#2a0a3a' : (hot ? '#ffe066' : '#e6dcff'));
+    cx.restore();
   }
   txt(cx, 'Spielbar mit Maus, Touch, Tastatur oder Xbox-Controller', bx + bw / 2, y + 16, '600 13px "Baloo 2", sans-serif', 'rgba(255,240,255,0.8)');
   txt(cx, 'Fan-Projekt · nicht verbunden mit LucasArts, Disney oder Double Fine', W / 2 + 140, H - 14, '600 12px "Baloo 2", sans-serif', 'rgba(255,240,255,0.7)');
 }
 function titleClick(x, y) {
+  if (G.menu) return menuClick(x, y);
   const b = G.titleBtns.find(b => inRect(x, y, b)); if (!b) return;
   Sound.sfx('click');
-  if (b.id === 'cont') continueGame(G.saved);
+  if (b.id === 'load') G.menu = 'load';
+  else if (b.id === 'cont') continueGame(G.saved);
   else if (b.id === 'new') startNew();
   else if (b.id === 'voice') toggleVoice();
   else if (b.id === 'music') toggleMusic();
@@ -999,7 +1396,7 @@ function drawEnd() {
   R(cx, b.x, b.y, b.w, b.h, inRect(G.mouse.x, G.mouse.y, b) ? '#ffe066' : '#ffd23a', 3, 12);
   txt(cx, 'Nochmal von vorn', W / 2, b.y + 28, '400 20px "Titan One", sans-serif', '#2a0a3a');
 }
-function endClick(x, y) { if (G.endBtn && inRect(x, y, G.endBtn)) { G.saved = null; G.screen = 'title'; music(); } }
+function endClick(x, y) { if (G.endBtn && inRect(x, y, G.endBtn)) { G.saved = null; G.hasSaves = anySave(); G.screen = 'title'; music(); } }
 
 // ---------- Hauptschleife ----------
 function update(dt) {
@@ -1008,8 +1405,10 @@ function update(dt) {
   if (G.screen === 'game') updateActors(dt);
   const sp = G.speech;
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
-  else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice); G.nextBlip = G.t + 70 + Math.random() * 60; }
+  else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
+  updateParts(dt); updateMotes(dt); updateWeather(); updateBarks();
+  while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();
   if (G.fadeRes) {
     const k = G.skipAll ? 1 : Math.min(1, (G.t - G.fadeStart) / G.fadeDur);
     G.fade = G.fadeFrom + (G.fadeTarget - G.fadeFrom) * k;
@@ -1028,7 +1427,7 @@ function update(dt) {
   }
 }
 function drawScreen() {
-  if (G.screen === 'title') drawTitle();
+  if (G.screen === 'title') { drawTitle(); if (!cx.isPix) drawBloom(0.2, H); if (G.menu) drawMenu(); }
   else if (G.screen === 'end') drawEnd();
   else if (G.screen === 'game') { drawScene(); drawUI(); drawFly(); if (G.menu) drawMenu(); }
   else { cx.fillStyle = '#120a1c'; cx.fillRect(0, 0, W, H); txt(cx, 'Lade …', W / 2, H / 2, '700 22px sans-serif', '#d7c6ff'); }
@@ -1049,6 +1448,12 @@ function render() {
 }
 function frame(ts) {
   const dt = Math.min(50, ts - (G.last || ts)); G.last = ts; G.t += dt;
+  // adaptive Qualität: bei anhaltendem Ruckeln DPR und Partikeldichte drosseln, später wieder hoch
+  G.fpsAvg += (dt - G.fpsAvg) * 0.03;
+  if (G.t > 4000 && G.t - G.fpsGate > 6000) {
+    if (G.fpsAvg > 24 && G.quality > 0.5) { G.quality = 0.5; G.fpsGate = G.t; resize(); }
+    else if (G.fpsAvg < 17 && G.quality < 1) { G.quality = 1; G.fpsGate = G.t; resize(); }
+  }
   try { update(dt); render(); } catch (e) { console.error(e); }
   requestAnimationFrame(frame);
 }
@@ -1065,7 +1470,7 @@ async function boot() {
   } catch (e) { /* Fallback-Schrift */ }
   for (const k in bgCache) delete bgCache[k];
   loadSettings(); loadAch();
-  G.saved = loadSave();
+  G.saved = loadSave(); G.hasSaves = anySave();
   G.screen = 'title';
   music();
 }

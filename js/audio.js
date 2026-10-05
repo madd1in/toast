@@ -7,6 +7,8 @@
 
 const Sound = (() => {
   let ac = null, master = null, musicBus = null, sfxBus = null, ambBus = null, noiseBuf = null;
+  let verb = null, verbSend = null, musicSend = null, verbWanted = [0.6, 0.18];
+  const verbCache = {};
   let musicOn = true, ducked = false, retro = false;
   let cur = null, wanted = null, loopEnd = 0, loops = [];
   let ambList = [], ambWanted = [], ambCount = 0;
@@ -23,6 +25,12 @@ const Sound = (() => {
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // Raumhall: Effekte und Umgebung bekommen einen Hall-Anteil, die Musik nur einen Hauch
+    verb = ac.createConvolver(); verb.connect(master);
+    verbSend = ac.createGain(); verbSend.gain.value = verbWanted[1]; verbSend.connect(verb);
+    musicSend = ac.createGain(); musicSend.gain.value = 0.06; musicSend.connect(verb);
+    sfxBus.connect(verbSend); ambBus.connect(verbSend); musicBus.connect(musicSend);
+    setReverb(verbWanted[0], verbWanted[1]);
     setInterval(tick, 100);
     if (wanted) { const w = wanted; wanted = null; play(w); }
     ambience(ambWanted);
@@ -100,22 +108,23 @@ const Sound = (() => {
       { inst: 'drum', seq: Array(32).fill('-:0.5 H:0.5').join(' ') },
     ] },
     past: { bpm: 132, tracks: [
-      { inst: 'harp', seq: 'G4:1 B4:1 D5:1 C5:1 B4:0.5 A4:0.5 B4:1 A4:1 F#4:1 D4:1 G4:2 D5:1 E5:1 D5:1 C5:1 B4:1 A4:1 G4:1 A4:1 B4:0.5 A4:0.5 F#4:1 G4:3' },
-      { inst: 'harp', seq: 'G2:1 D3:1 B2:1 A2:1 D3:1 G2:1 D2:1 A2:1 F#2:1 G2:1 B2:1 D3:1 C3:1 E3:1 G2:1 G2:1 D3:1 B2:1 D2:1 F#2:1 A2:1 G2:1 D2:1 G2:1' },
-      { inst: 'organ', seq: 'G3+B3+D4:3 A3+C4+D4:3 D3+F#3+A3:3 G3+B3+D4:3 C3+E3+G3:3 G3+B3+D4:3 D3+F#3+A3:3 G3+B3+D4:3' },
+      { inst: 'harp', seq: 'G4:1 B4:1 D5:1 C5:1 B4:0.5 A4:0.5 B4:1 A4:1 F#4:1 D4:1 G4:2 D5:1 E5:1 D5:1 C5:1 B4:1 A4:1 G4:1 A4:1 B4:0.5 A4:0.5 F#4:1 G4:3 B4:1 C5:1 D5:1 E5:2 D5:1 C5:1 B4:1 A4:1 B4:2 G4:1 A4:1 B4:1 C5:1 D5:1 C5:1 B4:1 A4:1 G4:1 F#4:1 G4:3' },
+      { inst: 'harp', seq: 'G2:1 D3:1 B2:1 A2:1 D3:1 G2:1 D2:1 A2:1 F#2:1 G2:1 B2:1 D3:1 C3:1 E3:1 G2:1 G2:1 D3:1 B2:1 D2:1 F#2:1 A2:1 G2:1 D2:1 G2:1 G2:1 B2:1 D3:1 C3:1 E3:1 G3:1 A2:1 C3:1 E3:1 G2:1 B2:1 D3:1 F#2:1 A2:1 D3:1 G2:1 B2:1 D3:1 D2:1 F#2:1 A2:1 G2:1 D2:1 G1:1' },
+      { inst: 'organ', seq: 'G3+B3+D4:3 A3+C4+D4:3 D3+F#3+A3:3 G3+B3+D4:3 C3+E3+G3:3 G3+B3+D4:3 D3+F#3+A3:3 G3+B3+D4:3 G3+B3+D4:3 C3+E3+G3:3 A2+C3+E3:3 G3+B3+D4:3 D3+F#3+A3:3 G3+B3+D4:3 D3+F#3+A3:3 G3+B3+D4:3' },
     ] },
+    // Zeitalter-Themen jetzt mit A- und B-Teil (16 Takte), damit der Loop nicht so schnell ermüdet
     present: { bpm: 116, tracks: [
-      { inst: 'pizz', seq: x2('D2:1 A2:1 D3:1 A2:1 D2:1 A2:1 D3:1 A2:1 Bb1:1 F2:1 Bb2:1 F2:1 A1:1 E2:1 A2:1 C#3:1') },
-      { inst: 'bassoon', seq: 'D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 G4:0.5 F4:0.5 E4:1 F4:0.5 E4:0.5 D4:2 Bb4:0.5 -:0.5 A4:0.5 -:0.5 G4:1 F4:1 E4:1 C#4:1 A3:2 D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 D5:1 C5:0.5 Bb4:0.5 A4:0.5 G4:0.5 A4:2 Bb4:1 G4:1 E4:1 C#4:1 D4:2 -:2' },
-      { inst: 'pad', seq: x2('D3+F3+A3:4 D3+F3+A3:4 Bb2+D3+F3:4 A2+C#3+E3:4') },
-      { inst: 'drum', seq: Array(8).fill('K:1 H:1 S:1 H:1').join(' ') },
+      { inst: 'pizz', seq: x2('D2:1 A2:1 D3:1 A2:1 D2:1 A2:1 D3:1 A2:1 Bb1:1 F2:1 Bb2:1 F2:1 A1:1 E2:1 A2:1 C#3:1') + ' ' + x2('G2:1 D3:1 G3:1 D3:1 F2:1 C3:1 F3:1 C3:1 Bb1:1 F2:1 Bb2:1 F2:1 A1:1 E2:1 A2:1 E2:1') },
+      { inst: 'bassoon', seq: 'D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 G4:0.5 F4:0.5 E4:1 F4:0.5 E4:0.5 D4:2 Bb4:0.5 -:0.5 A4:0.5 -:0.5 G4:1 F4:1 E4:1 C#4:1 A3:2 D4:0.5 -:0.5 F4:0.5 -:0.5 A4:1 D5:1 C5:0.5 Bb4:0.5 A4:0.5 G4:0.5 A4:2 Bb4:1 G4:1 E4:1 C#4:1 D4:2 -:2 G4:1 Bb4:0.5 A4:0.5 G4:1 D4:1 F4:1 A4:0.5 G4:0.5 F4:2 D5:1 C5:0.5 Bb4:0.5 A4:1 F4:1 E4:2 C#4:2 G4:0.5 A4:0.5 Bb4:1 D5:1 Bb4:1 A4:0.5 G4:0.5 F4:1 A4:2 Bb4:1 A4:1 G4:1 E4:1 D4:4' },
+      { inst: 'pad', seq: x2('D3+F3+A3:4 D3+F3+A3:4 Bb2+D3+F3:4 A2+C#3+E3:4') + ' ' + x2('G2+Bb2+D3:4 F2+A2+C3:4 Bb2+D3+F3:4 A2+C#3+E3:4') },
+      { inst: 'drum', seq: Array(16).fill('K:1 H:1 S:1 H:1').join(' ') },
     ] },
     future: { bpm: 124, tracks: [
-      { inst: 'arp', seq: x2('A3:0.5 C4:0.5 E4:0.5 A4:0.5 E4:0.5 C4:0.5 A3:0.5 C4:0.5 F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 C4:0.5 E4:0.5 G4:0.5 C5:0.5 G4:0.5 E4:0.5 C4:0.5 E4:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5 B3:0.5') },
-      { inst: 'synbass', seq: x2('A1:2 A2:2 F1:2 F2:2 C2:2 C3:2 G1:2 G2:2') },
-      { inst: 'bell', seq: 'E5:2 D5:1 C5:1 A4:4 G4:2 C5:1 E5:1 D5:4 E5:2 G5:1 E5:1 F5:2 E5:1 C5:1 D5:2 B4:2 A4:4' },
-      { inst: 'pad', seq: x2('A3+C4+E4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4') },
-      { inst: 'drum', seq: Array(8).fill('K:1 H:0.5 H:0.5 S:1 H:0.5 K:0.5').join(' ') },
+      { inst: 'arp', seq: x2('A3:0.5 C4:0.5 E4:0.5 A4:0.5 E4:0.5 C4:0.5 A3:0.5 C4:0.5 F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 C4:0.5 E4:0.5 G4:0.5 C5:0.5 G4:0.5 E4:0.5 C4:0.5 E4:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5 B3:0.5') + ' ' + x2('D4:0.5 F4:0.5 A4:0.5 D5:0.5 A4:0.5 F4:0.5 D4:0.5 F4:0.5 F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5 B3:0.5 A3:0.5 C4:0.5 E4:0.5 A4:0.5 E4:0.5 C4:0.5 A3:0.5 C4:0.5') },
+      { inst: 'synbass', seq: x2('A1:2 A2:2 F1:2 F2:2 C2:2 C3:2 G1:2 G2:2') + ' ' + x2('D2:2 D3:2 F1:2 F2:2 G1:2 G2:2 A1:2 A2:2') },
+      { inst: 'bell', seq: 'E5:2 D5:1 C5:1 A4:4 G4:2 C5:1 E5:1 D5:4 E5:2 G5:1 E5:1 F5:2 E5:1 C5:1 D5:2 B4:2 A4:4 A5:2 G5:1 F5:1 D5:4 F5:2 E5:1 D5:1 B4:4 C5:1 D5:1 E5:2 F5:2 E5:1 D5:1 E5:2 G#4:2 A4:4' },
+      { inst: 'pad', seq: x2('A3+C4+E4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4') + ' ' + x2('D3+F3+A3:4 F3+A3+C4:4 G3+B3+D4:4 A3+C4+E4:4') },
+      { inst: 'drum', seq: Array(16).fill('K:1 H:0.5 H:0.5 S:1 H:0.5 K:0.5').join(' ') },
     ] },
     palace: { bpm: 96, tracks: [
       { inst: 'tuba', seq: x2('C2:1 G2:1 C2:1 G2:1 Ab1:1 Eb2:1 Ab1:1 Eb2:1 F1:1 C2:1 F1:1 C2:1 G1:1 D2:1 G1:1 B1:1') },
@@ -162,7 +171,27 @@ const Sound = (() => {
     birds: t => { if (Math.random() < 0.55) { const f = 2300 + Math.random() * 1700, n = 2 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) osc('sine', f, t + i * 0.1, 0.07, 0.025, ambBus, { f2: f * (1.15 + Math.random() * 0.3), decay: true }); } return 0.7 + Math.random() * 1.8; },
     future: t => { osc('sine', 98 + Math.random() * 30, t, 3, 0.02, ambBus, { attack: 1, release: 1 }); if (Math.random() < 0.35) nz(t + Math.random(), 1.4, 0.025, ambBus, { type: 'bandpass', f: 300, f2: 1800, q: 5 }); return 2.2; },
     palace: t => { osc('sine', 65.4, t, 3.2, 0.028, ambBus, { attack: 1.2, release: 1.2 }); osc('sine', 98, t + 0.5, 2.8, 0.012, ambBus, { attack: 1, release: 1 }); return 2.8; },
+    rain: t => { nz(t, 0.5, 0.035, ambBus, { type: 'bandpass', f: 2200 + Math.random() * 2400, q: 0.5, attack: 0.15 }); if (Math.random() < 0.3) osc('sine', 1800 + Math.random() * 900, t + Math.random() * 0.3, 0.04, 0.012, ambBus, { f2: 900, decay: true }); return 0.32; },
+    wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
+  // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt
+  function setReverb(sec, wet) {
+    verbWanted = [sec, wet];
+    if (!ac) return;
+    const key = sec.toFixed(2);
+    let buf = verbCache[key];
+    if (!buf) {
+      const len = Math.max(1, Math.floor(ac.sampleRate * sec));
+      buf = ac.createBuffer(2, len, ac.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6) * (i < 60 ? i / 60 : 1);
+      }
+      verbCache[key] = buf;
+    }
+    if (verb.buffer !== buf) verb.buffer = buf;
+    verbSend.gain.setTargetAtTime(wet, ac.currentTime, 0.2);
+  }
   function ambience(list) {
     ambWanted = list || [];
     if (!ac) return;
@@ -241,24 +270,37 @@ const Sound = (() => {
     bake: t => ['E5', 'G5', 'C6'].forEach((n, i) => osc('sine', freq(n), t + i * 0.3, 0.5, 0.1, sfxBus, { decay: true })),
     bad: t => { osc('sawtooth', 220, t, 0.25, 0.07, sfxBus, { lp: 900, decay: true }); osc('sawtooth', 165, t + 0.25, 0.45, 0.07, sfxBus, { lp: 900, decay: true }); },
     click2: t => osc('triangle', 1200, t, 0.05, 0.08, sfxBus, { decay: true }),
+    thunder: t => { nz(t, 0.25, 0.4, sfxBus, { type: 'lowpass', f: 900, f2: 300 }); nz(t + 0.15, 3.2, 0.32, sfxBus, { type: 'lowpass', f: 260, f2: 60, attack: 0.3 }); osc('sine', 48, t + 0.1, 2.6, 0.16, sfxBus, { f2: 32, attack: 0.25, release: 1.6 }); },
+    open: t => { nz(t, 0.18, 0.18, sfxBus, { type: 'bandpass', f: 600, q: 2 }); osc('triangle', 220, t, 0.25, 0.06, sfxBus, { f2: 330, decay: true }); },
+    sparkle: t => { for (let i = 0; i < 6; i++) osc('sine', 2093 * Math.pow(1.12, i % 4), t + i * 0.05, 0.12, 0.025, sfxBus, { decay: true }); },
   };
   const listeners = [];
-  function sfx(name) { if (ac) { const f = SFX[name]; if (f) f(ac.currentTime + 0.01); } listeners.forEach(fn => fn(name)); }
+  // Stereo-Position: der Effekt wird kurz über einen Panner auf den Effekt-Bus geleitet
+  function panned(pan, fn) {
+    if (pan == null || !ac.createStereoPanner) return fn();
+    const p = ac.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(sfxBus);
+    const keep = sfxBus; sfxBus = p;
+    try { fn(); } finally { sfxBus = keep; }
+    setTimeout(() => { try { p.disconnect(); } catch (e) { /* ok */ } }, 4000);
+  }
+  function sfx(name, pan) { if (ac) { const f = SFX[name]; if (f) panned(pan, () => f(ac.currentTime + 0.01)); } listeners.forEach(fn => fn(name)); }
   function onSfx(fn) { listeners.push(fn); }
 
   // Plapperstimme: kurze Silben-Töne pro Figur (wenn keine Sprachausgabe aktiv ist)
-  function blip(v) {
+  function blip(v, pan) {
     if (!ac || !v) return;
     const t = ac.currentTime + 0.005, f = (v.blip || 220) * (0.85 + Math.random() * 0.35);
-    osc(v.wave || 'square', f, t, 0.065, 0.032, sfxBus, { lp: 1900, decay: true, attack: 0.004 });
-    osc('sine', f * 2, t, 0.05, 0.012, sfxBus, { decay: true });
+    panned(pan, () => {
+      osc(v.wave || 'square', f, t, 0.065, 0.032, sfxBus, { lp: 1900, decay: true, attack: 0.004 });
+      osc('sine', f * 2, t, 0.05, 0.012, sfxBus, { decay: true });
+    });
   }
   // Schritte je nach Untergrund
   const STEP = { wood: { f: 900, q: 1.2, v: 0.1 }, tile: { f: 2400, q: 2, v: 0.07 }, grass: { f: 3800, q: 0.7, v: 0.045, type: 'highpass' }, marble: { f: 3000, q: 3, v: 0.06 }, carpet: { f: 380, q: 0.8, v: 0.06 } };
-  function step(kind) {
+  function step(kind, pan) {
     if (!ac) return;
     const s = STEP[kind] || STEP.wood;
-    nz(ac.currentTime + 0.005, 0.06, s.v, sfxBus, { type: s.type || 'bandpass', f: s.f * (0.9 + Math.random() * 0.2), q: s.q });
+    panned(pan, () => nz(ac.currentTime + 0.005, 0.06, s.v, sfxBus, { type: s.type || 'bandpass', f: s.f * (0.9 + Math.random() * 0.2), q: s.q }));
   }
 
   // Liefert den Spielton als MediaStream (z. B. für Trailer-Aufnahmen per MediaRecorder)
@@ -274,28 +316,52 @@ const Sound = (() => {
     if (ac && cur) { const c = cur; stopMusic(); cur = c; scheduleLoop(ac.currentTime + 0.1); }
   }
 
-  return { init, play, sfx, onSfx, setMusic, setRetro, duck, ambience, blip, step, captureStream, get musicOn() { return musicOn; } };
+  return { init, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, captureStream, get musicOn() { return musicOn; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------
 const Voice = (() => {
   const syn = window.speechSynthesis || null;
-  let on = false, voice = null;
+  let on = false, voice = null, fem = [], mal = [];
+  // Stimmnamen der gängigen Systeme (Edge/Windows, Chrome, macOS/iOS, Android) nach Geschlecht
+  const FEMALE = /katja|amala|seraphina|hedda|anna|petra|helena|ingrid|leni|elke|louisa|tanja|maja|gisela|klarissa|vicki|marlene|sabine|google deutsch|\bfemale\b|weiblich/i;
+  const MALE = /conrad|killian|florian|stefan|markus|yannick|martin|jonas|\bjan\b|ralf|bernd|kasper|christoph|hans|\bmale\b|männlich/i;
+  const quality = v => (/natural|neural|premium|enhanced|online/i.test(v.name) ? 4 : 0) + (/google/i.test(v.name) ? 2 : 0) + (/de-DE/i.test(v.lang) ? 1 : 0) + (v.localService ? 0 : 0.5);
+  function best(list) {
+    // natürliche Stimmen bevorzugen und nicht mit roboterhaften mischen
+    const top = Math.max(...list.map(quality));
+    return list.filter(v => quality(v) >= top - 1);
+  }
   function pick() {
     if (!syn) return;
-    const vs = syn.getVoices();
-    voice = vs.find(v => /^de/i.test(v.lang) && /natural|online|google/i.test(v.name)) || vs.find(v => /^de/i.test(v.lang)) || null;
+    const vs = syn.getVoices().filter(v => /^de/i.test(v.lang)).sort((a, b) => quality(b) - quality(a));
+    voice = vs[0] || null;
+    fem = vs.length ? best(vs.filter(v => FEMALE.test(v.name) && !MALE.test(v.name))) : [];
+    mal = vs.length ? best(vs.filter(v => MALE.test(v.name))) : [];
   }
   if (syn) { pick(); if ('onvoiceschanged' in syn) syn.onvoiceschanged = pick; }
+  // Bühnenanweisungen, Großbuchstaben-Schilder und Auslassungen so umbauen, dass sie natürlich klingen
+  function clean(t) {
+    return t.replace(/\*([^*]+)\*/g, '$1,').replace(/\.\.\.|…/g, ', ')
+      .replace(/\bDr\./g, 'Doktor').replace(/\b([A-ZÄÖÜ])([A-ZÄÖÜ]{2,})\b/g, (m, a, b) => a + b.toLowerCase())
+      .replace(/\s*,\s*([,.!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  }
+  function cast(prof) {
+    const tts = prof && prof.tts;
+    if (!tts) return { v: voice, pitch: 1, rate: 1.02 };
+    const pool = tts.g === 'f' ? fem : mal;
+    if (pool.length) return { v: pool[tts.n % pool.length], pitch: tts.pitch, rate: tts.rate };
+    // keine passende Stimme installiert: beste Stimme nehmen und die Tonlage leicht anpassen
+    return { v: voice, pitch: Math.max(0.6, Math.min(1.5, tts.pitch * (tts.g === 'f' ? 1.2 : 0.85))), rate: tts.rate };
+  }
   function speak(text, prof) {
     return new Promise(res => {
       if (!syn || !on) return res();
       try {
         syn.cancel();
-        const u = new SpeechSynthesisUtterance(text.replace(/\*/g, ''));
-        u.lang = 'de-DE'; if (voice) u.voice = voice;
-        u.pitch = prof && prof.pitch != null ? prof.pitch : 1;
-        u.rate = prof && prof.rate != null ? prof.rate : 1;
+        const c = cast(prof), u = new SpeechSynthesisUtterance(clean(text));
+        u.lang = c.v ? c.v.lang : 'de-DE'; if (c.v) u.voice = c.v;
+        u.pitch = c.pitch; u.rate = c.rate; u.volume = 1;
         u.onend = () => res(); u.onerror = () => res();
         syn.speak(u);
       } catch (e) { res(); }

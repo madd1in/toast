@@ -75,6 +75,28 @@ function kloFx(c, id, cxx, top, bot, bulbX, bulbY) {
     c.restore();
   }
 }
+// weicher Bodenschatten für Möbel und große Objekte
+function shadow(c, x, y, rx, ry, a = 0.28) {
+  c.save(); c.translate(x, y); c.scale(1, ry / rx);
+  const g = c.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
+  g.addColorStop(0, `rgba(10,4,18,${a})`); g.addColorStop(0.65, `rgba(10,4,18,${a * 0.6})`); g.addColorStop(1, 'rgba(10,4,18,0)');
+  c.fillStyle = g; c.beginPath(); c.ellipse(0, 0, rx, rx, 0, 0, Math.PI * 2); c.fill(); c.restore();
+}
+// Kontakt-Schatten, wo die Wand auf den Boden trifft
+function wallAO(c, yTop, yBot, a = 0.3) {
+  const g = c.createLinearGradient(0, yTop, 0, yBot);
+  g.addColorStop(0, `rgba(8,4,14,${a})`); g.addColorStop(1, 'rgba(8,4,14,0)');
+  c.fillStyle = g; c.fillRect(0, yTop, W, yBot - yTop);
+}
+// polierter Boden: schräge Glanzstreifen, auf das Boden-Polygon beschnitten
+function gloss(c, poly, x0, x1, a = 0.05) {
+  c.save(); pth(c, poly); c.clip();
+  c.fillStyle = `rgba(255,255,255,${a})`;
+  c.beginPath(); c.moveTo(x0, SH); c.lineTo(x0 + 60, SH); c.lineTo(x1 + 150, 304); c.lineTo(x1 + 90, 304); c.closePath(); c.fill();
+  c.fillStyle = `rgba(255,255,255,${a * 0.6})`;
+  c.beginPath(); c.moveTo(x0 + 230, SH); c.lineTo(x0 + 268, SH); c.lineTo(x1 + 330, 304); c.lineTo(x1 + 300, 304); c.closePath(); c.fill();
+  c.restore();
+}
 
 // =================== GEGENWART: LOBBY ===================
 function bgLobby(c) {
@@ -109,7 +131,19 @@ function bgLobby(c) {
   // Boden
   const fp = [0, 314, W, 304, W, SH, 0, SH]; P(c, fp, '#9a5f32');
   floorPlanks(c, fp, 480, '#7d4a24', [334, 358, 390, 424]);
+  wallAO(c, 312, 338, 0.28);
+  gloss(c, fp, 60, 400, 0.035);
   E(c, 560, 394, 190, 30, '#a3223b'); E(c, 560, 394, 160, 22, null, 2.5, 0, '#e2b85c'); E(c, 560, 394, 118, 13, '#8a1a30', 2);
+  P(c, [560, 382, 596, 394, 560, 406, 524, 394], 'rgba(226,184,92,0.55)', 0);   // Teppich-Medaillon
+  P(c, [560, 388, 578, 394, 560, 400, 542, 394], 'rgba(226,184,92,0.35)', 0);
+  for (let i = 0; i < 12; i++) {   // Bordüren-Punkte
+    const a = i / 12 * Math.PI * 2;
+    E(c, 560 + Math.cos(a) * 139, 394 + Math.sin(a) * 17.5, 2.2, 2.2, 'rgba(226,184,92,0.5)', 0);
+  }
+  shadow(c, 540, 352, 118, 15);       // Sofa
+  shadow(c, 148, 352, 122, 15, 0.24); // Rezeption
+  shadow(c, 738, 340, 62, 12);        // Kaffeeautomat
+  shadow(c, 322, 336, 44, 10, 0.24);  // Standuhr
   // Schlüsselbrett
   R(c, 66, 104, 150, 84, '#5a3418', 3, 4);
   for (let i = 0; i < 5; i++) for (let j = 0; j < 2; j++) {
@@ -214,7 +248,18 @@ function bgLabor(c) {
   // Boden
   const fp = [0, 320, W, 312, W, SH, 0, SH];
   P(c, fp, '#3b4458'); c.save(); pth(c, fp); c.clip(); checkerFloor(c, 312, SH, '#465170', '#333b4f', 6, 14); c.restore();
+  wallAO(c, 318, 344, 0.34);
+  gloss(c, fp, 110, 560, 0.05);
   L(c, [0, 320, W, 312], 3);
+  // Warnschraffur an der Boden-Wand-Kante
+  c.save(); c.globalAlpha = 0.32;
+  for (let x = -12; x < W + 24; x += 44) {
+    const yb = 320 - 8 * x / W;
+    P(c, [x, yb - 8, x + 22, yb - 8, x + 11, yb, x - 11, yb], '#e2c040', 0);
+  }
+  c.restore();
+  shadow(c, 490, 346, 122, 15);   // Gut-O-Mat
+  shadow(c, 788, 342, 72, 13);    // Chrono-Klo
   // Tür links
   P(c, [16, 336, 112, 330, 110, 108, 20, 100], '#6a3a1c');
   P(c, [26, 330, 102, 326, 100, 118, 30, 112], '#8a4f26');
@@ -225,6 +270,11 @@ function bgLabor(c) {
   txt(c, 'E = mc²', 192, 88, '700 18px "Baloo 2", sans-serif', '#e8f0e0');
   txt(c, 'E = mc Toast', 238, 113, '700 15px "Baloo 2", sans-serif', '#e8f0e0'); L(c, [196, 107, 280, 107], 2, '#e8f0e0');
   txt(c, 'Brot kaufen!', 252, 139, '700 14px "Baloo 2", sans-serif', '#ffd23a');
+  // Lüftungsgitter und Kabel über der Tafel
+  R(c, 336, 56, 48, 30, '#22343a', 2.5, 3, '#17262b');
+  for (let i = 0; i < 4; i++) L(c, [341, 62 + i * 6, 379, 62 + i * 6], 2, '#3d5560');
+  L(c, [340, 34, 340, 56], 3, '#222a30'); L(c, [392, 34, 392, 130], 3, '#222a30');
+  E(c, 392, 132, 5, 5, '#3d5560', 2);
   // Regal
   R(c, 132, 236, 190, 8, '#7a4a22', 2.5); R(c, 132, 296, 190, 8, '#7a4a22', 2.5);
   L(c, [140, 244, 150, 256], 3); L(c, [312, 244, 302, 256], 3);
@@ -247,6 +297,12 @@ function bgLabor(c) {
   R(c, 520, 266, 60, 40, '#4a4f58', 2.5, 5);
   // Chrono-Klo
   drawKloModern(c, 730);
+  // Lichtkegel von den Deckenröhren
+  for (const lx of [127, 307, 707]) {
+    c.save(); c.globalAlpha = 0.05;
+    P(c, [lx - 12, 20, lx + 12, 20, lx + 110, 316, lx - 110, 316], '#dff4ff', 0);
+    c.restore();
+  }
 }
 function drawMachineDyn(c, t) {
   const f = fl();
@@ -335,6 +391,10 @@ function bgGasthaus(c) {
   P(c, [0, 226, W, 220, W, 232, 0, 238], '#5a3a1e', 2.5);
   // Boden
   const fp = [0, 318, W, 310, W, SH, 0, SH]; P(c, fp, '#6e4626'); floorPlanks(c, fp, 480, '#55331a', [340, 368, 404]);
+  wallAO(c, 316, 342, 0.3);
+  gloss(c, fp, 90, 520, 0.035);
+  shadow(c, 519, 318, 148, 14, 0.24);  // Tisch
+  shadow(c, 320, 336, 42, 10, 0.22);   // Standuhr
   // Fenster mit Blick ins Grüne
   R(c, 474, 60, 132, 124, '#5a3a1e', 3, 3);
   c.save(); c.beginPath(); c.rect(486, 72, 108, 100); c.clip();
@@ -421,7 +481,14 @@ function bgGarten1776(c) {
   S(c, '#8fd06a', 3, () => { c.moveTo(0, 250); c.quadraticCurveTo(200, 190, 420, 240); c.quadraticCurveTo(640, 180, 960, 236); c.lineTo(960, 300); c.lineTo(0, 300); c.closePath(); });
   [[470, 232, 22], [520, 226, 28], [700, 214, 24], [940, 222, 26]].forEach(([x, y, r]) => { R(c, x - 3, y, 6, 20, '#6b4424', 2); E(c, x, y - r * 0.4, r, r * 0.8, '#4f9a3a', 2.5); });
   P(c, [0, 294, W, 286, W, SH, 0, SH], '#5fae3e');
+  // dunkles Horizontband unter der Baumlinie: Tiefe
+  c.save(); c.globalAlpha = 0.22; P(c, [0, 292, W, 284, W, 312, 0, 320], '#2a6a20', 0); c.restore();
   for (let i = 0; i < 70; i++) { const x = (i * 137) % W, y = 300 + ((i * 53) % 130); L(c, [x, y, x - 3, y - 8], 2, '#4a9030'); L(c, [x, y, x + 3, y - 7], 2, '#4a9030'); }
+  // Wiesenblumen
+  [[60, 332, '#ff8a8a'], [150, 306, '#ffd23a'], [386, 312, '#fff0f0'], [446, 390, '#ff5f8a'], [560, 312, '#ffd23a'], [700, 396, '#fff0f0'], [880, 306, '#ff8a8a'], [930, 382, '#ffd23a']].forEach(([fx, fy, col]) => {
+    L(c, [fx, fy, fx, fy - 7], 2, '#3f7a48');
+    E(c, fx, fy - 9, 3.4, 3.4, col, 0); E(c, fx, fy - 9, 1.4, 1.4, '#ffe9a0', 0);
+  });
   P(c, [100, 340, 220, 336, 300, SH, 30, SH], '#c8a06a', 2.5);
   // Gasthaus-Wand
   P(c, [0, 0, 124, 0, 124, 340, 0, 344], '#e6d2a2');
@@ -433,6 +500,7 @@ function bgGarten1776(c) {
   R(c, 344, 250, 364, 10, '#b07a3c', 2.5); R(c, 344, 280, 364, 10, '#b07a3c', 2.5);
   for (let x = 350; x <= 700; x += 26) P(c, [x, 302, x + 18, 302, x + 18, 236, x + 9, 226, x, 236], '#c69458', 2.5);
   // Brunnen
+  shadow(c, 271, 342, 80, 13);   // Brunnen
   R(c, 214, 182, 10, 98, '#6a4220', 2.5); R(c, 318, 182, 10, 98, '#6a4220', 2.5);
   P(c, [194, 194, 348, 194, 271, 146], '#a04a2a');
   for (let i = 1; i < 4; i++) L(c, [271 - i * 19, 146 + i * 12, 271 + i * 19, 146 + i * 12], 2, '#7a3418');
@@ -445,6 +513,7 @@ function bgGarten1776(c) {
   c.restore(); R(c, 210, 276, 122, 62, null, 3, 6);
   E(c, 271, 276, 64, 14, '#b5ae9f'); E(c, 271, 276, 50, 9, '#1a2a3a', 2);
   // Plumpsklo mit Dr.-Fred-Technik
+  shadow(c, 825, 344, 78, 13);   // Plumpsklo
   P(c, [764, 342, 886, 338, 880, 132, 770, 136], '#9a6a3a');
   for (let x = 788; x < 880; x += 18) L(c, [x, 138, x, 340], 2, '#7a4e26');
   P(c, [750, 140, 898, 134, 884, 98, 764, 104], '#6a3a1e');
@@ -529,7 +598,14 @@ function drawKloFuture(c, x) {
 function bgFGarten(c) {
   c.fillStyle = grad(c, 0, 0, 0, 300, [[0, '#1c0838'], [0.6, '#6a2a7a'], [1, '#c85a8e']]); c.fillRect(0, 0, W, SH);
   for (let i = 0; i < 60; i++) E(c, (i * 137) % W, (i * 71) % 210, 1.3, 1.3, 'rgba(255,255,255,0.8)', 0);
+  // Mond mit Glow
+  const mg = c.createRadialGradient(180, 72, 10, 180, 72, 95);
+  mg.addColorStop(0, 'rgba(255,230,190,0.4)'); mg.addColorStop(1, 'rgba(255,230,190,0)');
+  c.fillStyle = mg; c.fillRect(85, -23, 190, 190);
   E(c, 180, 72, 30, 30, '#ffe6a0', 3, 0, '#c8a060'); E(c, 170, 64, 6, 5, '#f0d488', 0); E(c, 192, 82, 4, 3, '#f0d488', 0);
+  // Nebelbänder am Horizont
+  c.save(); c.globalAlpha = 0.16; E(c, 480, 298, 430, 24, '#e8a0d8', 0); c.restore();
+  c.save(); c.globalAlpha = 0.11; E(c, 280, 314, 330, 18, '#c88ae0', 0); c.restore();
   E(c, 250, 42, 12, 12, '#ffc6e0', 2.5);
   [[40, 300, 190, 54, '#3b1660'], [300, 300, 150, 44, '#4a1f73'], [440, 300, 230, 60, '#3b1660'], [640, 300, 170, 50, '#5e2a8a'], [780, 300, 240, 64, '#4a1f73'], [920, 300, 160, 50, '#3b1660']]
     .forEach(([x, b, h, w, col]) => tower(c, x, b, h, w, col));
@@ -545,11 +621,12 @@ function bgFGarten(c) {
   R(c, 872, 66, 86, 24, '#d8b040', 2.5, 3); txt(c, 'PALAST', 915, 84, '800 14px "Baloo 2", sans-serif', '#4a1a6a');
   drawKloFuture(c, 80);
   // Statue
+  shadow(c, 350, 344, 76, 13);   // Statue
   R(c, 296, 262, 108, 78, '#8f86a6', 3, 4); R(c, 288, 254, 124, 14, '#a59cbc', 3, 3);
   txt(c, 'SEINE LILAHEIT', 350, 298, '800 11px "Baloo 2", sans-serif', '#2a1a40');
   txt(c, 'Herrscher der Welt', 350, 314, '700 9px "Baloo 2", sans-serif', '#2a1a40');
   c.save(); c.translate(346, 254); c.scale(0.8, 0.8); drawStatue(c); c.restore();
-  // Laterne
+  // Laterne (die leuchtende Zelle wirft unten ihren grünen Schein, siehe drawLampDyn)
   S(c, '#3c2a5a', 3, () => { c.moveTo(536, 340); c.bezierCurveTo(528, 260, 560, 180, 540, 110); c.quadraticCurveTo(530, 84, 544, 68); c.lineTo(554, 70); c.quadraticCurveTo(542, 86, 550, 110); c.bezierCurveTo(570, 180, 540, 260, 552, 340); c.closePath(); });
   E(c, 544, 342, 24, 7, '#3c2a5a', 3);
   R(c, 518, 24, 54, 46, '#2a1d40', 3, 8); R(c, 526, 31, 38, 32, '#14101e', 2, 6);
@@ -559,6 +636,11 @@ function drawLampDyn(c, t) {
   const p = 0.5 + Math.sin(t * 0.005) * 0.2;
   const g = c.createRadialGradient(545, 47, 3, 545, 47, 60); g.addColorStop(0, `rgba(140,255,130,${p})`); g.addColorStop(1, 'rgba(140,255,130,0)');
   c.fillStyle = g; c.fillRect(485, -13, 120, 120);
+  // grüner Schein der Zelle auf dem Boden
+  c.save(); c.translate(545, 346); c.scale(1, 0.26);
+  const g2 = c.createRadialGradient(0, 0, 5, 0, 0, 85);
+  g2.addColorStop(0, `rgba(140,255,130,${0.32 * p})`); g2.addColorStop(1, 'rgba(140,255,130,0)');
+  c.fillStyle = g2; c.beginPath(); c.ellipse(0, 0, 85, 85, 0, 0, Math.PI * 2); c.fill(); c.restore();
   c.save(); c.translate(545, 47); c.rotate(Math.PI / 2); c.scale(0.7, 0.7); ICON.zelle(c); c.restore();
 }
 function drawBigTree(c, t) {
@@ -569,6 +651,7 @@ function drawBigTree(c, t) {
   }
   if (k <= 0) return;
   c.save(); c.translate(700, 356); c.scale(k, k);
+  shadow(c, 0, 4, 125, 20, 0.26);   // Baumwurf
   S(c, '#6b4424', 3, () => { c.moveTo(-28, 0); c.quadraticCurveTo(-14, -80, -22, -170); c.lineTo(-4, -192); c.lineTo(18, -170); c.quadraticCurveTo(10, -80, 30, 0); c.closePath(); });
   L(c, [-14, -150, -96, -212], 14, OUT); L(c, [-14, -150, -96, -212], 9, '#6b4424');
   L(c, [6, -160, 80, -226], 12, OUT); L(c, [6, -160, 80, -226], 7, '#6b4424');
@@ -681,6 +764,7 @@ function bgThron(c) {
   L(c, [380, SH, 518, 350], 3, '#d8b040'); L(c, [640, SH, 612, 350], 3, '#d8b040');
   P(c, [440, 352, 862, 352, 848, 332, 456, 332], '#c9a040');
   P(c, [456, 332, 848, 332, 834, 314, 470, 314], '#e0bc5a');
+  shadow(c, 657, 354, 108, 14, 0.3);   // Thron
   S(c, '#f2c14e', 3, () => { c.moveTo(590, 318); c.lineTo(588, 170); c.bezierCurveTo(580, 90, 640, 56, 660, 100); c.bezierCurveTo(690, 40, 742, 90, 726, 170); c.lineTo(724, 318); c.closePath(); });
   S(c, '#7a1fa2', 3, () => { c.moveTo(606, 300); c.lineTo(604, 176); c.bezierCurveTo(600, 118, 640, 96, 658, 124); c.bezierCurveTo(680, 90, 716, 120, 708, 176); c.lineTo(706, 300); c.closePath(); });
   E(c, 657, 92, 8, 8, '#3cf0ff', 2.5);

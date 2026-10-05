@@ -65,7 +65,40 @@ function newState() {
 const NPCS = ['drfred', 'green', 'gertrude', 'hancock', 'wache', 'lila'];
 // Meilensteine für die Fortschrittsanzeige und den "Rätsel gelöst"-Jingle
 const MILESTONES = ['kaffee', 'brot', 'tree', 'zelle', 'cellIn', 'breadIn', 'toast', 'guardGone'];
-function progress() { const f = fl(); return MILESTONES.filter(m => m === 'breadIn' ? (f.breadIn || f.toast) : f[m]).length; }
+function milestoneDone(m) { const f = fl(); return !!(m === 'breadIn' ? (f.breadIn || f.toast) : f[m]); }
+function progress() { return MILESTONES.filter(milestoneDone).length; }
+// Notizbuch im Menü: Meilensteine in Story-Reihenfolge
+const NOTES = [
+  ['brot', 'Gertrude hat das Freundlichkeits-Brot gebacken.'],
+  ['tree', 'Hoagie hat 1776 einen Apfelbaum gepflanzt und gegossen.'],
+  ['zelle', 'Laverne hat die Energiezelle aus der Laterne geholt.'],
+  ['cellIn', 'Die Energiezelle steckt im Gut-O-Mat.'],
+  ['breadIn', 'Das Brot liegt im Gut-O-Mat.'],
+  ['toast', 'Der Gut-Toast ist fertig gebacken.'],
+  ['kaffee', 'Bernard hat am KAFFEE-O-MAT einen Kaffee gezogen.'],
+  ['guardGone', 'Die müde Wache hat den Weg zum Thron freigegeben.'],
+];
+// Nebenbei-Sprüche der NPCs (laufen nicht blockierend, wenn gerade nichts passiert)
+const BARKS = {
+  drfred: ['Hmm, die Flux-Spule braucht mehr... Flux.', 'Wo habe ich nur meinen Schraubenzieher hingelegt?', 'Der Gut-O-Mat rettet die Welt. Oder macht wenigstens sehr guten Toast.', 'Nicht anfassen! Doch, anfassen. Nein! Doch.', 'Ich spüre eine Erfindung kommen...'],
+  green: ['Ba-dum-tss. Ich übe Schlagzeug ohne Schlagzeug.', 'Lalala... nein, das reimt sich nicht.', 'Mein Bruder war früher auch nett. Ehrlich.', 'Wenn ich berühmt bin, schreibe ich ein Lied über euch.', 'Hat jemand Lust auf ein Tentakel-Duett?'],
+  gertrude: ['Ein Gasthaus ohne Brot ist wie ein Brot ohne Gasthaus.', 'Alle wollen Freiheit, keiner wischt die Tische.', 'Der Ofen ist heiß, das Herz ist warm.', 'Wer hat schon wieder Schlamm reingetragen?'],
+  hancock: ['John... Han... cock. Zu klein. Nochmal.', 'Eines Tages liest man meine Unterschrift vom Mond aus.', 'Mehr Tinte! Größere Feder!', 'Hmm. Vielleicht mit Schnörkel?'],
+  wache: ['*gähn*', 'Nicht... einschlafen... nicht...', 'Wer da? Ach, niemand. Wie immer.', 'Vierzig Jahre Dienst. Kein einziger Kaffee.'],
+  lila: ['Die Welt gehört mir! Und der Rest auch!', 'Muahaha. Ha. Hm. Das muss ich noch üben.', 'Unterwerfung ist auch nur eine Form von Ordnung.', 'Wer hat meine Statue geputzt? Sie glänzt nicht genug!'],
+};
+// Spielfigur meldet sich, wenn 40 Sekunden lang nichts passiert
+const IDLE = {
+  bernard: ['Wenn ich nur wüsste, was als Nächstes kommt...', 'Ich könnte ja mal auf den Tipp-Knopf drücken.', 'Mein Taschenrechner und ich langweilen uns.', '*räusper* Ich warte.'],
+  hoagie: ['Ich mach mal kurz Pause, Mann.', 'Hey, ist hier irgendwo was zu essen?', 'Tsss tsss tsss... Schlagzeug-Solo im Kopf.', 'Joa. Chillen kann ich.'],
+  laverne: ['Ich zähle Staubkörner. Bin bei 4711.', 'Ob Pflanzen träumen? Ich frage für eine Freundin.', 'Langweilig. Ich könnte jemanden untersuchen.', 'Hallo? Ist da draußen jemand?'],
+};
+// Sprachausgabe: Stimmlage pro Figur [Geschlecht der Stimme, Tonhöhe, Tempo]
+const TTS = {
+  bernard: ['m', 1.15, 1.08], hoagie: ['m', 0.8, 0.94], laverne: ['f', 1.15, 1.1], drfred: ['m', 1.08, 1.2], green: ['m', 1.22, 1.04],
+  gertrude: ['f', 0.98, 0.98], hancock: ['m', 0.9, 0.95], wache: ['m', 0.75, 0.9], lila: ['m', 0.72, 0.96],
+};
+for (const [id, [g, pitch, rate]] of Object.entries(TTS)) ACT[id].voice.tts = { g, pitch, rate, n: Object.keys(TTS).filter(k => TTS[k][0] === g).indexOf(id) };
 const ACH = [
   { id: 'post', name: 'Klo-Express', desc: 'Den ersten Gegenstand durch die Zeit geschickt.' },
   { id: 'apfel', name: 'Vitamin Kolonie', desc: 'Hoagie hat einen Apfel aus dem Jahr 1776 gegessen.' },
