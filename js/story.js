@@ -99,6 +99,8 @@ const TTS = {
   gertrude: ['f', 0.98, 0.98], hancock: ['m', 0.9, 0.95], wache: ['m', 0.75, 0.9], lila: ['m', 0.72, 0.96],
 };
 for (const [id, [g, pitch, rate]] of Object.entries(TTS)) ACT[id].voice.tts = { g, pitch, rate, n: Object.keys(TTS).filter(k => TTS[k][0] === g).indexOf(id) };
+// Plapperstimme: Formant-Lage pro Figur (kleiner = dunklere, größere Klangfarbe)
+for (const [id, k] of Object.entries({ bernard: 1.08, hoagie: 0.84, laverne: 1.18, drfred: 1.0, green: 1.12, gertrude: 1.1, hancock: 0.9, wache: 0.8, lila: 0.78 })) ACT[id].voice.formant = k;
 const ACH = [
   { id: 'post', name: 'Klo-Express', desc: 'Den ersten Gegenstand durch die Zeit geschickt.' },
   { id: 'apfel', name: 'Vitamin Kolonie', desc: 'Hoagie hat einen Apfel aus dem Jahr 1776 gegessen.' },
@@ -110,6 +112,7 @@ const ACH = [
   { id: 'plausch', name: 'Plaudertasche', desc: 'Mit allen sechs Figuren gesprochen.' },
   { id: 'neugier', name: 'Neugiernase', desc: '25 verschiedene Dinge angeschaut.' },
   { id: 'kristalle', name: 'Kristallklar', desc: 'Alle sechs Chrono-Kristalle eingesammelt.' },
+  { id: 'rockstar', name: 'Tentakel-Rockstar', desc: 'Im Minispiel mindestens 80 % der Töne getroffen.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
 

@@ -9,7 +9,7 @@ const Sound = (() => {
   let ac = null, master = null, musicBus = null, sfxBus = null, ambBus = null, noiseBuf = null;
   let verb = null, verbSend = null, musicSend = null, verbWanted = [0.6, 0.18], muffleF = null, muffled = false, intensity = 0;
   const verbCache = {};
-  let musicOn = true, ducked = false, retro = false, fadeNext = false;
+  let musicOn = true, ducked = false, retro = false, fadeNext = false, songT0 = 0;
   let cur = null, wanted = null, loopEnd = 0, loops = [];
   let ambList = [], ambWanted = [], ambCount = 0, offline = false;
   const pending = [];
@@ -80,6 +80,18 @@ const Sound = (() => {
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     car.connect(g); g.connect(bus); car.start(t); mod.start(t); car.stop(t + dur + 0.05); mod.stop(t + dur + 0.05);
   }
+  // E-Gitarre: zwei leicht verstimmte Sägezähne durch eine Verzerrung (tanh-Kennlinie) und einen Tiefpass
+  let distCurve = null;
+  function guitar(f, t, dur, vol, bus, mute) {
+    if (!distCurve) { distCurve = new Float32Array(1024); for (let i = 0; i < 1024; i++) distCurve[i] = Math.tanh((i / 512 - 1) * 5); }
+    const pre = ac.createGain(), sh = ac.createWaveShaper(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    pre.gain.value = 2.2; sh.curve = distCurve; fl.type = 'lowpass'; fl.frequency.value = mute ? 1400 : 3200; fl.Q.value = 1.2;
+    for (const dt of [-6, 6]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = dt; o.connect(pre); o.start(t); o.stop(t + dur + 0.08); }
+    pre.connect(sh); sh.connect(fl); fl.connect(g); g.connect(bus);
+    const d = mute ? Math.min(dur, 0.16) : dur;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.setValueAtTime(vol * 0.7, t + Math.max(0.01, d * 0.6)); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.06);
+  }
   function nz(t, dur, vol, bus, o = {}) {
     const { type = 'lowpass', f = 1000, f2 = null, q = 1, attack = 0.005 } = o;
     const s = ac.createBufferSource(); s.buffer = noiseBuf;
@@ -124,6 +136,8 @@ const Sound = (() => {
         case 'epiano': fm(f, t, Math.max(d, 0.5) * 1.3, 0.055, bus, 1, 1.6); fm(f, t, 0.35, 0.012, bus, 14, 0.4); break;
         case 'pluck': osc('triangle', f, t, 0.6, 0.11, bus, { decay: true, attack: 0.002 }); osc('sawtooth', f, t, 0.35, 0.035, bus, { lp: 3400, lp2: 600, lpT: 0.3, decay: true, attack: 0.002 }); break;
         case 'fiddle': osc('sawtooth', f, t, d * 0.95, 0.04, bus, { lp: 2800, attack: 0.04, release: 0.06, vib: 5 }); osc('sawtooth', f, t, d * 0.95, 0.018, bus, { lp: 2000, attack: 0.05, detune: 6, vib: 4 }); break;
+        case 'guitar': guitar(f, t, d * 0.92, 0.07, bus); break;
+        case 'chug': guitar(f, t, d, 0.06, bus, true); break;
         case 'organ': osc('triangle', f, t, d * 0.95, 0.035, bus, { attack: 0.06, release: 0.15 }); osc('sine', f * 2, t, d * 0.95, 0.015, bus, { attack: 0.06, release: 0.15 }); break;
         default: osc('triangle', f, t, d, 0.08, bus);
       }
@@ -202,8 +216,31 @@ const Sound = (() => {
       { inst: 'pizz', seq: x2('C3:1 G2:1 C3:1 G2:1 F2:1 C3:1 G2:2 C3:1 A2:1 G2:1 G2:1 C3:4') },
       { inst: 'pad', seq: x2('C4+E4+G4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4') },
       { inst: 'drum', seq: Array(8).fill('K:1 H:1 S:1 H:1').join(' ') },
+      { inst: 'brass', seq: 'G4:2 E4:2 A4:2 C5:2 G4:3 E4:1 D4:4 G4:2 E4:2 A4:2 C5:2 G4:2 E5:2 D5:4' },
+      { inst: 'strings', seq: x2('C4+E4+G4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4') },
+      { inst: 'drum', seq: Array(8).fill('-:1 C:1 -:1 C:1').join(' ') },
+      { inst: 'drum', seq: Array(64).fill('H:0.5').join(' ') },
+    ] },
+    // Tentakel-Rock: Begleitung fürs Minispiel – die Lead-Gitarre spielt der Spieler selbst
+    rock: { bpm: 120, tracks: [
+      { inst: 'drum', seq: Array(16).fill('K:1 S:1 K:0.5 K:0.5 S:1').join(' ') },
+      { inst: 'drum', seq: Array(128).fill('H:0.5').join(' ') },
+      { inst: 'synbass', seq: Array(4).fill('E2:0.5 E2:0.5 E3:0.5 E2:0.5 G2:0.5 G2:0.5 A2:0.5 B2:0.5 E2:0.5 E2:0.5 E3:0.5 E2:0.5 D2:0.5 D2:0.5 B1:0.5 D2:0.5 C2:0.5 C2:0.5 C3:0.5 C2:0.5 C2:0.5 G2:0.5 C3:0.5 B2:0.5 D2:0.5 D2:0.5 D3:0.5 D2:0.5 D2:0.5 A2:0.5 D3:0.5 F#2:0.5').join(' ') },
+      { inst: 'chug', seq: Array(4).fill('E3+B3:0.5 E3+B3:0.5 -:0.5 E3+B3:0.5 E3+B3:0.5 -:0.5 E3+B3:1 E3+B3:0.5 E3+B3:0.5 -:0.5 E3+B3:0.5 E3+B3:0.5 -:0.5 E3+B3:1 C3+G3:0.5 C3+G3:0.5 -:0.5 C3+G3:0.5 C3+G3:0.5 -:0.5 C3+G3:1 D3+A3:0.5 D3+A3:0.5 -:0.5 D3+A3:0.5 D3+A3:0.5 -:0.5 D3+A3:1').join(' ') },
     ] },
   };
+  const RIFFS = {
+    A: [[0, 'E4'], [0.5, 'G4'], [1, 'A4'], [1.5, 'B4'], [2.5, 'A4'], [3, 'G4']],
+    B: [[0, 'B4'], [1, 'D5'], [1.5, 'B4'], [2, 'A4'], [3, 'G4']],
+    C: [[0, 'E5'], [1, 'D5'], [1.5, 'B4'], [2, 'G4'], [3, 'A4']],
+    D: [[0, 'D5'], [0.5, 'E5'], [1, 'D5'], [2, 'B4'], [2.5, 'A4'], [3, 'B4']],
+  };
+  const ROCK_CHART = (() => {
+    const out = [];
+    'ABCD ABCD BACD ABC'.replace(/ /g, '').split('').forEach((r, bar) => RIFFS[r].forEach(([b, n]) => out.push({ beat: bar * 4 + b, note: n })));
+    out.push({ beat: 60, note: 'E5', len: 3 });
+    return out;
+  })();
   function parse(seq) {
     const ev = []; let b = 0;
     for (const tok of seq.trim().split(/\s+/)) {
@@ -294,8 +331,10 @@ const Sound = (() => {
     if (cur === name) return;
     const had = !!cur;
     stopMusic(); cur = name; fadeNext = had;
-    if (name) scheduleLoop(ac.currentTime + (had ? 0.35 : 0.15));
+    if (name) { songT0 = ac.currentTime + (had ? 0.35 : 0.15); scheduleLoop(songT0); }
   }
+  // einzelner Ton auf dem Musik-Bus (z. B. die selbst gespielte Lead-Gitarre)
+  function note(instName, n, sec) { if (ac) inst(instName, n, ac.currentTime + 0.005, sec || 0.3, musicBus); }
   function musicLevel() { return musicOn ? (ducked ? 0.1 : 0.2) : 0; }
   function setMusic(on) { musicOn = on; if (musicBus) musicBus.gain.setTargetAtTime(musicLevel(), ac.currentTime, 0.1); }
   function duck(on) { if (ducked === on) return; ducked = on; if (musicBus) musicBus.gain.setTargetAtTime(musicLevel(), ac.currentTime, 0.15); }
@@ -325,6 +364,15 @@ const Sound = (() => {
       osc('sawtooth', 200, t, 0.42, 0.022, sfxBus, { f2: 340, lp: 900, q: 9, vib: 16, attack: 0.05 });   // Knarren
       nz(t + 0.38, 0.25, 0.4, sfxBus, { type: 'lowpass', f: 300 }); osc('sine', 90, t + 0.38, 0.2, 0.2, sfxBus, { f2: 50, decay: true });
     },
+    firework: t => {
+      osc('sine', 700, t, 0.55, 0.02, sfxBus, { f2: 2200, attack: 0.05 });   // Pfeifen beim Aufsteigen
+      nz(t + 0.6, 0.5, 0.35, sfxBus, { type: 'lowpass', f: 1200, f2: 200 }); osc('sine', 70, t + 0.6, 0.4, 0.22, sfxBus, { f2: 40, decay: true });
+      for (let i = 0; i < 10; i++) nz(t + 0.75 + Math.random() * 0.7, 0.025, 0.05 + Math.random() * 0.05, sfxBus, { type: 'highpass', f: 3000 + Math.random() * 3000 });
+    },
+    squeak: t => { for (let i = 0; i < 3; i++) osc('sine', 3200 + i * 300, t + i * 0.06, 0.05, 0.03, sfxBus, { f2: 4200, decay: true }); },
+    wink: t => { osc('sine', 1200, t, 0.12, 0.05, sfxBus, { f2: 1800, decay: true }); osc('sine', 2400, t + 0.1, 0.25, 0.03, sfxBus, { decay: true }); },
+    miss: t => osc('sawtooth', 110, t, 0.18, 0.05, sfxBus, { lp: 600, f2: 80, decay: true }),
+    cheer: t => { nz(t, 2.2, 0.16, sfxBus, { type: 'bandpass', f: 1400, q: 0.6, attack: 0.25 }); for (let i = 0; i < 24; i++) nz(t + Math.random() * 1.8, 0.03, 0.08, sfxBus, { type: 'bandpass', f: 1800 + Math.random() * 1500, q: 2 }); },
     page: t => { nz(t, 0.16, 0.12, sfxBus, { type: 'bandpass', f: 2600, f2: 900, q: 1.2 }); nz(t + 0.12, 0.12, 0.08, sfxBus, { type: 'bandpass', f: 2000, f2: 700, q: 1.2 }); },
     menu: t => nz(t, 0.28, 0.05, sfxBus, { type: 'bandpass', f: 500, f2: 1700, q: 2, attack: 0.08 }),
     fanfare: t => ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => osc('square', freq(n), t + i * 0.12, i === 3 ? 0.6 : 0.12, 0.06, sfxBus, { lp: 2500 })),
@@ -372,12 +420,25 @@ const Sound = (() => {
   function onSfx(fn) { listeners.push(fn); }
 
   // Plapperstimme: kurze Silben-Töne pro Figur (wenn keine Sprachausgabe aktiv ist)
+  // Silbe = Sägezahn in Stimmlage durch zwei Bandpässe auf den Formanten eines zufälligen Vokals (a, e, i, o, u)
+  const VOWELS = [[800, 1250], [450, 1900], [320, 2300], [520, 920], [360, 780]];
   function blip(v, pan) {
     if (!ac || !v) return;
-    const t = ac.currentTime + 0.005, f = (v.blip || 220) * (0.85 + Math.random() * 0.35);
+    const t = ac.currentTime + 0.005, f = (v.blip || 220) * (0.88 + Math.random() * 0.28);
+    if (retro) {   // Klassik-Modus: altes Soundkarten-Piepsen
+      panned(pan, () => { osc(v.wave || 'square', f, t, 0.065, 0.032, sfxBus, { lp: 1900, decay: true, attack: 0.004 }); });
+      return;
+    }
+    const dur = 0.075 + Math.random() * 0.05, [f1, f2] = VOWELS[Math.floor(Math.random() * VOWELS.length)], k = v.formant || 1;
     panned(pan, () => {
-      osc(v.wave || 'square', f, t, 0.065, 0.032, sfxBus, { lp: 1900, decay: true, attack: 0.004 });
-      osc('sine', f * 2, t, 0.05, 0.012, sfxBus, { decay: true });
+      const src = ac.createOscillator(), g = ac.createGain();
+      src.type = 'sawtooth'; src.frequency.setValueAtTime(f, t); src.frequency.linearRampToValueAtTime(f * (0.9 + Math.random() * 0.2), t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3 / k, t + 0.014); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      for (const [ff, q, lv] of [[f1 * k, 6, 1], [f2 * k, 10, 0.7]]) {
+        const bp = ac.createBiquadFilter(), bg = ac.createGain(); bp.type = 'bandpass'; bp.frequency.value = ff; bp.Q.value = q; bg.gain.value = lv;
+        src.connect(bp); bp.connect(bg); bg.connect(g);
+      }
+      g.connect(sfxBus); src.start(t); src.stop(t + dur + 0.02);
     });
   }
   // Schritte je nach Untergrund
@@ -426,7 +487,7 @@ const Sound = (() => {
   // Für Trailer-Aufnahmen: Klang in einen OfflineAudioContext rendern, getaktet über tick()
   function initOffline(ctx) { init(ctx); }
 
-  return { init, initOffline, tick, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get ctx() { return ac; }, get out() { return master; } };
+  return { init, initOffline, tick, play, sfx, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------

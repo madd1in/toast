@@ -514,12 +514,14 @@ function drawStatue(c) {
 
 // ---------- Portraits (Köpfe in den Charakter-Buttons) ----------
 const PORTRAIT = { bernard: [8, -186, 0.86], hoagie: [8, -154, 0.92], laverne: [8, -176, 0.82] };
-function drawPortrait(c, id, x, y, r, bg) {
+function drawPortrait(c, id, x, y, r, bg, t = 0, talking = false) {
   c.save(); c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.clip();
-  c.fillStyle = bg; c.fillRect(x - r, y - r, r * 2, r * 2);
+  if (hd(c)) { const g = c.createRadialGradient(x - r * 0.3, y - r * 0.4, 2, x, y, r * 1.2); g.addColorStop(0, mix(bg, '#ffffff', 0.35)); g.addColorStop(1, mix(bg, '#0a0414', 0.45)); c.fillStyle = g; }
+  else c.fillStyle = bg;
+  c.fillRect(x - r, y - r, r * 2, r * 2);
   const [hx, hy, s] = PORTRAIT[id];
   c.translate(x - hx * s, y - hy * s + 6); c.scale(s, s);
-  CHAR[id](c, { talking: false, walking: false, phase: 0, seed: 1 }, 0);
+  CHAR[id](c, { talking, walking: false, phase: 0, seed: { bernard: 1, hoagie: 2.3, laverne: 3.7 }[id] || 1 }, t);
   c.restore();
 }
 // Pokal-Symbol für Erfolge

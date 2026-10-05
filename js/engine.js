@@ -599,6 +599,7 @@ function irisAt(a) { const room = ROOMS[a.room]; G.irisX = a.x; G.irisY = a.y - 
 
 // ---------- Räume, Figuren, Zeitreise-Post ----------
 function music() {
+  if (G.screen === 'rock') return Sound.play('rock');
   if (G.screen === 'title' || G.screen === 'end') { Sound.ambience([]); Sound.setReverb(1.4, 0.14); return Sound.play(G.screen === 'title' ? 'title' : 'ending'); }
   const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
   Sound.play(fx.music || r.theme || ERA[r.era].theme);
@@ -845,6 +846,7 @@ function onClick(x, y, right) {
   firstInteraction();
   if (G.screen === 'title') return titleClick(x, y);
   if (G.screen === 'end') return endClick(x, y);
+  if (G.screen === 'rock') return rockClick(x, y);
   if (G.screen !== 'game') return;
   if (G.menu) return menuClick(x, y);
   if (fsAvailable && inRect(x, y, UI.fs, 4)) { toggleFullscreen(); return; }
@@ -921,6 +923,15 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('keydown', e => {
   firstInteraction();
   const k = e.key;
+  if (G.screen === 'rock') {
+    e.preventDefault();
+    if (e.repeat) return;
+    const lane = { a: 0, A: 0, ArrowLeft: 0, s: 1, S: 1, ArrowDown: 1, d: 2, D: 2, ArrowRight: 2 }[k];
+    if (lane != null && !RK.done) rockHit(lane);
+    else if (k === 'Escape') endRock();
+    else if (k === 'Enter' && RK.done) startRock();
+    return;
+  }
   if (k === 'f' || k === 'F') { toggleFullscreen(); return; }
   if (k === 'o' || k === 'O' || k === 'F2') { if (G.screen !== 'loading') { e.preventDefault(); takePhoto(); } return; }
   if (k === 'F1' || k === 'p' || k === 'P') { e.preventDefault(); toggleRetro(); return; }
@@ -1019,6 +1030,9 @@ function pollPad(dt) {
       if (down(0)) { const b = G.titleBtns.find(b => inRect(G.mouse.x, G.mouse.y, b)); if (b) titleClick(G.mouse.x, G.mouse.y); else snapNav(0, 1); }
       if (down(9)) titleDefault();
     }
+  } else if (G.screen === 'rock') {
+    if (RK.done) { if (down(0)) startRock(); if (down(1) || down(9)) endRock(); }
+    else { if (down(2) || down(14)) rockHit(0); if (down(0) || down(13)) rockHit(1); if (down(1) || down(15)) rockHit(2); if (down(9)) endRock(); }
   } else if (G.screen === 'end') {
     if (down(0) || down(9)) { G.saved = null; G.hasSaves = anySave(); G.screen = 'title'; music(); }
   } else if (G.screen === 'game') {
@@ -1045,6 +1059,7 @@ function menuItems() {
   const back = { id: G.screen === 'game' ? 'main' : 'close', label: 'Zurück' };
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
+  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
   if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
@@ -1062,11 +1077,10 @@ function menuItems() {
   return [
     { id: 'close', label: 'Weiterspielen' },
     { id: 'notes', label: 'Notizbuch' },
-    { id: 'jukebox', label: 'Musikbox' },
+    { id: 'extras', label: 'Extras' },
     { id: 'save', label: 'Spiel speichern' },
     { id: 'load', label: 'Spiel laden' },
     { id: 'settings', label: 'Einstellungen' },
-    { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` },
     { id: 'help', label: 'Steuerung & Hilfe' },
     { id: 'new', label: 'Neues Spiel' },
   ];
@@ -1085,8 +1099,9 @@ function menuClick(x, y) {
   else if (b.id === 'auto') { if (!b.off) loadFrom(loadSave()); }
   else if (b.id === 'export') exportSave();
   else if (b.id === 'import') importSave();
+  else if (b.id === 'rock') startRock();
   else if (b.id.startsWith('jb_')) { G.jbOn = true; Sound.play(b.id.slice(3)); }
-  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox'].includes(b.id)) {
+  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras'].includes(b.id)) {
     if (b.id === 'notes') Sound.sfx('page');
     G.menu = b.id;
   }
@@ -1475,7 +1490,8 @@ function drawUI() {
   }
   for (const p of UI.ports) {
     const isCur = p.id === curId(), fla = G.flash[p.id] && G.t - G.flash[p.id] < 2000;
-    drawPortrait(cx, p.id, p.x, p.y, p.r, ERA[HOME_ERA[p.id]].bg);
+    if (isCur && !cx.isPix) { const g = cx.createRadialGradient(p.x, p.y, p.r * 0.8, p.x, p.y, p.r * 1.7); g.addColorStop(0, 'rgba(255,224,102,0.35)'); g.addColorStop(1, 'rgba(255,224,102,0)'); cx.fillStyle = g; cx.fillRect(p.x - p.r * 2, p.y - p.r * 2, p.r * 4, p.r * 4); }
+    drawPortrait(cx, p.id, p.x, p.y, p.r, ERA[HOME_ERA[p.id]].bg, G.t, !!(G.speech && G.speech.a && G.speech.a.id === p.id));
     const ring = fla && Math.floor(G.t / 200) % 2 ? '#7dff7a' : isCur ? '#ffe066' : mix(ERA[HOME_ERA[p.id]].col, '#241739', 0.35);
     E(cx, p.x, p.y, p.r, p.r, null, isCur || fla ? 3.5 : 2.5, 0, ring);
     txt(cx, ACT[p.id].name, p.x, p.y + 42, '800 13px "Baloo 2", sans-serif', isCur ? '#ffe066' : '#c3b2ff');
@@ -1506,7 +1522,7 @@ function drawMenu() {
   const extra = G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 31 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
   const bw = G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, bh = 100 + extra + items.length * 46, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
-  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox' }[G.menu] || 'Pause';
+  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
   let y = by + 74;
   if (G.menu === 'main' && G.state) { txt(cx, `Fortschritt: ${progress()} von ${MILESTONES.length} Rätseln`, W / 2, y - 2, '600 13px "Baloo 2", sans-serif', '#a99ad0'); y += 10; }
@@ -1617,8 +1633,8 @@ function fog(y, alpha, speed, off) {
   }
 }
 const TITLE_LIGHT = [1, '#e0d2ff', '#10081f'];
-function titleActor(id, x, y, sc, dir, seed) {
-  const base = ACT[id], a = { ...base, x, y, dir, walking: false, talking: false, target: null, seed };
+function titleActor(id, x, y, sc, dir, seed, extra) {
+  const base = ACT[id], a = Object.assign({ ...base, x, y, dir, walking: false, talking: false, target: null, seed }, extra);
   cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.beginPath(); cx.ellipse(x - 6 * sc, y + 2, 34 * sc * (base.shadowW || 1), 7 * sc, 0, 0, Math.PI * 2); cx.fill();
   if (cx.isPix) { cx.save(); cx.translate(x, y); cx.scale(sc * dir, sc); CHAR[base.kind](cx, a, G.t); cx.restore(); }
   else drawActorLit(a, sc, TITLE_LIGHT, 0);
@@ -1640,6 +1656,14 @@ function drawTitle() {
   // Mond mit Hof
   for (const [r, a] of [[230, 0.16], [140, 0.22]]) { const mg = cx.createRadialGradient(800, 140, 40, 800, 140, r); mg.addColorStop(0, `rgba(255,236,196,${a})`); mg.addColorStop(1, 'rgba(255,236,196,0)'); cx.fillStyle = mg; cx.fillRect(800 - r, 140 - r, r * 2, r * 2); }
   E(cx, 800, 140, 66, 66, '#fff0c4', 3, 0, '#d8b070');
+  if (G.moonWink && G.t - G.moonWink < 1400) {   // der Mond hat ein Gesicht – für einen Moment
+    const k = (G.t - G.moonWink) / 1400, a = Math.min(1, k * 8, (1 - k) * 5);
+    cx.save(); cx.globalAlpha = a;
+    E(cx, 782, 128, 5, 7, '#6a4a2a', 0); L(cx, [808, 130, 814, 126, 822, 130], 3, '#6a4a2a');
+    S(cx, null, 3, () => { cx.moveTo(780, 158); cx.quadraticCurveTo(800, 174, 822, 156); }, '#6a4a2a');
+    E(cx, 774, 150, 7, 4, 'rgba(255,140,140,0.5)', 0); E(cx, 828, 150, 7, 4, 'rgba(255,140,140,0.5)', 0);
+    cx.restore();
+  }
   for (const [x, y, rx, ry] of [[778, 118, 13, 10], [826, 160, 10, 8], [812, 116, 6, 5], [784, 166, 7, 6]]) E(cx, x, y, rx, ry, 'rgba(226,196,140,0.55)', 0);
   for (let i = 0; i < 3; i++) {   // Wolken ziehen vor dem Mond vorbei, Unterkante vom Mond angeleuchtet
     const wx = ((t * (0.01 + i * 0.004) + i * 470) % 1500) - 260, wy = 104 + i * 46, s = 1 + i * 0.25;
@@ -1661,8 +1685,9 @@ function drawTitle() {
   fog(470, 0.26, 0.006, 0);
   ridge(478, 12, '#26123f', 4, 40);
   // Fledermäuse um den Turm
+  const scare = G.batScare && G.t - G.batScare < 2500 ? (G.t - G.batScare) / 2500 : 0;
   for (let i = 0; i < 3; i++) {
-    const x = 374 + Math.cos(t * 0.0011 + i * 2.1) * (80 + i * 14), y = 150 + Math.sin(t * 0.0017 + i) * 40, wy = Math.sin(t * 0.022 + i * 3) * 5;
+    const x = 374 + Math.cos(t * 0.0011 + i * 2.1) * (80 + i * 14) + scare * (i - 1) * 400, y = 150 + Math.sin(t * 0.0017 + i) * 40 - scare * 260 * (1 - scare * 0.5), wy = Math.sin(t * (scare ? 0.06 : 0.022) + i * 3) * 5;
     L(cx, [x - 9, y - wy, x - 4, y, x, y - 2, x + 4, y, x + 9, y - wy], 2.2, '#12081c');
   }
   cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore();
@@ -1741,9 +1766,34 @@ function drawTitle() {
   txt(cx, 'Spielbar mit Maus, Touch, Tastatur oder Xbox-Controller', bx + bw / 2, y + 16, '600 13px "Baloo 2", sans-serif', 'rgba(255,240,255,0.8)');
   txt(cx, 'Fan-Projekt · nicht verbunden mit LucasArts, Disney oder Double Fine', W / 2 + 140, H - 14, '600 12px "Baloo 2", sans-serif', 'rgba(255,240,255,0.7)');
 }
+const TITLE_HITS = [['green', 0, 440, 92, 600], ['bernard', 270, 450, 316, 592], ['hoagie', 326, 476, 386, 594], ['laverne', 390, 456, 434, 590], ['lila', 468, 396, 562, 604]];
+function titleEgg(x, y) {
+  if (Math.hypot(x - 800, y - 140) < 66) { G.moonWink = G.t; Sound.sfx('wink'); return true; }
+  for (let i = 0; i < 3; i++) {
+    const t = G.t, bx = 374 + Math.cos(t * 0.0011 + i * 2.1) * (80 + i * 14), by = 150 + Math.sin(t * 0.0017 + i) * 40;
+    if (Math.hypot(x - bx, y - by) < 22 && !(G.batScare && G.t - G.batScare < 2500)) { G.batScare = G.t; Sound.sfx('squeak'); return true; }
+  }
+  const h = TITLE_HITS.find(([, x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
+  if (h) {
+    const id = h[0], lines = BARKS[id] || IDLE[id];
+    G.titleBark = { id, x: (h[1] + h[3]) / 2, y: h[2] - 8, text: pick(lines), start: G.t, until: G.t + 2600, babbleEnd: G.t + 1200 };
+    return true;
+  }
+  return false;
+}
+function drawTitleBark() {
+  const b = G.titleBark; if (!b || G.t > b.until) return;
+  cx.font = '700 17px "Baloo 2", system-ui, sans-serif';
+  const lines = wrap(b.text, 260), lh = 19, maxW = Math.max(...lines.map(l => cx.measureText(l).width));
+  const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, b.x));
+  cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, (b.until - G.t) / 300, (G.t - b.start) / 150));
+  cx.textAlign = 'center'; cx.lineJoin = 'round';
+  lines.forEach((l, i) => { const ly = b.y - (lines.length - 1 - i) * lh; cx.lineWidth = 4; cx.strokeStyle = '#0b0610'; cx.strokeText(l, x, ly); cx.fillStyle = ACT[b.id].color; cx.fillText(l, x, ly); });
+  cx.restore();
+}
 function titleClick(x, y) {
   if (G.menu) return menuClick(x, y);
-  const b = G.titleBtns.find(b => inRect(x, y, b)); if (!b) return;
+  const b = G.titleBtns.find(b => inRect(x, y, b)); if (!b) { titleEgg(x, y); return; }
   Sound.sfx('click');
   if (b.id === 'load') G.menu = 'load';
   else if (b.id === 'cont') continueGame(G.saved);
@@ -1754,25 +1804,194 @@ function titleClick(x, y) {
   else if (b.id === 'fs') { G.settings.fullscreen = !G.settings.fullscreen; saveSettings(); if (G.settings.fullscreen) enterFullscreen(); else exitFullscreen(); }
 }
 function fmtTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+const FW = { rockets: [], sparks: [], conf: [], next: 0 };
+const FW_COLS = ['#ffd23a', '#ff5fa8', '#7fe8ff', '#a6ff8f', '#d79bff', '#ffffff'];
+const CREDITS = [
+  ['Tentakel-Toast', 'ein inoffizielles Fanspiel'],
+  ['Idee, Code, Grafik und Musik', 'komplett neu und prozedural im Browser erzeugt'],
+  ['Licht, Schatten und Feuerwerk', 'gezeichnet auf einem einzigen Canvas'],
+  ['Musik und Geräusche', 'live aus dem WebAudio-Synthesizer'],
+  ['Day of the Tentacle', '© LucasArts / Disney · Remastered von Double Fine'],
+  ['Danke fürs Spielen!', 'Und denk dran: Frühstück ist die wichtigste Mahlzeit der Weltrettung.'],
+];
+function updateEnd(dt) {
+  if (G.screen !== 'end') return;
+  const s = dt / 1000;
+  if (G.t >= FW.next) {
+    const x = 110 + Math.random() * 740;
+    FW.rockets.push({ x0: x, x1: x + (Math.random() - 0.5) * 120, y1: 70 + Math.random() * 170, t0: G.t, col: pick(FW_COLS) });
+    Sound.sfx('firework', panX(x)); FW.next = G.t + 650 + Math.random() * 900;
+  }
+  for (let i = FW.rockets.length - 1; i >= 0; i--) {
+    const r = FW.rockets[i], k = (G.t - r.t0) / 600;
+    if (k >= 1) {
+      FW.rockets.splice(i, 1);
+      const n = G.quality < 1 ? 36 : 64, col2 = pick(FW_COLS);
+      for (let j = 0; j < n; j++) { const a = j / n * Math.PI * 2, v = 90 + Math.random() * 140; FW.sparks.push({ x: r.x1, y: r.y1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 1100 + Math.random() * 800, col: j % 3 ? r.col : col2 }); }
+    }
+  }
+  for (let i = FW.sparks.length - 1; i >= 0; i--) {
+    const p = FW.sparks[i]; p.life += dt;
+    if (p.life > p.max) { FW.sparks.splice(i, 1); continue; }
+    p.vx *= 0.985; p.vy = p.vy * 0.985 + 70 * s; p.x += p.vx * s; p.y += p.vy * s;
+  }
+  while (FW.conf.length < 46) FW.conf.push({ x: Math.random() * W, y: -10 - Math.random() * H, v: 40 + Math.random() * 50, r: Math.random() * 6, sp: (Math.random() - 0.5) * 6, col: pick(FW_COLS) });
+  for (const c of FW.conf) { c.y += c.v * s; c.x += Math.sin(G.t * 0.002 + c.r * 3) * 20 * s; c.r += c.sp * s; if (c.y > H + 10) { c.y = -10; c.x = Math.random() * W; } }
+}
 function drawEnd() {
-  const t = G.t;
-  cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#1a0a2e'], [1, '#6a2a7a']]); cx.fillRect(0, 0, W, H);
-  cx.globalAlpha = 0.5;
-  for (let i = 0; i < 18; i++) { const k = ((t * 0.00015 + i / 18) % 1); heart(cx, (i * 197) % W, H - k * (H + 40), 8 + (i % 3) * 3, ['#ff5fa8', '#ffd23a', '#7dff7a'][i % 3], 2); }
-  cx.globalAlpha = 1;
-  txt(cx, 'ENDE', W / 2, 140, '400 96px "Titan One", sans-serif', '#ffd23a', 'center', 12, '#2a0a3a');
-  txt(cx, 'Lila Tentakel ist jetzt nett. Vorerst.', W / 2, 188, '700 24px "Baloo 2", sans-serif', '#f3e6ff', 'center', 5, '#2a0a3a');
-  const ta = { talking: false, walking: false, phase: 0, seed: 0, nice: 1 };
-  cx.save(); cx.translate(W / 2 + 10, 420); CHAR.purple(cx, ta, t + 5000); cx.restore();
+  const t = G.t, hd = !cx.isPix;
+  cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#080320'], [0.55, '#2a0f4a'], [1, '#6a2a6e']]); cx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 80; i++) { const a = 0.3 + 0.7 * Math.abs(Math.sin(t * 0.0012 + i)); E(cx, (i * 173) % W, (i * 89) % 330, 1.3, 1.3, `rgba(255,255,255,${a})`, 0); }
+  // Feuerwerk
+  for (const r of FW.rockets) {
+    const k = (G.t - r.t0) / 600, x = r.x0 + (r.x1 - r.x0) * k, y = H - (H - r.y1) * (1 - Math.pow(1 - k, 2));
+    L(cx, [x, y, x - (r.x1 - r.x0) * 0.05, y + 26], 2.5, 'rgba(255,230,180,0.7)'); E(cx, x, y, 2.5, 2.5, '#fff6d0', 0);
+  }
+  if (hd) { cx.save(); cx.globalCompositeOperation = 'lighter'; }
+  for (const p of FW.sparks) {
+    const a = 1 - p.life / p.max;
+    if (hd) { const g = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 7); g.addColorStop(0, hexA(p.col, 0.8 * a)); g.addColorStop(1, hexA(p.col, 0)); cx.fillStyle = g; cx.fillRect(p.x - 7, p.y - 7, 14, 14); }
+    else { cx.globalAlpha = a; E(cx, p.x, p.y, 1.8, 1.8, p.col, 0); cx.globalAlpha = 1; }
+  }
+  if (hd) cx.restore();
+  // Hügel mit allen Figuren
+  S(cx, grad(cx, 0, 520, 0, H, [[0, '#2a5236'], [1, '#0c2214']]), 0, () => { cx.moveTo(-4, 572); cx.quadraticCurveTo(480, 528, 964, 572); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
+  const cast = [['green', 70, 1.0, 1], ['bernard', 180, 0.62, 1], ['hoagie', 262, 0.62, 1], ['laverne', 344, 0.62, 1], ['lila', 480, 0.92, 1], ['drfred', 614, 0.66, -1], ['gertrude', 704, 0.62, -1], ['hancock', 792, 0.62, -1], ['wache', 892, 0.9, -1]];
+  cast.forEach(([id, x, sc, dir], i) => {
+    const y = 586 - Math.sin((x - 480) / 480 * Math.PI / 2 + Math.PI / 2) * 0 - Math.abs(Math.sin(t * 0.004 + i * 1.3)) * 6;
+    titleActor(id, x, y, sc, dir, i, { talking: Math.sin(t * 0.0021 + i * 2.2) > 0.7, nice: id === 'lila' ? 1 : 0 });
+  });
+  // Konfetti
+  for (const c of FW.conf) { cx.save(); cx.translate(c.x, c.y); cx.rotate(c.r); cx.scale(1, Math.abs(Math.cos(c.r * 1.7)) + 0.2); cx.fillStyle = c.col; cx.fillRect(-3, -2, 6, 4); cx.restore(); }
+  // Titel, Statistik, Abspann
+  if (hd) { const lg = cx.createRadialGradient(W / 2, 120, 40, W / 2, 120, 360); lg.addColorStop(0, 'rgba(14,4,30,0.55)'); lg.addColorStop(1, 'rgba(14,4,30,0)'); cx.fillStyle = lg; cx.fillRect(0, 0, W, 300); }
+  const gl = ((t * 0.004) % 14) - 3;
+  ['E', 'N', 'D', 'E'].forEach((ch, i) => {
+    const x = W / 2 + (i - 1.5) * 76, y = 122 + Math.sin(t * 0.004 + i * 0.8) * 6, hl = Math.max(0, 1 - Math.abs(gl - i) / 1.4);
+    txt(cx, ch, x, y + 8, '400 96px "Titan One", sans-serif', '#6a1838', 'center', 12, '#2a0a3a');
+    txt(cx, ch, x, y, '400 96px "Titan One", sans-serif', grad(cx, 0, y - 80, 0, y, [[0, mix('#fff0a0', '#ffffff', hl)], [1, '#ff7a30']]), 'center', 12, '#2a0a3a');
+  });
+  txt(cx, 'Lila Tentakel ist jetzt nett. Vorerst.', W / 2, 172, '700 24px "Baloo 2", sans-serif', '#f3e6ff', 'center', 5, '#2a0a3a');
   const st = G.endStats || { ms: 0, sent: 0 };
-  txt(cx, `Spielzeit ${fmtTime(st.ms)} · Zeitreise-Sendungen: ${st.sent} · Erfolge: ${achCount()}/${ACH.length}`, W / 2, 452, '800 17px "Baloo 2", sans-serif', '#ffd23a', 'center', 4, '#2a0a3a');
-  const lines = ['Tentakel-Toast – ein inoffizielles Fanspiel', 'Idee, Code, Grafik und Musik: komplett neu und prozedural erzeugt', 'Day of the Tentacle © LucasArts / Disney · Remastered von Double Fine'];
-  lines.forEach((l, i) => txt(cx, l, W / 2, 482 + i * 20, '600 14px "Baloo 2", sans-serif', '#d7c6ff'));
-  const b = { x: W / 2 - 130, y: 548, w: 260, h: 40 }; G.endBtn = b;
-  R(cx, b.x, b.y, b.w, b.h, inRect(G.mouse.x, G.mouse.y, b) ? '#ffe066' : '#ffd23a', 3, 12);
-  txt(cx, 'Nochmal von vorn', W / 2, b.y + 28, '400 20px "Titan One", sans-serif', '#2a0a3a');
+  txt(cx, `Spielzeit ${fmtTime(st.ms)} · Zeitreise-Sendungen: ${st.sent} · Erfolge: ${achCount()}/${ACH.length} · Kristalle: ${G.state ? crystalCount() : 0}/${CRYSTAL_ROOMS.length}`, W / 2, 204, '800 16px "Baloo 2", sans-serif', '#ffd23a', 'center', 4, '#2a0a3a');
+  const ci = Math.floor(t / 3600) % CREDITS.length, ck = (t % 3600) / 3600, ca = Math.min(1, ck * 6, (1 - ck) * 6);
+  cx.save(); cx.globalAlpha = ca;
+  txt(cx, CREDITS[ci][0], W / 2, 246, '400 22px "Titan One", sans-serif', '#ffffff', 'center', 5, '#2a0a3a');
+  txt(cx, CREDITS[ci][1], W / 2, 270, '600 15px "Baloo 2", sans-serif', '#d7c6ff', 'center', 4, '#2a0a3a');
+  cx.restore();
+  const bt = { x: W / 2 - 130, y: 294, w: 260, h: 40 }; G.endBtn = bt;
+  R(cx, bt.x, bt.y, bt.w, bt.h, inRect(G.mouse.x, G.mouse.y, bt) ? '#ffe066' : '#ffd23a', 3, 12, '#5a2a10');
+  txt(cx, 'Nochmal von vorn', W / 2, bt.y + 28, '400 20px "Titan One", sans-serif', '#2a0a3a');
 }
 function endClick(x, y) { if (G.endBtn && inRect(x, y, G.endBtn)) { G.saved = null; G.hasSaves = anySave(); G.screen = 'title'; music(); } }
+
+// ---------- Minispiel: Tentakel-Rock (Rhythmus-Spiel mit dem Grünen Tentakel) ----------
+const ROCK = { lanes: [400, 500, 600], cols: ['#7dff7a', '#ffe066', '#ff7ad9'], top: 70, hitY: 500, look: 1.6, keyLabels: ['A / ←', 'S / ↓', 'D / →'], padLabels: ['X', 'A', 'B'] };
+const RK = { notes: [], score: 0, combo: 0, best: 0, hits: 0, fx: [], done: false, flash: [0, 0, 0], btns: [], start: 0, lastHit: 0 };
+function rockLane(n) { return /^(E4|G4)$/.test(n) ? 0 : /^(A4|B4)$/.test(n) ? 1 : 2; }
+function startRock() {
+  G.menu = null; G.screen = 'rock';
+  Object.assign(RK, { score: 0, combo: 0, best: 0, hits: 0, fx: [], done: false, flash: [0, 0, 0], btns: [], lastHit: 0 });
+  RK.notes = Sound.chart.map(c => ({ note: c.note, len: c.len || 0, lane: rockLane(c.note), t: c.beat * 0.5, state: 0 }));
+  Sound.ambience([]); Sound.play(null); Sound.play('rock'); Sound.setReverb(1.1, 0.12);
+  RK.start = G.t + 150;
+}
+function rockTime() { const ac = Sound.ctx; return ac && Sound.songT0 && Sound.current === 'rock' ? ac.currentTime - Sound.songT0 : (G.t - RK.start) / 1000; }
+function rockHit(lane) {
+  if (RK.done) return;
+  RK.flash[lane] = G.t;
+  const now = rockTime();
+  let best = null, bd = 1;
+  for (const n of RK.notes) if (!n.state && n.lane === lane) { const d = Math.abs(n.t - now); if (d < bd) { bd = d; best = n; } }
+  if (best && bd < 0.18) {
+    best.state = 1; RK.hits++; RK.combo++; RK.best = Math.max(RK.best, RK.combo); RK.lastHit = G.t;
+    const perfect = bd < 0.07, mult = 1 + Math.min(3, Math.floor(RK.combo / 8));
+    RK.score += (perfect ? 100 : 50) * mult;
+    RK.fx.push({ text: perfect ? 'Perfekt!' : 'Gut!', x: ROCK.lanes[lane], y: ROCK.hitY - 40, t0: G.t, col: perfect ? '#ffe066' : '#c8f0ff' });
+    Sound.note('guitar', best.note, best.len ? best.len * 0.5 : 0.3);
+    if (perfect) for (let i = 0; i < 8; i++) puff(ROCK.lanes[lane], ROCK.hitY, ROCK.cols[lane], 1, { vy: 120, vx: 160, r: 2.6, max: 500 });
+  } else { RK.combo = 0; Sound.sfx('miss'); }
+}
+function updateRock() {
+  if (G.screen !== 'rock' || RK.done) return;
+  const now = rockTime();
+  for (const n of RK.notes) if (!n.state && now - n.t > 0.18) { n.state = 2; RK.combo = 0; RK.fx.push({ text: 'Daneben', x: ROCK.lanes[n.lane], y: ROCK.hitY - 40, t0: G.t, col: '#ff8a8a' }); }
+  if (now > 33.5) {
+    RK.done = true;
+    const pct = RK.hits / RK.notes.length;
+    if (pct >= 0.8) unlock('rockstar');
+    Sound.sfx('cheer');
+  }
+  RK.fx = RK.fx.filter(f => G.t - f.t0 < 700);
+}
+function endRock() { G.screen = 'game'; music(); }
+function drawRock() {
+  const t = G.t, now = rockTime(), beat = now / 0.5, bp = 1 - (beat - Math.floor(beat)), hd = !cx.isPix;
+  // Bühne: Rückwand, Lautsprecher, wandernde Scheinwerfer, Publikum
+  cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#14062a'], [0.7, '#2a0e3e'], [1, '#08020e']]); cx.fillRect(0, 0, W, H);
+  for (const x of [40, 840]) { R(cx, x, 250, 80, 150, '#1c1424', 3, 6); for (const yy of [290, 360]) { E(cx, x + 40, yy, 26 + bp * 2, 26 + bp * 2, '#2e2438', 3); E(cx, x + 40, yy, 9, 9, '#0c0812', 2); } }
+  if (hd) {
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    ROCK.cols.forEach((col, i) => {
+      const ang = Math.sin(t * 0.0009 + i * 2.1) * 0.5, x0 = 200 + i * 280;
+      cx.save(); cx.translate(x0, -10); cx.rotate(ang);
+      const g = cx.createLinearGradient(0, 0, 0, 520); g.addColorStop(0, hexA(col, 0.32)); g.addColorStop(1, hexA(col, 0));
+      cx.fillStyle = g; cx.beginPath(); cx.moveTo(-14, 0); cx.lineTo(14, 0); cx.lineTo(120, 520); cx.lineTo(-120, 520); cx.closePath(); cx.fill(); cx.restore();
+    });
+    cx.restore();
+  }
+  R(cx, -4, 420, W + 8, 30, '#3a2238', 3, 0);   // Bühnenkante
+  // Grüner Tentakel mit Gitarre
+  const ga = { ...ACT.green, x: 200, y: 420 - bp * 4, dir: 1, walking: false, talking: G.t - RK.lastHit < 160, seed: 2 };
+  if (hd) drawActorLit(ga, 1.3, [1, '#ffe2ff', '#140828'], 0); else { cx.save(); cx.translate(ga.x, ga.y); cx.scale(1.3, 1.3); CHAR.green(cx, ga, t); cx.restore(); }
+  cx.save(); cx.translate(222, 330 - bp * 4); cx.rotate(-0.5);
+  P(cx, [-30, -12, 8, -18, 18, -6, 8, 14, -30, 10], '#c8322e', 2.5); R(cx, 10, -4, 78, 7, '#6a3a1a', 2, 2); R(cx, 86, -7, 14, 13, '#2a1a10', 2, 3);
+  E(cx, -8, -2, 6, 6, '#1a0a0a', 0); cx.restore();
+  // Publikum wippt im Takt
+  for (let i = 0; i < 22; i++) { const x = (i * 47 + 10) % W, y = 560 + ((i * 37) % 30) - Math.abs(Math.sin((beat + i * 0.3) * Math.PI)) * 8; E(cx, x, y, 18, 22, '#0a0410', 0); E(cx, x, y - 26, 11, 12, '#0a0410', 0); if (i % 4 === 0) L(cx, [x + 10, y - 20, x + 18, y - 52], 6, '#0a0410'); }
+  // Bahnen, Trefferzone, Noten
+  ROCK.lanes.forEach((x, i) => {
+    R(cx, x - 38, ROCK.top - 20, 76, ROCK.hitY - ROCK.top + 60, 'rgba(10,4,24,0.55)', 2, 18, hexA(ROCK.cols[i], 0.35));
+    const fl = Math.max(0, 1 - (t - RK.flash[i]) / 220);
+    E(cx, x, ROCK.hitY, 30 + fl * 6, 30 + fl * 6, hexA(ROCK.cols[i], 0.18 + fl * 0.5), 4, 0, ROCK.cols[i]);
+    txt(cx, G.pointer === 'pad' ? ROCK.padLabels[i] : ROCK.keyLabels[i], x, ROCK.hitY + 56, '800 15px "Baloo 2", sans-serif', '#e6dcff', 'center', 4, '#0b0610');
+  });
+  for (const n of RK.notes) {
+    if (n.state === 1) continue;
+    const dt = n.t - now; if (dt > ROCK.look || dt < -0.3) continue;
+    const x = ROCK.lanes[n.lane], y = ROCK.hitY - dt / ROCK.look * (ROCK.hitY - ROCK.top), col = n.state === 2 ? '#6a5a7a' : ROCK.cols[n.lane];
+    if (n.len) { const y2 = ROCK.hitY - (dt + n.len * 0.5) / ROCK.look * (ROCK.hitY - ROCK.top); R(cx, x - 8, Math.max(ROCK.top, y2), 16, y - Math.max(ROCK.top, y2), hexA(col, 0.5), 0, 8); }
+    if (hd && n.state !== 2) { const g = cx.createRadialGradient(x, y, 4, x, y, 34); g.addColorStop(0, hexA(col, 0.5)); g.addColorStop(1, hexA(col, 0)); cx.save(); cx.globalCompositeOperation = 'lighter'; cx.fillStyle = g; cx.fillRect(x - 34, y - 34, 68, 68); cx.restore(); }
+    E(cx, x, y, 22, 22, col, 3); E(cx, x - 6, y - 7, 7, 5, 'rgba(255,255,255,0.55)', 0);
+  }
+  drawParts();
+  for (const f of RK.fx) { const k = (G.t - f.t0) / 700; cx.globalAlpha = 1 - k; txt(cx, f.text, f.x, f.y - k * 30, '400 22px "Titan One", sans-serif', f.col, 'center', 5, '#0b0610'); cx.globalAlpha = 1; }
+  // Anzeige
+  txt(cx, 'TENTAKEL-ROCK', 24, 44, '400 30px "Titan One", sans-serif', '#a6ff8f', 'left', 6, '#0b0610');
+  txt(cx, 'Esc / Menü: beenden', 24, 66, '600 13px "Baloo 2", sans-serif', '#c3b2ff', 'left', 3, '#0b0610');
+  txt(cx, `${RK.score}`, W - 24, 46, '400 32px "Titan One", sans-serif', '#ffe066', 'right', 6, '#0b0610');
+  if (RK.combo > 2) txt(cx, `${RK.combo}er-Kombo · x${1 + Math.min(3, Math.floor(RK.combo / 8))}`, W - 24, 70, '800 15px "Baloo 2", sans-serif', '#ffffff', 'right', 4, '#0b0610');
+  R(cx, 300, 18, 360, 10, 'rgba(255,255,255,0.12)', 0, 5); R(cx, 300, 18, 360 * Math.max(0, Math.min(1, now / 32)), 10, '#a6ff8f', 0, 5);
+  if (now < 1.2) txt(cx, now < 0 ? 'Bereit?' : 'Los!', W / 2, 230, '400 54px "Titan One", sans-serif', '#ffe066', 'center', 9, '#0b0610');
+  // Ergebnis
+  RK.btns = [];
+  if (RK.done) {
+    cx.fillStyle = 'rgba(8,3,18,0.72)'; cx.fillRect(0, 0, W, H);
+    const pct = RK.hits / RK.notes.length, rank = pct >= 0.95 ? 'Legende des Tentakel-Rock!' : pct >= 0.8 ? 'Rockstar!' : pct >= 0.55 ? 'Garagenband' : 'Nochmal üben, Mann.';
+    R(cx, W / 2 - 230, 120, 460, 330, '#1f1432', 3, 18, '#7a5ab8');
+    txt(cx, rank, W / 2, 180, '400 34px "Titan One", sans-serif', '#ffd23a', 'center', 6, '#2a0a3a');
+    txt(cx, `${RK.hits} von ${RK.notes.length} Tönen · ${Math.round(pct * 100)} %`, W / 2, 224, '800 20px "Baloo 2", sans-serif', '#ffffff');
+    txt(cx, `Punkte: ${RK.score} · beste Kombo: ${RK.best}`, W / 2, 254, '700 17px "Baloo 2", sans-serif', '#d7c6ff');
+    if (pct >= 0.8) txt(cx, 'Erfolg: Tentakel-Rockstar', W / 2, 284, '800 15px "Baloo 2", sans-serif', '#a6ff8f');
+    RK.btns = [{ id: 'again', label: 'Nochmal', x: W / 2 - 200, y: 340, w: 180, h: 44 }, { id: 'back', label: 'Zurück zum Spiel', x: W / 2 + 20, y: 340, w: 180, h: 44 }];
+    for (const b of RK.btns) button(b, b.label, inRect(G.mouse.x, G.mouse.y, b));
+  }
+}
+function rockClick(x, y) {
+  if (RK.done) { const b = RK.btns.find(b => inRect(x, y, b)); if (!b) return; Sound.sfx('click'); if (b.id === 'again') startRock(); else endRock(); return; }
+  const i = ROCK.lanes.findIndex(lx => Math.abs(x - lx) < 70);
+  if (i >= 0 && y > ROCK.top - 30) rockHit(i);
+}
 
 // ---------- Hauptschleife ----------
 function update(dt) {
@@ -1783,6 +2002,9 @@ function update(dt) {
   if (sp && (G.t >= sp.end || G.skipAll)) finishSpeech();
   else if (sp && sp.babble && G.t < sp.babbleEnd && G.t >= G.nextBlip) { Sound.blip(sp.a.voice, panOf(sp.a)); G.nextBlip = G.t + 70 + Math.random() * 60; }
   for (let i = timers.length - 1; i >= 0; i--) if (G.skipAll || G.t >= timers[i].until) { const r = timers[i].r; timers.splice(i, 1); r(); }
+  updateEnd(dt); updateRock();
+  const tb = G.titleBark;
+  if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
   updateParts(dt); updateMotes(dt); updateWeather(); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
   Sound.muffle(!!G.menu && G.menu !== 'jukebox' && G.screen === 'game');
   if (G.jbOn && G.menu !== 'jukebox') { G.jbOn = false; music(); }
@@ -1810,8 +2032,9 @@ function update(dt) {
   }
 }
 function drawScreen() {
-  if (G.screen === 'title') { drawTitle(); if (!cx.isPix) drawBloom(0.2, H); if (G.menu) drawMenu(); }
-  else if (G.screen === 'end') drawEnd();
+  if (G.screen === 'title') { drawTitle(); drawTitleBark(); if (!cx.isPix) drawBloom(0.2, H); if (G.menu) drawMenu(); }
+  else if (G.screen === 'end') { drawEnd(); if (!cx.isPix) drawBloom(0.22, H); }
+  else if (G.screen === 'rock') { drawRock(); if (!cx.isPix) drawBloom(0.25, H); }
   else if (G.screen === 'game') { drawScene(); drawUI(); drawFly(); if (G.menu) drawMenu(); }
   else { cx.fillStyle = '#120a1c'; cx.fillRect(0, 0, W, H); txt(cx, 'Lade …', W / 2, H / 2, '700 22px sans-serif', '#d7c6ff'); }
   drawCursor();

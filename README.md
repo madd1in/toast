@@ -41,7 +41,11 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - NPCs murmeln nebenbei vor sich hin, und wer zu lange herumsteht, bekommt einen Spruch von der eigenen Figur
 - Spiegelungen auf Fliesen und Marmor, leichtes Atmen im Stand, Dialog-Kamera, die bei Gesprächen sanft heranzoomt, Funkenregen beim Aufheben, Gräser im Vordergrund der Gärten, neues Titelbild mit Hügel-Ebenen, Nebel, leuchtender Villa, Fledermäusen und den drei Helden im Mondlicht
 - **Neue Musik:** Tavernen-Gigue im Gasthaus 1776, Bossa-Lounge in der Lobby, neue Instrumente (Streicher, Blech, E-Piano, Laute, Fiedel), Schlagzeug mit Hi-Hats, Klatschen und Bodhrán, Instrumente im Stereo-Bild verteilt, Kompressor auf der Summe
-- **Musikbox** im Menü: alle Stücke anhören
+- **Musikbox** im Menü (Extras): alle Stücke anhören
+- **Minispiel „Tentakel-Rock“** (Menü → Extras): mit dem Grünen Tentakel die Lead-Gitarre im Takt spielen – drei Bahnen, Kombos, eigener Rock-Song mit verzerrter Gitarre und ein Erfolg ab 80 % Treffern
+- **Plapperstimmen mit Vokal-Formanten:** Kauderwelsch statt Piepsen, jede Figur mit eigener Klangfarbe
+- **Großes Finale:** Feuerwerk, Konfetti, alle Figuren auf dem Hügel, Abspann und eine größere Abspannmusik
+- Lebendige Porträts (blinzeln, reden mit) und versteckte Gags auf dem Titelbildschirm
 - **Adaptive Musik:** Mit jedem gelösten Rätsel kommen neue Instrumente dazu; jede Figur hat ein kurzes Erkennungsmotiv beim Gesprächsbeginn; im Pausenmenü klingt alles gedämpft
 - **Chrono-Kristalle:** In sechs Räumen liegt je ein Kristall versteckt – wer alle findet, bekommt einen Erfolg
 - **Foto-Taste** (O oder F2): speichert das aktuelle Bild als PNG
