@@ -387,6 +387,11 @@ const Sound = (() => {
     snore: t => { nz(t, 1.3, 0.045, ambBus, { type: 'bandpass', f: 300, f2: 520, q: 2, attack: 0.6 }); osc('sawtooth', 62, t + 1.45, 1.1, 0.028, ambBus, { f2: 48, lp: 380, q: 4, vib: 9, attack: 0.15 }); return 4.2 + Math.random() * 1.2; },
     hum: t => { osc('sine', 60, t, 4.2, 0.016, ambBus, { attack: 0.8, release: 0.8 }); osc('sine', 120, t, 4.2, 0.008, ambBus, { attack: 0.8, release: 0.8 }); if (Math.random() < 0.25) nz(t + Math.random() * 2, 0.6, 0.01, ambBus, { type: 'highpass', f: 6000 }); return 3.4; },   // Laborbrummen
     air: t => { nz(t, 4.4, 0.018, ambBus, { type: 'lowpass', f: 380, attack: 1.4, release: 1.4 }); return 3.6; },   // leise Lüftung / Raumton
+    // Standuhr: ab und zu drei tiefe Schläge (Glocke mit unharmonischen Obertönen)
+    chime: t => {
+      if (Math.random() < 0.4) for (let i = 0; i < 3; i++) { const s = t + i * 1.3; osc('sine', 196, s, 2.6, 0.035, ambBus, { decay: true }); osc('sine', 196 * 2.76, s, 1.4, 0.012, ambBus, { decay: true }); osc('sine', 196 * 5.4, s, 0.7, 0.006, ambBus, { decay: true }); nz(s, 0.03, 0.02, ambBus, { type: 'bandpass', f: 1800, q: 2 }); }
+      return 45 + Math.random() * 45;
+    },
     wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt

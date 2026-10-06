@@ -130,9 +130,9 @@ function drawRipples() {
 // ---------- Raum-Atmosphäre: Hall, Licht auf Figuren, Bloom, Wetter, Schwebeteilchen ----------
 // light: [Seite der Hauptlichtquelle (-1 links, 1 rechts), Führungslicht, Schattenfarbe]
 const ROOM_FX = {
-  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic', 'air'], motes: 'dust', music: 'lounge' },
+  lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic', 'air', 'chime'], motes: 'dust', music: 'lounge' },
   labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps', 'hum'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
-  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak'], motes: 'warm', flicker: 'fire', music: 'tavern' },
+  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak', 'chime'], motes: 'warm', flicker: 'fire', music: 'tavern' },
   garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, amb: ['future', 'rain'], motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars', storm: true, rain: true },
   vorraum: { music: 'march', verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
@@ -1779,6 +1779,7 @@ function drawScene() {
   drawSky();
   drawMeteor(room);
   drawLobbyBat(room);
+  drawCandles(room);
   HDS.deco = true;   // Raum-Grafik: handgezeichnete Kanten, Fasen, Holzmaserung
   try {
     if (room.dyn) room.dyn(cx, G.t);
@@ -1792,6 +1793,7 @@ function drawScene() {
   HDS.deco = true;
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
   drawSwanFlight();
+  drawEmbers(room);
   if (!cx.isPix) { drawRays(room); drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass) drawForeground(fg); }
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
@@ -1819,6 +1821,7 @@ function drawScene() {
 }
 // Hinweiszeile oben und Erfolgs-Toast (im Spiel und auf dem Titelbildschirm)
 function drawToasts() {
+  drawKloFunk();
   if (G.note && G.t < G.note.until) {
     const nz = uf(15), nf = `700 ${nz}px "Baloo 2", sans-serif`; cx.font = nf;
     const w = Math.min(W - 20, cx.measureText(T(G.note.text)).width + 30), nh = nz * 2;
@@ -3307,6 +3310,27 @@ function drawSaber() {
 }
 // Fledermaus: flattert ab und zu draußen am Lobbyfenster vorbei (nur im Fensterglas sichtbar)
 function batK() { const m = (G.t + 9000) % 23000; return m < 1500 ? m / 1500 : -1; }
+// Kaminfunken im Gasthaus: steigen aus dem Feuer auf, glimmen und verlöschen
+function drawEmbers(room) {
+  if (room.id !== 'gasthaus') return;
+  for (let i = 0; i < 9; i++) {
+    const q = ((G.t * 0.00042) + i * 0.137) % 1, x = 104 + ((i * 37) % 70) + Math.sin(G.t * 0.003 + i * 2.3) * 6 * q, y = 296 - q * 82;
+    const a = Math.sin(q * Math.PI) * (0.6 + 0.4 * Math.sin(G.t * 0.02 + i * 5));
+    if (a <= 0.05) continue;
+    if (!cx.isPix) glow(x, y, 7, '#ff9a40', 0.5 * a);
+    cx.globalAlpha = a; E(cx, x, y, 1.3, 1.3, q < 0.5 ? '#ffe080' : '#ff8a30', 0); cx.globalAlpha = 1;
+  }
+}
+// Kerzen am Kronleuchter im Thronsaal: flackernde Flammen mit warmem Schein
+function drawCandles(room) {
+  if (room.id !== 'thron') return;
+  [259, 279, 299, 319, 339].forEach((x, i) => {
+    const f = Math.sin(G.t * 0.017 + i * 1.9) * 0.5 + Math.sin(G.t * 0.041 + i * 3.1) * 0.3, h = 7 + f * 1.6, sx = Math.sin(G.t * 0.013 + i) * 0.8;
+    if (!cx.isPix) glow(x, 64, 16 + f * 3, '#ffc860', 0.42 + f * 0.08);
+    S(cx, '#ffd84a', 0, () => { cx.moveTo(x - 2.6, 68); cx.quadraticCurveTo(x - 3, 64 - h * 0.4, x + sx, 66 - h); cx.quadraticCurveTo(x + 3, 64 - h * 0.4, x + 2.6, 68); cx.closePath(); });
+    E(cx, x, 66.5, 1.2, 1.8, '#fff6d0', 0);
+  });
+}
 function drawLobbyBat(room) {
   if (room.id !== 'lobby') return;
   const k = batK(); if (k < 0) return;
@@ -3332,6 +3356,32 @@ function drawMeteor(room) {
   if (!cx.isPix) { for (let i = 0; i < 8; i++) glow(x + i * 14, y - i * 3.3, 14 - i, '#c070ff', 0.4 - i * 0.04); glow(x, y, 26, '#ffd0ff', 0.6); }
   else L(cx, [x, y, x + 50, y - 12], 3, '#c070ff');
   E(cx, x, y, 4, 4, '#ffe8ff', 0);
+}
+// Klo-Funk: alle paar Minuten schickt ein anderer Held eine kurze Nachricht durch die Zeit
+function updateKloFunk() {
+  if (G.screen !== 'game' || !G.state || G.fast || G.inIntro) return;
+  if (!G.funkNext) G.funkNext = G.t + 100000 + Math.random() * 60000;
+  if (G.funk && G.t - G.funk.t0 > 6500) G.funk = null;
+  if (G.t < G.funkNext || G.busy || G.dialog || G.menu || G.speech || G.fade !== 0) return;
+  const me_ = curId(), list = KLO_FUNK.filter(m => m[1] === me_ && !(G.funkSeen || {})[m[2]]);
+  G.funkNext = G.t + 150000 + Math.random() * 90000;
+  const m = list.length ? pick(list) : null; if (!m) return;
+  (G.funkSeen || (G.funkSeen = {}))[m[2]] = 1;
+  G.funk = { from: m[0], text: m[2], t0: G.t };
+  Sound.sfx('flush', -0.6); setTimeout(() => { if (G.settings.babble) for (let i = 0; i < 5; i++) setTimeout(() => Sound.blip(ACT[m[0]].voice, -0.5), i * 110); }, 600);
+}
+function drawKloFunk() {
+  const f = G.funk; if (!f || G.screen !== 'game') return;
+  const k = (G.t - f.t0) / 6500, a = Math.min(1, k * 8, (1 - k) * 6); if (a <= 0) return;
+  const fz = uf(14); cx.font = `700 ${fz}px "Baloo 2", sans-serif`;
+  const lines = wrap(T(f.text), 300 * Math.min(UIS, 1.3)), lh = fz + 3, w = Math.max(...lines.map(l => cx.measureText(l).width)) + 84, h = 34 + lines.length * lh;
+  const x = 14 - (1 - Math.min(1, k * 6)) * 60, y = 96;
+  cx.save(); cx.globalAlpha = a;
+  R(cx, x, y, w, h, 'rgba(20,10,32,0.9)', 2.5, 12, ERA[HOME_ERA[f.from]].col);
+  drawPortrait(cx, f.from, x + 30, y + h / 2, 20, ERA[HOME_ERA[f.from]].bg, G.t, k < 0.4);
+  txt(cx, `Klo-Post von ${ACT[f.from].name}`, x + 58, y + 20, `800 ${uf(12)}px "Baloo 2", sans-serif`, ERA[HOME_ERA[f.from]].col, 'left');
+  lines.forEach((l, i) => txt(cx, '\u200b' + l, x + 58, y + 22 + (i + 1) * lh, `700 ${fz}px "Baloo 2", sans-serif`, '#f3eaff', 'left'));
+  cx.restore();
 }
 function updateEggs() {
   if (G.screen !== 'game' || !G.state || G.fast) return;
@@ -3585,7 +3635,7 @@ function update(dt) {
   updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt); updateCritters(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
-  updateParts(dt); updateMotes(dt); updateEggs(); updateFidget(); updateNpcFoley(); updateSnuggle(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
+  updateParts(dt); updateMotes(dt); updateEggs(); updateKloFunk(); updateFidget(); updateNpcFoley(); updateSnuggle(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
   Sound.muffle(!!G.menu && G.menu !== 'jukebox' && G.screen === 'game');
   if (G.jbOn && G.menu !== 'jukebox') { G.jbOn = false; music(); }
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();

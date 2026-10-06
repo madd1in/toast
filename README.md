@@ -59,6 +59,9 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Text: Größe und Lesehilfe (Einstellungen → Text):** normal, groß, groß mit Hintergrund oder sehr groß mit Hintergrund – der dunkle Kasten hinter Sprechtexten hilft vor allem auf dem Handy
 - **Epochen-Motiv:** Wer einen Raum zum ersten Mal betritt, hört zum Ortsschild ein kurzes Motiv seiner Zeit (E-Piano, Harfe oder Glocken)
 - **Fledermaus:** flattert ab und zu draußen am Lobbyfenster vorbei
+- **Klo-Post:** Alle paar Minuten schickt einer der anderen Helden eine kurze Nachricht durch die Zeit – mit Spülgeräusch und Plapperstimme
+- **Kaminfunken und Kerzen:** Im Gasthaus steigen Funken aus dem Feuer, im Thronsaal flackern die Kerzen am Kronleuchter
+- **Standuhr:** In Lobby und Gasthaus schlägt ab und zu eine Uhr
 - **Easter Eggs – Verbeugungen vor den Klassikern:** Cousin Ted, die Familienmumie, Chuck die Topfpflanze, Onkel Ed, der aus der Labortür späht, und sein Hamster („NICHT in die Mikrowelle!“), ein lila Meteor über dem Zukunftsgarten, ein zweiköpfiges Eichhörnchen, ein schlichter Holzbecher und ein goldenes Götzenbild auf Druckplatten, ein Spinnrocken, dessen vier Töne einen Schwan rufen, Grog und ein Gummihuhn mit Umlenkrolle in der Taverne, ein dreiköpfiger Affe hinter dir – und ein Lichtschwert-Prototyp in Dr. Freds Labor. Wer alle findet, bekommt einen geheimen Erfolg
 - **Pixel-Look mit minimaler Bedienung:** Auch im VGA-Pixel-Stil füllt die Szene den ganzen Bildschirm, die Kamera fährt pixelgenau mit, Tasche, Symbolleiste und Gesichter bleiben an ihrem Platz – die klassische Verbleiste gibt es weiter unter Einstellungen → Bedienung
 - **Umgebungslicht:** Die Ränder neben dem Spielbild (Handy quer, breite Monitore) leuchten weich in den Farben der aktuellen Szene

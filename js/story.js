@@ -156,6 +156,21 @@ const CRITTERS = {
   huhn: { name: 'Huhn Henriette', room: 'garten1776', kind: 'hen', speed: 48, h: 40, w: 36, sound: 'cluck', idles: ['peck', 'peck', 'sit'] },
   saugbot: { name: 'Saugroboter Staubi 3000', room: 'vorraum', kind: 'bot', speed: 75, h: 18, w: 42, sound: 'botbeep', idles: ['sit', 'sit'] },
 };
+// ---------- Klo-Funk: die Helden schicken sich ab und zu kleine Nachrichten durch die Zeit ----------
+const KLO_FUNK = [
+  ['hoagie', 'bernard', 'Mann, hier gibt’s keinen Kühlschrank. Nur einen Keller. Mit Rüben.'],
+  ['hoagie', 'laverne', 'Grüß die Zukunft! Gibt’s da Hoverboards? Sag Ja.'],
+  ['hoagie', 'bernard', 'Benjamin Franklin hat mir einen Drachen geliehen. Ich glaub, der will was mit Blitzen machen.'],
+  ['hoagie', 'laverne', 'Hier riecht alles nach Pferd. Und nach Geschichte. Hauptsächlich nach Pferd.'],
+  ['bernard', 'hoagie', 'Hast du dir die Hände gewaschen, bevor du das Klo benutzt hast? Also … das andere Klo?'],
+  ['bernard', 'laverne', 'Bitte nichts Lebendiges durchs Klo schicken. Dr. Fred bekommt sonst wieder Ideen.'],
+  ['bernard', 'hoagie', 'Hier ist alles normal. Dr. Fred redet mit seinem Toaster. Also: normal.'],
+  ['bernard', 'laverne', 'Die Lobby-Katze schaut mich schon wieder so an. Ich glaube, sie weiß Dinge.'],
+  ['laverne', 'bernard', 'Mir ist langweilig. Darf ich die Wache sezieren? Nur ein bisschen?'],
+  ['laverne', 'hoagie', 'In der Zukunft gibt es keine Rüben mehr. Ich hab nachgesehen. Gern geschehen.'],
+  ['laverne', 'bernard', 'Ich hab einen Tentakel gefragt, ob er Knochen hat. Er war beleidigt.'],
+  ['laverne', 'hoagie', 'Schick mir mal was aus 1776. Etwas Altes. Etwas Klebriges.'],
+];
 // ---------- Easter Eggs: Verbeugungen vor Maniac Mansion, Zak McKracken, Indiana Jones, Loom, Monkey Island und Star Wars ----------
 const EGGS = {
   mumie: { name: 'Cousin Ted', kind: 'mummy', room: 'labor', x: 682, y: 340, w: 56, h: 176, walk: [612, 396], dv: 'look',
