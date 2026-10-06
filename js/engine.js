@@ -288,9 +288,9 @@ function drawRain() {
 }
 // Sommerregen 1776: Spruch des Helden draußen, danach ein Regenbogen über dem Garten
 function showerTurn(room, wet) {
-  if (!wet) { G.rainbow = G.t; if (room.id === 'garten1776') setTimeout(() => { if (viewRoomId() === 'garten1776' && !G.menu) Sound.sfx('rainbow', 0.2); }, 1400); }
+  if (!wet) { G.rainbow = G.t; if (room.id === 'garten1776') wait(1400).then(() => { if (viewRoomId() === 'garten1776' && !G.menu) Sound.sfx('rainbow', 0.2); }); }
   if (room.id !== 'garten1776' || me().room !== room.id || G.busy || G.speech || G.dialog || G.bark) return;
-  setTimeout(() => { if (viewRoomId() === 'garten1776' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(curId(), pick(SHOWER_BARKS[wet ? 'wet' : 'bow'])); }, wet ? 1800 : 3600);
+  wait(wet ? 1800 : 3600).then(() => { if (viewRoomId() === 'garten1776' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(curId(), pick(SHOWER_BARKS[wet ? 'wet' : 'bow'])); });
 }
 function showerDim() {
   if (rainFx.era !== 'past') return 0;
@@ -3410,10 +3410,10 @@ function updateKloFunk() {
   G.funkNext = G.t + 150000 + Math.random() * 90000;
   const m = list.length ? pick(list) : null; if (!m) return;
   seen[m[2]] = 1; save();
-  if (Object.keys(seen).length >= 3) setTimeout(() => unlock('brieffreund'), 6800);
+  if (Object.keys(seen).length >= 3) wait(6800).then(() => unlock('brieffreund'));
   G.funk = { from: m[0], text: m[2], t0: G.t };
-  setTimeout(() => { if (curId() === me_ && G.screen === 'game' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(me_, pick(FUNK_REPLY[me_])); }, 4200);
-  Sound.sfx('flush', -0.6); setTimeout(() => { if (G.settings.babble) for (let i = 0; i < 5; i++) setTimeout(() => Sound.blip(ACT[m[0]].voice, -0.5), i * 110); }, 600);
+  wait(4200).then(() => { if (curId() === me_ && G.screen === 'game' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(me_, pick(FUNK_REPLY[me_])); });
+  Sound.sfx('flush', -0.6); wait(600).then(() => { if (G.settings.babble) for (let i = 0; i < 5; i++) wait(i * 110).then(() => Sound.blip(ACT[m[0]].voice, -0.5)); });
 }
 function drawKloFunk() {
   const f = G.funk; if (!f || G.screen !== 'game') return;
