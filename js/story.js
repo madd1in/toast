@@ -136,6 +136,7 @@ const ACH = [
   { id: 'tierfreund', name: 'Tierfreund', desc: 'Katze, Huhn und Saugroboter gestreichelt.' },
   { id: 'eier', name: 'Easter-Egg-Jäger', desc: 'Alle Verbeugungen vor den Klassikern entdeckt.', secret: true },
   { id: 'geduld', name: 'Geduldsprobe', desc: 'Alle Leerlauf-Ticks der Helden gesehen.' },
+  { id: 'brieffreund', name: 'Brieffreund', desc: 'Drei Nachrichten per Klo-Post bekommen.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
 // Figuren-Steckbriefe (Menü → Extras); NPCs erscheinen erst, wenn man sie angeschaut oder angesprochen hat
@@ -171,6 +172,17 @@ const KLO_FUNK = [
   ['laverne', 'bernard', 'Ich hab einen Tentakel gefragt, ob er Knochen hat. Er war beleidigt.'],
   ['laverne', 'hoagie', 'Schick mir mal was aus 1776. Etwas Altes. Etwas Klebriges.'],
 ];
+// kurze Reaktion des Empfängers, nachdem die Klo-Post eingeblendet wurde
+const FUNK_REPLY = {
+  bernard: ['Klo-Post. Die zuverlässigste Post der Welt.', 'Notiert. Und gleich desinfiziert.', 'Ich antworte später. Vielleicht in 200 Jahren.'],
+  hoagie: ['Ha! Guter Witz, Alter.', 'Ich schreib zurück. Mit Feder. Dauert.', 'Klo-Post. Rock’n’Roll.'],
+  laverne: ['Hihi. Die heb ich mir auf.', 'Ich antworte mit einem Bild. Von einem Käfer.', 'Post! Für mich!'],
+};
+// Sommerregen im Garten von 1776: Spruch beim Schauer und beim Regenbogen danach
+const SHOWER_BARKS = {
+  wet: ['Regen! Und kein Schirm in Sicht.', 'Gratis-Dusche. Wird auch Zeit.', 'Hey, meine Kappe wird nass!'],
+  bow: ['Ein Regenbogen! Und am Ende steht … das Plumpsklo. Typisch.', 'Whoa. Sieht aus wie ein Albumcover.'],
+};
 // ---------- Easter Eggs: Verbeugungen vor Maniac Mansion, Zak McKracken, Indiana Jones, Loom, Monkey Island und Star Wars ----------
 const EGGS = {
   mumie: { name: 'Cousin Ted', kind: 'mummy', room: 'labor', x: 682, y: 340, w: 56, h: 176, walk: [612, 396], dv: 'look',

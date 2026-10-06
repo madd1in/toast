@@ -62,6 +62,8 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Klo-Post:** Alle paar Minuten schickt einer der anderen Helden eine kurze Nachricht durch die Zeit – mit Spülgeräusch und Plapperstimme
 - **Kaminfunken und Kerzen:** Im Gasthaus steigen Funken aus dem Feuer, im Thronsaal flackern die Kerzen am Kronleuchter
 - **Standuhr:** In Lobby und Gasthaus schlägt ab und zu eine Uhr
+- **Sommerregen 1776:** Ab und zu zieht über dem Garten ein kurzer Schauer auf – der Himmel wird grau, im Gasthaus läuft Regen übers Fenster, danach steht ein Regenbogen über dem Plumpsklo
+- **Klo-Post-Antworten:** Der Empfänger reagiert mit einem kurzen Spruch; wer drei Nachrichten bekommt, erhält den Erfolg „Brieffreund“
 - **Easter Eggs – Verbeugungen vor den Klassikern:** Cousin Ted, die Familienmumie, Chuck die Topfpflanze, Onkel Ed, der aus der Labortür späht, und sein Hamster („NICHT in die Mikrowelle!“), ein lila Meteor über dem Zukunftsgarten, ein zweiköpfiges Eichhörnchen, ein schlichter Holzbecher und ein goldenes Götzenbild auf Druckplatten, ein Spinnrocken, dessen vier Töne einen Schwan rufen, Grog und ein Gummihuhn mit Umlenkrolle in der Taverne, ein dreiköpfiger Affe hinter dir – und ein Lichtschwert-Prototyp in Dr. Freds Labor. Wer alle findet, bekommt einen geheimen Erfolg
 - **Pixel-Look mit minimaler Bedienung:** Auch im VGA-Pixel-Stil füllt die Szene den ganzen Bildschirm, die Kamera fährt pixelgenau mit, Tasche, Symbolleiste und Gesichter bleiben an ihrem Platz – die klassische Verbleiste gibt es weiter unter Einstellungen → Bedienung
 - **Umgebungslicht:** Die Ränder neben dem Spielbild (Handy quer, breite Monitore) leuchten weich in den Farben der aktuellen Szene

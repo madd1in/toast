@@ -392,6 +392,7 @@ const Sound = (() => {
       if (Math.random() < 0.4) for (let i = 0; i < 3; i++) { const s = t + i * 1.3; osc('sine', 196, s, 2.6, 0.035, ambBus, { decay: true }); osc('sine', 196 * 2.76, s, 1.4, 0.012, ambBus, { decay: true }); osc('sine', 196 * 5.4, s, 0.7, 0.006, ambBus, { decay: true }); nz(s, 0.03, 0.02, ambBus, { type: 'bandpass', f: 1800, q: 2 }); }
       return 45 + Math.random() * 45;
     },
+    rainin: t => { nz(t, 0.6, 0.02, ambBus, { type: 'lowpass', f: 900 + Math.random() * 300, q: 0.4, attack: 0.2 }); if (Math.random() < 0.2) osc('sine', 900 + Math.random() * 500, t + Math.random() * 0.3, 0.03, 0.005, ambBus, { decay: true }); return 0.45; },
     wind: t => { nz(t, 2.6, 0.03, ambBus, { type: 'bandpass', f: 380 + Math.random() * 300, f2: 700 + Math.random() * 500, q: 1.4, attack: 1.1 }); return 2.1 + Math.random() * 1.2; },
   };
   // Hall-Impulsantwort: abklingendes Stereo-Rauschen, je Raumgröße einmal erzeugt
@@ -589,6 +590,7 @@ const Sound = (() => {
     swan: t => { for (let i = 0; i < 6; i++) nz(t + i * 0.42, 0.25, 0.035, sfxBus, { type: 'lowpass', f: 700, f2: 300, attack: 0.08 }); vowel(t + 1.1, 0.35, 520, 470, [[600, 1000], [560, 950]], 0.05); },
     boulder: t => { nz(t, 2.8, 0.12, sfxBus, { type: 'lowpass', f: 160, f2: 90, attack: 0.4 }); for (let i = 0; i < 8; i++) osc('sine', 48 + Math.random() * 10, t + i * 0.32, 0.3, 0.08, sfxBus, { decay: true }); },
     rubber: t => { osc('square', 900, t, 0.22, 0.035, sfxBus, { f2: 1500, lp: 2200, q: 6, attack: 0.01 }); osc('square', 1450, t + 0.24, 0.35, 0.03, sfxBus, { f2: 700, lp: 2000, q: 6, attack: 0.01 }); },
+    rainbow: t => { ['C6', 'E6', 'G6', 'B6', 'D7', 'G7'].forEach((n, i) => { osc('sine', freq(n), t + i * 0.16, 2.2, 0.018, sfxBus, { attack: 0.05, decay: true }); osc('triangle', freq(n) * 2, t + i * 0.16 + 0.01, 0.9, 0.005, sfxBus, { decay: true }); }); nz(t, 1.6, 0.012, sfxBus, { type: 'highpass', f: 7000, attack: 0.5 }); },
     grail: t => { ['C5', 'E5', 'G5', 'C6', 'E6'].forEach((n, i) => osc('sine', freq(n), t + i * 0.12, 1.6, 0.03, sfxBus, { attack: 0.2, release: 0.6 })); },
     grog: t => { for (let i = 0; i < 9; i++) osc('sine', 220 + Math.random() * 300, t + i * 0.09 + Math.random() * 0.04, 0.06, 0.025, sfxBus, { f2: 500 + Math.random() * 400, decay: true }); },
     chatter: t => { for (let i = 0; i < 10; i++) osc('square', 2200 + Math.random() * 900, t + i * 0.07, 0.04, 0.012, sfxBus, { decay: true }); },

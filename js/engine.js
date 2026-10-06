@@ -133,7 +133,7 @@ const ROOM_FX = {
   lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic', 'air', 'chime'], motes: 'dust', music: 'lounge' },
   labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps', 'hum'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
   gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak', 'chime'], motes: 'warm', flicker: 'fire', music: 'tavern' },
-  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo'], motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
+  garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo', 'rain'], rain: true, motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, amb: ['future', 'rain'], motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars', storm: true, rain: true },
   vorraum: { music: 'march', verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
   thron: { verb: [2.6, 0.26], light: [-1, '#f4c4ff', '#1a0830'], bloom: 0.32, amb: ['rain', 'palace', 'air'], motes: 'magic', storm: true, reflect: 0.22 },
@@ -218,31 +218,42 @@ function drawMotes() {
 // Gewitter über Lilas Palast, flackernde Laborröhren, Kaminfeuer im Gasthaus
 // Sichtbarer Regen (z. B. Zukunftsgarten im Gewitter): Schauer kommen und gehen,
 // Tropfen fallen schräg und spritzen unten auf, Glühwürmchen und Donner pausieren in der Trockenphase
-const rainFx = { drops: [], splashes: [], on: false, next: 0 };
+const rainFx = { drops: [], splashes: [], on: false, next: 0, era: null, t0: 0 };
+// Wetter je Epoche: in der Zukunft wechseln Schauer und Pausen, 1776 gibt es nur ab und zu einen kurzen Sommerregen mit Regenbogen
+const RAIN_ERA = {
+  future: { first: true, wet: [20000, 18000], dry: [12000, 16000] },
+  past: { first: false, firstDry: [50000, 70000], wet: [15000, 8000], dry: [110000, 110000], bow: true },
+};
 function rainActive() { return !!(G.state && G.screen === 'game' && (ROOM_FX[viewRoomId()] || {}).rain && rainFx.on); }
 function roomAmb() {
   const r = ROOMS[viewRoomId()], fx = ROOM_FX[r.id] || {};
   const list = [...new Set([...(r.amb || []), ...(fx.amb || [])])];
   if (G.state && !fl().guardGone && ACT.wache.room === r.id && ACT.wache.visible) list.push('snore');   // die Wache schnarcht leise
+  if (rainFx.on && rainFx.era === 'past' && r.id === 'gasthaus') list.push('rainin');   // Sommerregen gedämpft durchs Fenster
   return rainFx.on ? list : list.filter(n => n !== 'rain');
 }
 function updateRain(dt) {
   // Die Schauer-Phasen laufen in allen Zukunfts-Räumen weiter (auch im Palast),
   // sichtbare Tropfen gibt es nur draußen – so bleibt das Wetter beim Reingehen bestehen
-  const room = G.screen === 'game' && G.state ? ROOMS[viewRoomId()] : null;
-  if (!room || room.era !== 'future' || G.menu) {
+  const room = G.screen === 'game' && G.state ? ROOMS[viewRoomId()] : null, wx = room && RAIN_ERA[room.era];
+  if (!room || !wx || G.menu) {
     if (rainFx.drops.length || rainFx.on || rainFx.next) { rainFx.drops = []; rainFx.splashes = []; rainFx.on = false; rainFx.next = 0; }
+    rainFx.era = null;
     return;
   }
-  if (!rainFx.next) {   // beim Betreten: erst eine Schauer, danach Wechsel zwischen Regen und Pause
-    rainFx.on = true; rainFx.next = G.t + 16000 + Math.random() * 14000;
+  if (rainFx.era !== room.era) { rainFx.drops = []; rainFx.splashes = []; rainFx.on = false; rainFx.next = 0; rainFx.era = room.era; }
+  if (!rainFx.next) {   // beim Betreten der Zukunft: erst eine Schauer; in 1776 erst einmal trocken
+    rainFx.on = wx.first; rainFx.t0 = G.t;
+    rainFx.next = G.t + (wx.first ? 16000 + Math.random() * 14000 : wx.firstDry[0] + Math.random() * wx.firstDry[1]);
     Sound.ambience(roomAmb());
   }
   if (G.t >= rainFx.next) {
-    rainFx.on = !rainFx.on;
-    rainFx.next = G.t + (rainFx.on ? 20000 + Math.random() * 18000 : 12000 + Math.random() * 16000);
+    rainFx.on = !rainFx.on; rainFx.t0 = G.t;
+    const d = rainFx.on ? wx.wet : wx.dry;
+    rainFx.next = G.t + d[0] + Math.random() * d[1];
     Sound.ambience(roomAmb());
     if (!rainFx.on) { rainFx.drops = []; rainFx.splashes = []; }
+    if (wx.bow) showerTurn(room, rainFx.on);
   }
   if (!rainFx.on || !(ROOM_FX[room.id] || {}).rain) {
     if (rainFx.drops.length) { rainFx.drops = []; rainFx.splashes = []; }
@@ -274,6 +285,34 @@ function drawRain() {
     E(cx, sp.x, sp.y, 2 + k * 5, 0.9 + k * 2, null, 1.2, 0, '#cfe4ff');
   }
   cx.globalAlpha = 1;
+}
+// Sommerregen 1776: Spruch des Helden draußen, danach ein Regenbogen über dem Garten
+function showerTurn(room, wet) {
+  if (!wet) { G.rainbow = G.t; if (room.id === 'garten1776') setTimeout(() => { if (viewRoomId() === 'garten1776' && !G.menu) Sound.sfx('rainbow', 0.2); }, 1400); }
+  if (room.id !== 'garten1776' || me().room !== room.id || G.busy || G.speech || G.dialog || G.bark) return;
+  setTimeout(() => { if (viewRoomId() === 'garten1776' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(curId(), pick(SHOWER_BARKS[wet ? 'wet' : 'bow'])); }, wet ? 1800 : 3600);
+}
+function showerDim() {
+  if (rainFx.era !== 'past') return 0;
+  if (rainFx.on) return Math.min(1, (G.t - rainFx.t0) / 2500);
+  return G.rainbow ? Math.max(0, 1 - (G.t - G.rainbow) / 3500) : 0;
+}
+function drawRainbow(room) {
+  if (room.id !== 'garten1776' || !G.rainbow || rainFx.on) return;
+  const k = G.t - G.rainbow; if (k > 34000) return;
+  const a = Math.max(0, Math.min(1, (k - 1200) / 4000, (34000 - k) / 6000)) * 0.42; if (a <= 0) return;
+  cx.save(); cx.beginPath(); cx.rect(0, 0, 2000, 226); cx.clip();
+  cx.globalAlpha = a; cx.lineWidth = 5.4;
+  ['#ff4a4a', '#ff9a3a', '#ffe14a', '#5ad85a', '#4aa8ff', '#6a5aff', '#b05aff'].forEach((c, i) => { cx.strokeStyle = c; cx.beginPath(); cx.arc(560, 300, 236 - i * 5, Math.PI, 2 * Math.PI); cx.stroke(); });
+  cx.restore();
+}
+function drawWindowRain(room) {
+  if (room.id !== 'gasthaus' || !rainFx.on || rainFx.era !== 'past') return;
+  cx.save(); cx.beginPath(); cx.rect(484, 72, 112, 104); cx.clip();
+  cx.fillStyle = 'rgba(40,50,70,0.28)'; cx.fillRect(484, 72, 112, 104);
+  cx.strokeStyle = 'rgba(214,232,255,0.65)'; cx.lineWidth = 1.4; cx.beginPath();
+  for (let i = 0; i < 14; i++) { const x = 480 + ((i * 53) % 120), y = 66 + ((G.t * 0.5 + i * 97) % 124); cx.moveTo(x, y); cx.lineTo(x - 2, y + 10); }
+  cx.stroke(); cx.restore();
 }
 function updateWeather() {
   const fx = G.screen === 'game' ? roomFx() : {};
@@ -749,7 +788,7 @@ function updateActors(dt) {
         puff(a.x + (Math.random() - 0.5) * 30, a.y - a.h * roomScale(room, a.climbY) * 0.5, pick(['#6ac26a', '#4f9a4a', '#9ad86a']), 2, { vy: -10, vx: 30, r: 3, max: 900, spread: 30 });
       } else if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
         const st = STEP_STYLE[a.id] || [null, (a.bw || 50) / 55];
-        Sound.step(room.floor, panX(a.x), st[1], rainFx.on, st[0]);
+        Sound.step(room.floor, panX(a.x), st[1], rainFx.on && !!(ROOM_FX[room.id] || {}).rain, st[0]);
         puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
         if (room.id === 'garten1776' && Math.random() < 0.5) puff(a.x, a.y - 2, pick(['#e0782e', '#e8b040', '#c8501e']), 1, { vy: 30, vx: 70, r: 2.6, max: 700, spread: 12 });   // Laub wirbelt auf
       }
@@ -1777,6 +1816,8 @@ function drawScene() {
   camApply();
   drawBg(room);
   drawSky();
+  drawRainbow(room);
+  drawWindowRain(room);
   drawMeteor(room);
   drawLobbyBat(room);
   drawCandles(room);
@@ -1798,6 +1839,7 @@ function drawScene() {
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
   cx.restore();
+  { const dm = room.id === 'garten1776' ? showerDim() : 0; if (dm > 0) { cx.fillStyle = `rgba(44,56,80,${(0.32 * dm).toFixed(3)})`; cx.fillRect(0, 0, W, SH); } }
   drawLightFx(!cx.isPix);
   drawDisco();
   if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
@@ -3363,11 +3405,14 @@ function updateKloFunk() {
   if (!G.funkNext) G.funkNext = G.t + 100000 + Math.random() * 60000;
   if (G.funk && G.t - G.funk.t0 > 6500) G.funk = null;
   if (G.t < G.funkNext || G.busy || G.dialog || G.menu || G.speech || G.fade !== 0) return;
-  const me_ = curId(), list = KLO_FUNK.filter(m => m[1] === me_ && !(G.funkSeen || {})[m[2]]);
+  const seen = G.state.funkSeen || (G.state.funkSeen = {});
+  const me_ = curId(), list = KLO_FUNK.filter(m => m[1] === me_ && !seen[m[2]]);
   G.funkNext = G.t + 150000 + Math.random() * 90000;
   const m = list.length ? pick(list) : null; if (!m) return;
-  (G.funkSeen || (G.funkSeen = {}))[m[2]] = 1;
+  seen[m[2]] = 1; save();
+  if (Object.keys(seen).length >= 3) setTimeout(() => unlock('brieffreund'), 6800);
   G.funk = { from: m[0], text: m[2], t0: G.t };
+  setTimeout(() => { if (curId() === me_ && G.screen === 'game' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(me_, pick(FUNK_REPLY[me_])); }, 4200);
   Sound.sfx('flush', -0.6); setTimeout(() => { if (G.settings.babble) for (let i = 0; i < 5; i++) setTimeout(() => Sound.blip(ACT[m[0]].voice, -0.5), i * 110); }, 600);
 }
 function drawKloFunk() {
