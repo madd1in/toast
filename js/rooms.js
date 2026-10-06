@@ -765,6 +765,13 @@ room({
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
   draw: bgVorraum,
   dyn: (c, t) => {
+    // Regen fällt draußen vor dem Gartentor – dieselben Schauer wie im Garten
+    if (rainFx.on) for (let i = 0; i < 8; i++) {
+      const k = ((t * 0.0014) + i * 0.125) % 1, rx = 12 + ((i * 37) % 70) + k * 4, ry = 168 + k * 158;
+      c.save(); c.globalAlpha = 0.3 * Math.sin(k * Math.PI);
+      L(c, [rx + 1.2, ry - 7, rx, ry], 1.2, '#aac8e8');
+      c.restore();
+    }
     // Überwachungsdrohne Seiner Lilaheit
     const dx = 560 + Math.sin(t * 0.0005) * 300, dy = 64 + Math.sin(t * 0.002) * 8;
     L(c, [dx - 22, dy - 8, dx + 22, dy - 8], 2.5); E(c, dx - 22, dy - 9, 9, 2, '#c9d3dc', 1.5); E(c, dx + 22, dy - 9, 9, 2, '#c9d3dc', 1.5);
