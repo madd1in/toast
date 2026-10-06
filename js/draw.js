@@ -1075,15 +1075,23 @@ function drawStatue(c) {
 
 // ---------- Portraits (Köpfe in den Charakter-Buttons) ----------
 const PORTRAIT = { bernard: [8, -186, 0.86], hoagie: [8, -154, 0.92], laverne: [8, -176, 0.82] };
-const PORTRAIT_3D = Object.fromEntries(['bernard', 'hoagie', 'laverne'].map(id => [id, [0, 1].map(k => Object.assign(new Image(), { src: `img/portrait_${id}_${k}.png` }))]));
+// Lädt ein gerendertes Bild; bricht das Laden ab (z. B. weil viele Bilder gleichzeitig kommen), wird es noch zweimal versucht
+function loadImg(src, tries = 3) {
+  const im = new Image();
+  im.onerror = () => { if (--tries > 0) setTimeout(() => { im.src = `${src}?r=${tries}`; }, 700); };
+  im.src = src;
+  return im;
+}
+const imgOk = im => im.complete && im.naturalWidth > 0;
+const PORTRAIT_3D = Object.fromEntries(['bernard', 'hoagie', 'laverne'].map(id => [id, [0, 1].map(k => loadImg(`img/portrait_${id}_${k}.png`))]));
 function drawPortrait(c, id, x, y, r, bg, t = 0, talking = false) {
   c.save(); c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.clip();
   if (hd(c)) { const g = c.createRadialGradient(x - r * 0.3, y - r * 0.4, 2, x, y, r * 1.2); g.addColorStop(0, mix(bg, '#ffffff', 0.35)); g.addColorStop(1, mix(bg, '#0a0414', 0.45)); c.fillStyle = g; }
   else c.fillStyle = bg;
   c.fillRect(x - r, y - r, r * 2, r * 2);
   // HD: Porträt aus Blender (Kopf in 3D, zweites Bild mit offenem Mund zum Sprechen)
-  const p3 = hd(c) && PORTRAIT_3D[id], im = p3 && p3[talking && Math.floor(t / 130) % 2 ? 1 : 0];
-  if (im && im.complete && im.naturalWidth) { const sz = r * 2.55; c.drawImage(im, x - sz * 0.47, y - sz * 0.43, sz, sz); c.restore(); return; }
+  const p3 = hd(c) && PORTRAIT_3D[id], im = p3 && p3.every(imgOk) && p3[talking && Math.floor(t / 130) % 2 ? 1 : 0];
+  if (im) { const sz = r * 2.55; c.drawImage(im, x - sz * 0.47, y - sz * 0.43, sz, sz); c.restore(); return; }
   const [hx, hy, s] = PORTRAIT[id];
   c.translate(x - hx * s, y - hy * s + 6); c.scale(s, s);
   CHAR[id](c, { talking, walking: false, phase: 0, seed: { bernard: 1, hoagie: 2.3, laverne: 3.7 }[id] || 1 }, t);
@@ -1177,3 +1185,9 @@ const ICON = {
     for (let i = -1; i <= 1; i += 2) S(c, null, 2, () => { c.moveTo(i * 8, -20); c.quadraticCurveTo(i * 8 + 4, -24, i * 8, -28); }, '#e8dcc8');
   },
 };
+// Gegenstände in 3D (in Blender modelliert, Toon-Look mit Kontur); im Pixel-Modus bleiben die gezeichneten Symbole
+const ICON_3D = Object.fromEntries(['rechner', 'muenze', 'kaffee', 'zucker', 'sticks', 'altsticks', 'apfel', 'butzen', 'schaufel', 'eimer', 'wasser', 'brot', 'steth', 'zelle', 'lapfel', 'toast'].map(id => [id, loadImg(`img/items/${id}.png`)]));
+for (const id of Object.keys(ICON_3D)) {
+  const drawn = ICON[id];
+  if (drawn) ICON[id] = c => { const im = ICON_3D[id]; if (hd(c) && imgOk(im)) c.drawImage(im, -30, -30, 60, 60); else drawn(c); };
+}

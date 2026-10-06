@@ -1802,18 +1802,17 @@ function drawReveal(room, scr) {
 }
 // Zeitreise-Übergang: Zeitwirbel (in Unreal gerendert) dreht sich hinter den Lichtstreifen,
 // in der Mitte taumelt ein Chrono-Klo (in Blender gerendert, 24 Bilder im Raster 6×4)
-const VORTEX_IMG = new Image(); VORTEX_IMG.src = 'img/vortex.jpg';
-const KLO_SPIN = new Image(); KLO_SPIN.src = 'img/klo_spin.png';
-const imgReady = im => im.complete && im.naturalWidth > 0;
+const VORTEX_IMG = loadImg('img/vortex.jpg');
+const KLO_SPIN = loadImg('img/klo_spin.png');
 function drawVortexBg(SH) {
-  if (!imgReady(VORTEX_IMG)) return;
+  if (!imgOk(VORTEX_IMG)) return;
   const d = Math.hypot(W, SH) * (1.05 + 0.08 * Math.sin(G.t * 0.001));
   cx.save(); cx.globalAlpha = G.fade * 0.95; cx.translate(W / 2, SH / 2); cx.rotate(G.t * 0.0009); cx.scale(1, 0.78);
   cx.drawImage(VORTEX_IMG, -d / 2, -d / 2, d, d);
   cx.restore();
 }
 function drawKloSpin(SH) {
-  if (!imgReady(KLO_SPIN)) return false;
+  if (!imgOk(KLO_SPIN)) return false;
   const fs = KLO_SPIN.naturalWidth / 6, f = Math.floor(G.t / 45) % 24, sx = (f % 6) * fs, sy = Math.floor(f / 6) * fs;
   const k = Math.min(1, G.fade * 1.6), size = 120 + 70 * k, y = SH / 2 - 46 + Math.sin(G.t * 0.006) * 8;
   cx.save(); cx.globalAlpha = Math.min(1, G.fade * 1.4); cx.translate(W / 2, y); cx.rotate(Math.sin(G.t * 0.004) * 0.25);
@@ -2321,7 +2320,7 @@ function titleActor(id, x, y, sc, dir, seed, extra) {
 }
 // Titel-Logo in 3D (in Blender gerendert: Toast-Buchstaben mit Kruste, lila Tentakel mit Saugnäpfen).
 // Wippt sanft; im Pixel-Modus und solange das Bild lädt, bleibt das gezeichnete Logo.
-const LOGO_IMG = new Image(); LOGO_IMG.src = 'img/logo.png';
+const LOGO_IMG = loadImg('img/logo.png');
 function drawLogo3d(t) {
   if (cx.isPix || !LOGO_IMG.complete || !LOGO_IMG.naturalWidth) return false;
   const w = 590, h = w * LOGO_IMG.naturalHeight / LOGO_IMG.naturalWidth, x = W / 2 - w * 0.47, y = -2 + Math.sin(t * 0.0021) * 3;
@@ -2333,10 +2332,10 @@ function drawLogo3d(t) {
 }
 // Herrenhaus in 3D (in Blender modelliert: Holzverkleidung, Schindeldach, schiefe Fensterläden, Gaube).
 // Die Ankerpunkte (Anteile im Bild) kommen aus der Kamera-Projektion in Blender: Schornstein, Fenster, Laternen.
-const HAUS_IMG = new Image(); HAUS_IMG.src = 'img/haus.png';
+const HAUS_IMG = loadImg('img/haus.png');
 const HAUS_AT = {"chimney": [0.488, 0.224], "windows": [[0.176, 0.615], [0.176, 0.783], [0.353, 0.618], [0.353, 0.786], [0.53, 0.621], [0.53, 0.789], [0.707, 0.624], [0.707, 0.792], [0.194, 0.254], [0.194, 0.34], [0.194, 0.425], [0.66, 0.301], [0.66, 0.398]], "lamps": [[0.341, 0.889], [0.55, 0.892]]};
 function drawHaus3d(t) {
-  if (cx.isPix || !imgReady(HAUS_IMG)) return false;
+  if (cx.isPix || !imgOk(HAUS_IMG)) return false;
   const h = 522, w = h * HAUS_IMG.naturalWidth / HAUS_IMG.naturalHeight, x = 262 - w / 2, y = 606 - h, at = ([fx, fy]) => [x + fx * w, y + fy * h];
   const [sx, sy] = at(HAUS_AT.chimney);
   for (let i = 0; i < 3; i++) { const k = ((t * 0.0003) + i / 3) % 1; cx.save(); cx.globalAlpha = (1 - k) * 0.5; E(cx, sx + Math.sin(t * 0.002 + i) * 10, sy - 6 - k * 90, 10 + k * 18, 7 + k * 12, 'rgba(122,90,154,0.9)', 0); cx.restore(); }
@@ -2348,11 +2347,11 @@ function drawHaus3d(t) {
 // Grüner und Lila Tentakel in 3D (Blender, Toon-Look mit Kontur); wippen und federn leicht.
 // Im Pixel-Modus und mit Partyhütchen bleiben die gezeichneten Figuren.
 // Auch die drei Helden gibt es fürs Titelbild in 3D (gleicher Maßstab wie in Blender gerendert).
-const TENT_IMG = Object.fromEntries([['green', 'tent_gruen'], ['lila', 'tent_lila'], ['bernard', 'held_bernard'], ['hoagie', 'held_hoagie'], ['laverne', 'held_laverne']].map(([id, f]) => [id, Object.assign(new Image(), { src: `img/${f}.png` })]));
+const TENT_IMG = Object.fromEntries([['green', 'tent_gruen'], ['lila', 'tent_lila'], ['bernard', 'held_bernard'], ['hoagie', 'held_hoagie'], ['laverne', 'held_laverne']].map(([id, f]) => [id, loadImg(`img/${f}.png`)]));
 const TENT_AT = { green: [0.53, 205], lila: [0.491, 240], bernard: [0.512, 151], hoagie: [0.463, 122], laverne: [0.54, 137] };   // Fußpunkt (Anteil der Breite) und Höhe im Titelbild
 function titleTent3d(id, x, y, seed) {
   const im = TENT_IMG[id];
-  if (cx.isPix || G.settings.party || !imgReady(im)) return false;
+  if (cx.isPix || G.settings.party || !imgOk(im)) return false;
   const [fx, hh] = TENT_AT[id], h = hh, w = h * im.naturalWidth / im.naturalHeight, t = G.t, sq = Math.sin(t * 0.004 + seed * 1.3);
   cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.beginPath(); cx.ellipse(x, y + 2, w * 0.42, 8, 0, 0, Math.PI * 2); cx.fill();
   cx.save(); cx.translate(x, y + 8 + Math.sin(t * 0.003 + seed) * 2); cx.scale(1 - sq * 0.012, 1 + sq * 0.022); cx.rotate(Math.sin(t * 0.0019 + seed) * 0.025);
@@ -2569,9 +2568,9 @@ function updateEnd(dt) {
   for (const c of FW.conf) { c.y += c.v * s; c.x += Math.sin(G.t * 0.002 + c.r * 3) * 20 * s; c.r += c.sp * s; if (c.y > H + 10) { c.y = -10; c.x = Math.random() * W; } }
 }
 // Schriftzug "ENDE" in 3D (Blender, wie das Titel-Logo); im Pixel-Modus bleiben die gezeichneten Buchstaben
-const ENDE_IMG = new Image(); ENDE_IMG.src = 'img/ende.png';
+const ENDE_IMG = loadImg('img/ende.png');
 function drawEnde3d(t) {
-  if (cx.isPix || !imgReady(ENDE_IMG)) return false;
+  if (cx.isPix || !imgOk(ENDE_IMG)) return false;
   const w = 310, h = w * ENDE_IMG.naturalHeight / ENDE_IMG.naturalWidth, s = 1 + Math.sin(t * 0.0023) * 0.025;
   cx.save(); cx.translate(W / 2, 100 + Math.sin(t * 0.004) * 5); cx.scale(s, s); cx.rotate(Math.sin(t * 0.0017) * 0.02);
   cx.drawImage(ENDE_IMG, -w / 2, -h / 2, w, h);
