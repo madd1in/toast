@@ -41,6 +41,15 @@ let SSK = 1;   // Überabtastung der Szene in der modernen Ansicht (schärfere V
 let UIS = 1;   // Schrift-/Bedienskalierung: auf Touch-Geräten und kleinen Bildschirmen größer
 const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 const uf = px => Math.round(px * UIS);
+// Text-Einstellung: Größe und dunkler Hintergrund hinter Sprechtexten (Lesehilfe)
+const TEXT_MODES = [['normal', 1, false], ['groß', 1.18, false], ['groß, mit Hintergrund', 1.18, true], ['sehr groß, mit Hintergrund', 1.36, true]];
+function textMode() { return TEXT_MODES[G.settings.textMode || 0] || TEXT_MODES[0]; }
+// Lesehilfe: abgerundeter Kasten hinter einem Textblock (Mitte x, Grundlinie der letzten Zeile y)
+function readBox(x, yLast, w, n, lh, fsz) {
+  if (!textMode()[2]) return;
+  const top = yLast - (n - 1) * lh - fsz * 0.95, h = (n - 1) * lh + fsz * 1.35;
+  R(cx, x - w / 2 - 12, top - 4, w + 24, h + 8, cx.isPix ? '#140a20' : 'rgba(10,4,20,0.66)', 0, 10);
+}
 const OBJ = {};
 
 // ---------- kleine Helfer ----------
@@ -627,6 +636,7 @@ function drawBark(scr) {
   const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, ax)), y = Math.max(lines.length * lh + 4, ay);
   cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, (b.until - G.t) / 300, (G.t - b.start) / 200)) * 0.92;
   cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round';
+  readBox(x, y, maxW, lines.length, lh, bsz);
   lines.forEach((l, i) => { const ly = y - (lines.length - 1 - i) * lh; cx.lineWidth = 4; cx.strokeStyle = '#0b0610'; cx.strokeText(l, x, ly); cx.fillStyle = a.color; cx.fillText(l, x, ly); });
   cx.restore();
 }
@@ -682,7 +692,7 @@ function resize() {
     cv.width = cw; cv.height = ch;
     for (const k in bgCache) delete bgCache[k];
   }
-  UIS = Math.max(COARSE || G.pointer === 'touch' ? 1.25 : 1, Math.min(1.45, 0.8 / VS));
+  UIS = Math.max(COARSE || G.pointer === 'touch' ? 1.25 : 1, Math.min(1.45, 0.8 / VS)) * textMode()[1];
   if (typeof layoutHud === 'function') layoutHud();
 }
 function roomScale(room, y) { const k = Math.max(0, Math.min(1, (y - room.yTop) / (room.yBot - room.yTop))); return room.sMin + (room.sMax - room.sMin) * k; }
@@ -1067,7 +1077,7 @@ function sceneClick(x, y, right) {
   const h = hitScene(x, y);
   G.ripples.push({ x, y, t: G.t });
   if (right) { if (h) { const dv = defaultVerb(h); G.verb = null; G.first = null; runSentence(dv || 'look', h); } return; }
-  if ((!h || h[0] === 'o') && !G.first && !G.verb && selfHit(x, y)) return emote();
+  if (!h && !G.first && !G.verb && selfHit(x, y)) return emote();
   if (!h) { G.first = null; G.verb = null; ++actToken; walkTo(me(), x, y); return; }
   if (G.first) { const v = G.verb, a = G.first; G.first = null; G.verb = null; return runSentence(v, a, h); }
   const v = G.verb || 'walk'; G.verb = null;
@@ -1086,6 +1096,7 @@ function itemClick(id, right) {
 }
 function portraitClick(ch) {
   if (G.first && G.first[0] === 'i') { const a = G.first; G.first = null; G.verb = null; return runSentence('give', a, 'p:' + ch); }
+  if (ch === curId() && !G.busy) { G.verb = null; G.first = null; return emote(); }   // eigenes Porträt: kleine Aktion
   G.verb = null; G.first = null; switchChar(ch);
 }
 function toggleReveal() { if (G.t < G.reveal) G.reveal = 0; else { G.reveal = G.t + 3200; Sound.sfx('reveal'); } }
@@ -1327,7 +1338,8 @@ function menuItems() {
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
   if (G.menu === 'album' || G.menu === 'bios') return [back];
-  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'bios', label: 'Figuren-Steckbriefe' }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
+  if (G.menu === 'eggs') return [{ id: 'extras', label: 'Zurück' }];
+  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'bios', label: 'Figuren-Steckbriefe' }, { id: 'eggs', label: `Fundstücke (${eggsFound()}/${Object.keys(EGGS).length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
   if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
@@ -1339,6 +1351,7 @@ function menuItems() {
     { id: 'lang', label: langLabel() },
     { id: 'voice', label: 'Sprachausgabe: ' + (!Voice.available ? 'nicht verfügbar' : G.settings.voice ? 'an' : 'aus') },
     { id: 'babble', label: 'Plapperstimmen: ' + (G.settings.babble ? 'an' : 'aus') },
+    { id: 'textm', label: 'Text: ' + textMode()[0] },
     { id: 'tspeed', label: 'Textgeschwindigkeit: ' + (G.settings.textSpeed || 'normal') },
     { id: 'alite', label: 'Klang: ' + (G.settings.audioLite == null ? `automatisch (${Sound.lite ? 'sparsam' : 'voll'})` : G.settings.audioLite ? 'sparsam (Handy)' : 'voll') },
     { id: 'ui', label: 'Bedienung: ' + (G.settings.ui === 'classic' ? 'Klassisch (Verben)' : 'Modern (minimal)') },
@@ -1368,6 +1381,7 @@ function menuClick(x, y) {
   else if (b.id === 'voice') toggleVoice();
   else if (b.id === 'lang') cycleLang();
   else if (b.id === 'babble') { G.settings.babble = !G.settings.babble; saveSettings(); }
+  else if (b.id === 'textm') { G.settings.textMode = ((G.settings.textMode || 0) + 1) % TEXT_MODES.length; saveSettings(); resize(); }
   else if (b.id === 'alite') { const v = G.settings.audioLite; G.settings.audioLite = v == null ? !Sound.lite : v === Sound.mobile ? null : !v; Sound.setLite(G.settings.audioLite); saveSettings(); }
   else if (b.id === 'hotspots') { G.settings.hotspots = !G.settings.hotspots; saveSettings(); }
   else if (b.id === 'ui') { G.settings.ui = G.settings.ui === 'classic' ? 'modern' : 'classic'; G.coin = null; G.viewRoomLast = null; saveSettings(); }
@@ -1386,7 +1400,7 @@ function menuClick(x, y) {
   else if (b.id.startsWith('mp_')) fastTravel(b.id.slice(3));
   else if (b.id === 'map') { G.mapFrom = 'main'; openMap(true); }
   else if (b.id === 'mapback') G.menu = G.mapFrom === 'main' ? 'main' : null;
-  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album', 'bios'].includes(b.id)) {
+  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album', 'bios', 'eggs'].includes(b.id)) {
     G.albumView = null;
     if (b.id === 'notes' || b.id === 'bios') Sound.sfx('page');
     G.menu = b.id;
@@ -1660,6 +1674,7 @@ function drawSpeech(scr) {
   cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round';
   const pk = Math.min(1, (G.t - sp.start) / 140), pop = pk < 1 ? 0.82 + 0.18 * (1 - Math.pow(1 - pk, 3)) + Math.sin(pk * Math.PI) * 0.06 : 1;
   cx.save(); cx.translate(x, y); cx.scale(pop, pop); cx.translate(-x, -y);
+  readBox(x, y, maxW, lines.length, lh, fsz);
   lines.forEach((l, i) => {
     const ly = y - (lines.length - 1 - i) * lh;
     if (!cx.isPix) { cx.fillStyle = 'rgba(8,2,16,0.45)'; cx.fillText(l, x + 2, ly + 3); }
@@ -1763,6 +1778,7 @@ function drawScene() {
   drawBg(room);
   drawSky();
   drawMeteor(room);
+  drawLobbyBat(room);
   HDS.deco = true;   // Raum-Grafik: handgezeichnete Kanten, Fasen, Holzmaserung
   try {
     if (room.dyn) room.dyn(cx, G.t);
@@ -2035,7 +2051,7 @@ const HELP = [
   'Klo-Post: Gegenstand wählen → Gesicht unten rechts (geht überall) · O Foto',
   'Menü → Extras: Minispiele, Fotoalbum, Figuren-Steckbriefe, Musikbox, Erfolge',
   'M: Zeitreise-Karte – besuchte Orte deiner Zeit per Schnellreise erreichen',
-  'Eigene Figur anklicken: kleine Aktion – Brille, Luftgitarre, Bauch-Trommel, Gähnen …',
+  'Eigenes Porträt (oder die Figur auf freier Fläche) anklicken: kleine Aktion – Brille, Luftgitarre, Gähnen …',
 ];
 function drawMenu() {
   // Pixel-Modus: Texte werden erst am Ende über die Pixel gelegt – alles darunter würde durch das Menü scheinen
@@ -2044,10 +2060,10 @@ function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
   const jb = G.menu === 'jukebox';
-  const extra = G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 24 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
-  const bw = jb ? 820 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, mst = items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
+  const extra = G.menu === 'eggs' ? Object.keys(EGGS).length * 30 + 34 : G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 24 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const bw = jb ? 820 : G.menu === 'eggs' ? 620 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, mst = items.length > 11 ? 40 : items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
-  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe' }[G.menu] || 'Pause';
+  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe', eggs: 'Fundstücke' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
   let y = by + 74;
   if (G.menu === 'main' && G.state) { txt(cx, `Fortschritt: ${progress()} von ${MILESTONES.length} Rätseln`, W / 2, y - 2, '600 13px "Baloo 2", sans-serif', '#a99ad0'); y += 10; }
@@ -2057,6 +2073,7 @@ function drawMenu() {
     y += HELP.length * 23 + 10;
   }
   if (G.menu === 'bios') { drawBios(bx, y); y += 3 * 140 + 8; }
+  if (G.menu === 'eggs') { drawEggList(bx, y, bw); y += Object.keys(EGGS).length * 30 + 34; }
   if (jb) drawJukebox(bx, by, bw);
   let photoBtns = [];
   if (G.menu === 'album') {
@@ -2094,7 +2111,7 @@ function drawMenu() {
     y += ACH.length * 24 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
-  G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: 38 }));
+  G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: Math.min(38, mst - 4) }));
   G.menuBtns.filter(b => !b.id.startsWith('ph_')).forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
   if (G.menu === 'album' && G.albumView != null && !cx.isPix) {
     const ph = albumList()[G.albumView];
@@ -2677,7 +2694,7 @@ function endToaster() { G.screen = G.state ? 'game' : 'title'; music(); }
 function showSign(roomId) {
   if (G.fast || G.inIntro || !G.state) return;
   const s = G.state.signs || (G.state.signs = {}); if (s[roomId]) return;
-  s[roomId] = 1; G.sign = { room: roomId, t0: G.t + 200 }; Sound.sfx('sign');
+  s[roomId] = 1; G.sign = { room: roomId, t0: G.t + 200 }; Sound.sfx('sign'); Sound.motif(ROOMS[roomId].era);
 }
 function markVisit(r) {
   const v = G.state.visited || (G.state.visited = {});
@@ -3157,7 +3174,7 @@ function modernClick(x, y, right) {
     if (h) openCoin(x, y, h);
     return;
   }
-  if ((!h || h[0] === 'o') && !G.first && !G.verb && selfHit(sx, sy)) return emote();   // die Figur steht vor Gegenständen im Hintergrund
+  if (!h && !G.first && !G.verb && selfHit(sx, sy)) return emote();   // Gegenstände hinter der Figur haben Vorrang (sonst verdeckt sie, wovor sie gerade steht)
   const lc = G.lastClick, dbl = lc && G.t - lc.t < 380 && Math.hypot(sx - lc.x, sy - lc.y) < 30;
   G.lastClick = dbl ? null : { x: sx, y: sy, t: G.t };
   G.ripples.push({ x: sx, y: sy, t: G.t });
@@ -3245,6 +3262,18 @@ function eggList(room, draw) {
   return Object.keys(EGGS).map(eggOf).filter(e => e.room === room && (draw || !e.when || e.when()));
 }
 function drawEgg(e) { cx.save(); cx.translate(e.x, e.y); try { EGG_DRAW[e.kind](cx, e, G.t); } finally { cx.restore(); } }
+function eggsFound() { const s = G.state && G.state.eggs; return s ? Object.keys(EGGS).filter(k => s[k]).length : 0; }
+// Liste der Easter Eggs: gefundene mit Namen, Ort und Zeit-Symbol, die anderen als Rätsel mit Hinweis auf die Epoche
+function drawEggList(bx, y, bw) {
+  const seen = (G.state && G.state.eggs) || {};
+  txt(cx, 'Kleine Verbeugungen vor den Klassikern – gefunden, wenn man sie einmal anschaut.', W / 2, y + 12, '600 13px "Baloo 2", sans-serif', '#a99ad0');
+  Object.entries(EGGS).forEach(([id, e], i) => {
+    const yy = y + 42 + i * 30, got = !!seen[id], room = ROOMS[e.room], era = ERA[room.era];
+    cx.globalAlpha = got ? 1 : 0.45; eraIcon(cx, room.era, bx + 44, yy - 5, 0.8); cx.globalAlpha = 1;
+    txt(cx, got ? e.name : '???', bx + 70, yy, '800 16px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
+    txt(cx, got ? `${room.name} · ${era.label}` : `irgendwo in der Epoche „${era.label}“`, bx + bw - 30, yy, '600 13px "Baloo 2", sans-serif', got ? '#e6dcff' : '#6a5a88', 'right');
+  });
+}
 async function eggResolve(v, a, b) {
   const key = a[0] === 'e' ? a : b, id = key.slice(2), e = eggOf(id), p = curId();
   if (!G.eggFx) G.eggFx = {};
@@ -3276,6 +3305,18 @@ function drawSaber() {
   L(cx, [x0, y0, x1, y1], 2.2 * sc, '#ffffff');
   cx.save(); cx.translate(x0, y0); cx.rotate(Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2); R(cx, -3 * sc, 0, 6 * sc, 18 * sc, '#c8ccd8', 1.5, 1.5); cx.restore();
 }
+// Fledermaus: flattert ab und zu draußen am Lobbyfenster vorbei (nur im Fensterglas sichtbar)
+function batK() { const m = (G.t + 9000) % 23000; return m < 1500 ? m / 1500 : -1; }
+function drawLobbyBat(room) {
+  if (room.id !== 'lobby') return;
+  const k = batK(); if (k < 0) return;
+  const x = 572 + k * 82, y = 128 - Math.sin(k * Math.PI) * 34 + Math.sin(k * 30) * 4, fl = Math.sin(G.t * 0.05);
+  cx.save(); cx.beginPath(); cx.rect(582, 70, 58, 110); cx.clip();
+  cx.translate(x, y);
+  for (const s of [-1, 1]) P(cx, [0, 0, s * 7, -4 - fl * 5, s * 12, -1 - fl * 3, s * 9, 2, s * 5, 1], '#1a1020', 1);
+  E(cx, 0, 0, 3, 2.6, '#1a1020', 0); E(cx, 1.2, -0.6, 0.6, 0.6, '#ff6040', 0);
+  cx.restore();
+}
 function drawSwanFlight() {
   const k = eggFx('swan', G.t, 3200); if (k < 0 || viewRoomId() !== 'gasthaus') return;
   const x = -60 + k * 1100, y = 120 - Math.sin(k * Math.PI) * 60 + Math.sin(G.t * 0.004) * 6;
@@ -3297,6 +3338,7 @@ function updateEggs() {
   const view = viewRoomId(), st = G.eggSt || (G.eggSt = {});
   const peek = view === 'lobby' && edPeek(G.t) > 0; if (peek && !st.ed && !G.menu) Sound.sfx('psst', panX(EGGS.ed.x)); st.ed = peek;
   const met = view === 'fgarten' && meteorK() >= 0; if (met && !st.meteor && !G.menu) Sound.sfx('meteor', 0.3); st.meteor = met;
+  const bat = view === 'lobby' && batK() >= 0; if (bat && !st.bat && !G.menu) Sound.sfx('squeak', 0.25); st.bat = bat;
 }
 async function critterResolve(v, a, b) {
   const key = a[0] === 'c' ? a : b, id = key.slice(2), c = CRIT[id], L = CRITTER_LINES[id], p = curId();

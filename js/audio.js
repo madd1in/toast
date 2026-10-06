@@ -668,6 +668,15 @@ const Sound = (() => {
     for (const e of parse(s[1]).ev) inst(s[0], e.n, t + e.b * spb, e.len * spb, lg);
     later(() => { try { lg.disconnect(); } catch (e) { /* ok */ } }, 4);
   }
+  // kurzes Motiv der Epoche, wenn ein Raum zum ersten Mal betreten wird (Gegenwart E-Piano, 1776 Harfe, Zukunft Glocken)
+  const MOTIF = { present: ['epiano', 'C5:0.25 G5:0.25 E5:0.5'], past: ['harp', 'G4:0.25 B4:0.25 D5:0.5'], future: ['bell', 'A5:0.25 E6:0.25 C#6:0.5'] };
+  function motif(era) {
+    const m = MOTIF[era]; if (!ac || !m || !musicOn) return;
+    const lg = ac.createGain(); lg.gain.value = 0.7; lg.connect(musicBus);
+    const t = ac.currentTime + 0.12, spb = 0.36;
+    for (const e of parse(m[1]).ev) inst(m[0], e.n, t + e.b * spb, e.len * spb, lg);
+    later(() => { try { lg.disconnect(); } catch (e) { /* ok */ } }, 3);
+  }
   function muffle(on) {
     if (muffled === on) return; muffled = on;
     if (muffleF) muffleF.frequency.setTargetAtTime(on ? 650 : 20000, ac.currentTime, on ? 0.08 : 0.15);
@@ -702,7 +711,7 @@ const Sound = (() => {
 
   function setParty(on) { partyOn = !!on; }
   function setLite(on) { lite = on == null ? MOBILE : !!on; if (ac) setReverb(verbWanted[0], verbWanted[1]); }
-  return { init, initOffline, tick, play, sfx, setParty, setLite, get lite() { return lite; }, get mobile() { return MOBILE; }, setHero, spectrum, info, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
+  return { init, initOffline, tick, play, sfx, motif, setParty, setLite, get lite() { return lite; }, get mobile() { return MOBILE; }, setHero, spectrum, info, onSfx, setMusic, setRetro, setReverb, duck, ambience, blip, step, sting, muffle, setIntensity, captureStream, get musicOn() { return musicOn; }, get current() { return cur; }, get songT0() { return songT0; }, note, chart: ROCK_CHART, get ctx() { return ac; }, get out() { return master; } };
 })();
 
 // ---------- Sprachausgabe über die Web Speech API ----------
