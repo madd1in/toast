@@ -2416,6 +2416,7 @@ function drawTitle() {
   P(cx, [x1 + 28, 140, x1 - 6, 138, x1 - 6, 168, x1 + 28, 170, x1 + 16, 154], '#5a1446', 2.5);
   P(cx, [x0, 132, x1, 132, x1, 162, x0, 162], '#8a2a6a', 3);
   txt(cx, sub, W / 2, 153, '700 19px "Baloo 2", sans-serif', '#fff0fa', 'center', 4, '#3a0a2a');
+  if (G.photoMode) return;   // Foto vom Titelbild: ohne Menü
   const bx = 596, bw = 300, btns = [];
   if (G.saved) btns.push({ id: 'cont', label: 'Weiterspielen', big: true });
   btns.push({ id: 'new', label: G.saved ? 'Neues Spiel' : 'Spiel starten', big: !G.saved });
