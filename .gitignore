@@ -3,3 +3,5 @@ shots/
 .DS_Store
 Thumbs.db
 media/
+.claude/
+*.blend1
