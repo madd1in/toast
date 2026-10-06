@@ -253,7 +253,7 @@ function updateRain(dt) {
     rainFx.next = G.t + d[0] + Math.random() * d[1];
     Sound.ambience(roomAmb());
     if (!rainFx.on) { rainFx.drops = []; rainFx.splashes = []; }
-    if (wx.bow) showerTurn(room, rainFx.on);
+    if (wx.bow) showerTurn(room, rainFx.on); else if (room.id === 'fgarten') futureRainBark(rainFx.on);
   }
   if (!rainFx.on || !(ROOM_FX[room.id] || {}).rain) {
     if (rainFx.drops.length) { rainFx.drops = []; rainFx.splashes = []; }
@@ -294,6 +294,29 @@ function showerTurn(room, wet) {
   if (room.id !== 'garten1776' || me().room !== room.id) return;   // ob gerade jemand spricht, zählt erst beim Spruch selbst
   wait(wet ? 1800 : 3600).then(() => { if (viewRoomId() === 'garten1776' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(curId(), pick(SHOWER_BARKS[wet ? 'wet' : 'bow'])); });
 }
+function futureRainBark(wet) {
+  if (me().room !== 'fgarten' || G.t - (G.wxBarkT || -1e9) < 90000) return;
+  G.wxBarkT = G.t;
+  wait(1500).then(() => { if (viewRoomId() === 'fgarten' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(curId(), pick(FUTURE_RAIN_BARKS[wet ? 'wet' : 'dry'])); });
+}
+// Hologramm-Werbung: flackerndes Pink über dem Turm, Lichtkegel von der Turmspitze, Bildstörung beim Wechsel
+function drawHolo(room) {
+  if (room.id !== 'fgarten') return;
+  const cyc = 4200, n = Math.floor(G.t / cyc), k = (G.t % cyc) / cyc, text = T(HOLO_ADS[n % HOLO_ADS.length]);
+  const glitch = k < 0.06 || (k > 0.5 && k < 0.52 && n % 2 === 1), x = 648, y = 78, h = 30, fnt = '800 12px "Baloo 2", sans-serif';
+  cx.save(); cx.font = fnt;
+  const w = Math.min(196, cx.measureText(text).width + 24), fl = 0.8 + 0.2 * Math.sin(G.t * 0.031) * Math.sin(G.t * 0.0117), ox = glitch ? (Math.random() - 0.5) * 7 : 0;
+  cx.globalAlpha = (glitch ? 0.35 : 0.85) * fl;
+  if (!cx.isPix) {
+    const bg = cx.createLinearGradient(0, 126, 0, y + h / 2); bg.addColorStop(0, 'rgba(255,120,220,0.4)'); bg.addColorStop(1, 'rgba(255,120,220,0)');
+    cx.fillStyle = bg; cx.beginPath(); cx.moveTo(x - 3, 126); cx.lineTo(x - w / 2, y + h / 2); cx.lineTo(x + w / 2, y + h / 2); cx.lineTo(x + 3, 126); cx.fill();
+    glow(x, y, w * 0.6, '#ff7ad8', 0.25 * fl);
+  }
+  R(cx, x - w / 2 + ox, y - h / 2, w, h, 'rgba(255,90,200,0.2)', 1.5, 6, '#ff8ade');
+  cx.fillStyle = 'rgba(255,190,245,0.14)'; for (let yy = y - h / 2 + 2; yy < y + h / 2 - 1; yy += 3) cx.fillRect(x - w / 2 + ox + 2, yy, w - 4, 1);
+  txt(cx, '\u200b' + text, x + ox, y + 4, fnt, '#ffe0f8', 'center');
+  cx.restore();
+}
 function showerDim() {
   if (rainFx.era !== 'past') return 0;
   if (rainFx.on) return Math.min(1, (G.t - rainFx.t0) / 2500);
@@ -303,6 +326,7 @@ function drawRainbow(room) {
   if (room.id !== 'garten1776' || !G.rainbow || rainFx.on) return;
   const k = G.t - G.rainbow; if (k > 34000) return;
   const a = Math.max(0, Math.min(1, (k - 1200) / 4000, (34000 - k) / 6000)) * 0.42; if (a <= 0) return;
+  if (a > 0.3 && G.screen === 'game' && !G.ach.regenbogen) unlock('regenbogen');
   cx.save(); cx.beginPath(); cx.rect(0, 0, 2000, 226); cx.clip();
   cx.globalAlpha = a; cx.lineWidth = 5.4;
   ['#ff4a4a', '#ff9a3a', '#ffe14a', '#5ad85a', '#4aa8ff', '#6a5aff', '#b05aff'].forEach((c, i) => { cx.strokeStyle = c; cx.beginPath(); cx.arc(560, 300, 236 - i * 5, Math.PI, 2 * Math.PI); cx.stroke(); });
@@ -1488,7 +1512,7 @@ function langStrings() {
     Object.values(CRITTERS).forEach(c => add(c.name)); Object.values(EGGS).forEach(e => add(e.name)); Object.values(VERB_LABEL).forEach(add);
     Object.values(ERA).forEach(e => add(e.label)); HUD_BTNS.forEach(b => add(b[1])); HELP.forEach(add); JUKEBOX.forEach(j => add(j[1]));
     ACH.forEach(a => { add(a.name); add(a.desc); }); NOTES.forEach(n => add(n[1]));
-    Object.values(NPC_CHATS).forEach(list => list.forEach(ch => ch.forEach(l => add(l[1]))));
+    Object.values(NPC_CHATS).forEach(list => list.forEach(ch => ch.forEach(l => add(l[1])))); HOLO_ADS.forEach(add);
     for (const m of ['main', 'settings', 'extras']) { const keep = G.menu; G.menu = m; try { menuItems().forEach(it => add(it.label)); } finally { G.menu = keep; } }
   } catch (e) { /* Liste ist nur ein Vorgriff */ }
   return out;
@@ -1836,6 +1860,7 @@ function drawScene() {
   camApply();
   drawBg(room);
   drawSky();
+  drawHolo(room);
   drawRainbow(room);
   drawWindowRain(room);
   drawMeteor(room);

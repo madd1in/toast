@@ -159,6 +159,7 @@ const ACH = [
   { id: 'eier', name: 'Easter-Egg-Jäger', desc: 'Alle Verbeugungen vor den Klassikern entdeckt.', secret: true },
   { id: 'geduld', name: 'Geduldsprobe', desc: 'Alle Leerlauf-Ticks der Helden gesehen.' },
   { id: 'brieffreund', name: 'Brieffreund', desc: 'Drei Nachrichten per Klo-Post bekommen.' },
+  { id: 'regenbogen', name: 'Nach dem Regen', desc: 'Den Regenbogen über dem Plumpsklo gesehen.' },
   { id: 'ende', name: 'Weltretter', desc: 'Lila Tentakel mit einem Toast geheilt.' },
 ];
 // Figuren-Steckbriefe (Menü → Extras); NPCs erscheinen erst, wenn man sie angeschaut oder angesprochen hat
@@ -205,6 +206,13 @@ const SHOWER_BARKS = {
   wet: ['Regen! Und kein Schirm in Sicht.', 'Gratis-Dusche. Wird auch Zeit.', 'Hey, meine Kappe wird nass!'],
   bow: ['Ein Regenbogen! Und am Ende steht … das Plumpsklo. Typisch.', 'Whoa. Sieht aus wie ein Albumcover.'],
 };
+// Laverne kommentiert den Zukunftsregen (höchstens alle anderthalb Minuten)
+const FUTURE_RAIN_BARKS = {
+  wet: ['Regen! Die Glühwürmchen verstecken sich schon wieder.', 'Ob der Regen hier auch lila ist? … Nein. Schade.'],
+  dry: ['Regen vorbei. Die Glühwürmchen trauen sich wieder raus.', 'Schon aufgehört? Ich hatte mich gerade dran gewöhnt.'],
+};
+// Hologramm-Werbung über dem Turm im Zukunftsgarten
+const HOLO_ADS = ['Huldigt Lila!', 'Lila-Cola – lilaer geht’s nicht', 'Toast? Verboten!', 'Klo 3000: schneller als die Zeit'];
 // ---------- Easter Eggs: Verbeugungen vor Maniac Mansion, Zak McKracken, Indiana Jones, Loom, Monkey Island und Star Wars ----------
 const EGGS = {
   mumie: { name: 'Cousin Ted', kind: 'mummy', room: 'labor', x: 682, y: 340, w: 56, h: 176, walk: [612, 396], dv: 'look',
