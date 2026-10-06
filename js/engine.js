@@ -2347,8 +2347,9 @@ function drawHaus3d(t) {
 }
 // Grüner und Lila Tentakel in 3D (Blender, Toon-Look mit Kontur); wippen und federn leicht.
 // Im Pixel-Modus und mit Partyhütchen bleiben die gezeichneten Figuren.
-const TENT_IMG = { green: Object.assign(new Image(), { src: 'img/tent_gruen.png' }), lila: Object.assign(new Image(), { src: 'img/tent_lila.png' }) };
-const TENT_AT = { green: [0.53, 205], lila: [0.491, 240] };   // Fußpunkt (Anteil der Breite) und Höhe im Titelbild
+// Auch die drei Helden gibt es fürs Titelbild in 3D (gleicher Maßstab wie in Blender gerendert).
+const TENT_IMG = Object.fromEntries([['green', 'tent_gruen'], ['lila', 'tent_lila'], ['bernard', 'held_bernard'], ['hoagie', 'held_hoagie'], ['laverne', 'held_laverne']].map(([id, f]) => [id, Object.assign(new Image(), { src: `img/${f}.png` })]));
+const TENT_AT = { green: [0.53, 205], lila: [0.491, 240], bernard: [0.512, 151], hoagie: [0.463, 122], laverne: [0.54, 137] };   // Fußpunkt (Anteil der Breite) und Höhe im Titelbild
 function titleTent3d(id, x, y, seed) {
   const im = TENT_IMG[id];
   if (cx.isPix || G.settings.party || !imgReady(im)) return false;
@@ -2426,9 +2427,9 @@ function drawTitle() {
   S(cx, 'rgba(210,190,255,0.12)', 0, () => { cx.moveTo(500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 552); cx.quadraticCurveTo(740, 598, 500, 564); cx.closePath(); });
   // die drei Helden im Mondlicht, gegenüber Lila Tentakel; Grüner Tentakel links
   if (!titleTent3d('green', 46, 604, 2)) titleActor('green', 46, 604, 1.05, -1, 2);
-  titleActor('bernard', 292, 590, 0.6, 1, 1);
-  titleActor('hoagie', 352, 592, 0.6, 1, 3);
-  titleActor('laverne', 410, 588, 0.6, 1, 5);
+  if (!titleTent3d('bernard', 292, 590, 1)) titleActor('bernard', 292, 590, 0.6, 1, 1);
+  if (!titleTent3d('hoagie', 352, 592, 3)) titleActor('hoagie', 352, 592, 0.6, 1, 3);
+  if (!titleTent3d('laverne', 410, 588, 5)) titleActor('laverne', 410, 588, 0.6, 1, 5);
   if (!titleTent3d('lila', 504, 604, 0)) titleActor('lila', 512, 604, 1.2, -1, 0);
   // Gras und Glühwürmchen
   for (let i = 0; i < (cx.isPix ? 14 : 40); i++) {
