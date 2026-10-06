@@ -1800,6 +1800,27 @@ function drawReveal(room, scr) {
   }
   cx.restore();
 }
+// Zeitreise-Übergang: Zeitwirbel (in Unreal gerendert) dreht sich hinter den Lichtstreifen,
+// in der Mitte taumelt ein Chrono-Klo (in Blender gerendert, 24 Bilder im Raster 6×4)
+const VORTEX_IMG = new Image(); VORTEX_IMG.src = 'img/vortex.jpg';
+const KLO_SPIN = new Image(); KLO_SPIN.src = 'img/klo_spin.png';
+const imgReady = im => im.complete && im.naturalWidth > 0;
+function drawVortexBg(SH) {
+  if (!imgReady(VORTEX_IMG)) return;
+  const d = Math.hypot(W, SH) * (1.05 + 0.08 * Math.sin(G.t * 0.001));
+  cx.save(); cx.globalAlpha = G.fade * 0.95; cx.translate(W / 2, SH / 2); cx.rotate(G.t * 0.0009); cx.scale(1, 0.78);
+  cx.drawImage(VORTEX_IMG, -d / 2, -d / 2, d, d);
+  cx.restore();
+}
+function drawKloSpin(SH) {
+  if (!imgReady(KLO_SPIN)) return false;
+  const fs = KLO_SPIN.naturalWidth / 6, f = Math.floor(G.t / 45) % 24, sx = (f % 6) * fs, sy = Math.floor(f / 6) * fs;
+  const k = Math.min(1, G.fade * 1.6), size = 120 + 70 * k, y = SH / 2 - 46 + Math.sin(G.t * 0.006) * 8;
+  cx.save(); cx.globalAlpha = Math.min(1, G.fade * 1.4); cx.translate(W / 2, y); cx.rotate(Math.sin(G.t * 0.004) * 0.25);
+  cx.drawImage(KLO_SPIN, sx, sy, fs, fs, -size / 2, -size / 2, size, size);
+  cx.restore();
+  return true;
+}
 function drawTransition() {
   if (G.fade <= 0) return;
   const SH = VH;
@@ -1819,6 +1840,7 @@ function drawTransition() {
       cx.setLineDash([]); cx.restore();
     } else {
       // Sterntunnel: Lichtstreifen rasen nach außen, Spiralarme drehen sich um ein helles Zentrum
+      drawVortexBg(SH);
       cx.save(); cx.globalAlpha = G.fade; cx.translate(W / 2, SH / 2);
       glow(0, 0, 260, G.warpCol, 0.5); glow(0, 0, 90, '#ffffff', 0.7);
       cx.lineCap = 'round';
@@ -1837,9 +1859,10 @@ function drawTransition() {
       }
       cx.restore();
     }
+    const klo = !cx.isPix && drawKloSpin(SH);
     if (G.fade > 0.5 && G.warpLabel) {
       cx.globalAlpha = (G.fade - 0.5) * 2;
-      txt(cx, G.warpLabel, W / 2, SH / 2 + 14, '400 40px "Titan One", sans-serif', G.warpCol, 'center', 8, '#0c0614');
+      txt(cx, G.warpLabel, W / 2, SH / 2 + (klo ? 92 : 14), '400 40px "Titan One", sans-serif', G.warpCol, 'center', 8, '#0c0614');
       cx.globalAlpha = 1;
     }
   } else { cx.fillStyle = `rgba(12,6,20,${G.fade})`; cx.fillRect(0, 0, W, SH); }
@@ -2516,6 +2539,16 @@ function updateEnd(dt) {
   while (FW.conf.length < 46) FW.conf.push({ x: Math.random() * W, y: -10 - Math.random() * H, v: 40 + Math.random() * 50, r: Math.random() * 6, sp: (Math.random() - 0.5) * 6, col: pick(FW_COLS) });
   for (const c of FW.conf) { c.y += c.v * s; c.x += Math.sin(G.t * 0.002 + c.r * 3) * 20 * s; c.r += c.sp * s; if (c.y > H + 10) { c.y = -10; c.x = Math.random() * W; } }
 }
+// Schriftzug "ENDE" in 3D (Blender, wie das Titel-Logo); im Pixel-Modus bleiben die gezeichneten Buchstaben
+const ENDE_IMG = new Image(); ENDE_IMG.src = 'img/ende.png';
+function drawEnde3d(t) {
+  if (cx.isPix || !imgReady(ENDE_IMG)) return false;
+  const w = 310, h = w * ENDE_IMG.naturalHeight / ENDE_IMG.naturalWidth, s = 1 + Math.sin(t * 0.0023) * 0.025;
+  cx.save(); cx.translate(W / 2, 100 + Math.sin(t * 0.004) * 5); cx.scale(s, s); cx.rotate(Math.sin(t * 0.0017) * 0.02);
+  cx.drawImage(ENDE_IMG, -w / 2, -h / 2, w, h);
+  cx.restore();
+  return true;
+}
 function drawEnd() {
   const t = G.t, hd = !cx.isPix;
   cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#080320'], [0.55, '#2a0f4a'], [1, '#6a2a6e']]); cx.fillRect(0, 0, W, H);
@@ -2542,7 +2575,7 @@ function drawEnd() {
   // Titel, Statistik, Abspann
   if (hd) { const lg = cx.createRadialGradient(W / 2, 120, 40, W / 2, 120, 360); lg.addColorStop(0, 'rgba(14,4,30,0.55)'); lg.addColorStop(1, 'rgba(14,4,30,0)'); cx.fillStyle = lg; cx.fillRect(0, 0, W, 300); }
   const gl = ((t * 0.004) % 14) - 3;
-  ['E', 'N', 'D', 'E'].forEach((ch, i) => {
+  if (!drawEnde3d(t)) ['E', 'N', 'D', 'E'].forEach((ch, i) => {
     const x = W / 2 + (i - 1.5) * 76, y = 122 + Math.sin(t * 0.004 + i * 0.8) * 6, hl = Math.max(0, 1 - Math.abs(gl - i) / 1.4);
     txt(cx, ch, x, y + 8, '400 96px "Titan One", sans-serif', '#6a1838', 'center', 12, '#2a0a3a');
     txt(cx, ch, x, y, '400 96px "Titan One", sans-serif', grad(cx, 0, y - 80, 0, y, [[0, mix('#fff0a0', '#ffffff', hl)], [1, '#ff7a30']]), 'center', 12, '#2a0a3a');

@@ -68,6 +68,8 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **Labor und Gasthaus:** Im Labor springt ab und zu ein knisternder Lichtbogen vom Kabel auf den Gut-O-Mat, über Gertrudes Kessel steigt Dampf auf und es blubbert
 - **Dr. Freds Laborwalzer:** Das Labor hat jetzt eine eigene, leicht schaurige Musik im Dreivierteltakt mit Theremin – auch in der Musikbox
 - **3D-Titel-Logo:** In Blender gerendert – Toast-Buchstaben mit Kruste und Comic-Kontur, dazu ein lila Tentakel mit Saugnäpfen (im Pixel-Modus bleibt das gezeichnete Logo)
+- **Zeitreise in 3D:** Beim Figurenwechsel dreht sich ein in Unreal Engine gerenderter Zeitwirbel, davor taumelt ein in Blender gerendertes Chrono-Klo
+- **3D-Abspann:** Der Schriftzug „ENDE“ im selben Toast-Look wie das Titel-Logo
 - **Echte Geräusch-Aufnahmen:** Das Spiel kann mit ElevenLabs erzeugte Geräusche abspielen (zuerst der Apfel-Biss); fehlt eine Datei oder ist der Klassik-Modus an, klingt weiter der Synthesizer
 - **Hologramm-Werbung:** Über einem Turm im Zukunftsgarten flackert pinke Werbung für Lila Tentakel – mit Lichtkegel und Bildstörung
 - **Wetter-Sprüche und neuer Erfolg:** Laverne kommentiert ab und zu den Zukunftsregen; wer den Regenbogen in 1776 sieht, bekommt den Erfolg „Nach dem Regen“
