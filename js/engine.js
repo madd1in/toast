@@ -3009,7 +3009,7 @@ function bioFigure(id, known, x, y, hgt) {
     if (!known) { txt(cx, '?', x, y - hgt * 0.4, '400 40px "Titan One", sans-serif', '#4a3a68'); return; }
     cx.save(); cx.translate(x, y); cx.scale(sc, sc); CHAR[base.kind](cx, a, 0); cx.restore(); return;
   }
-  const k = VS * DPR, bw = 110, bh = hgt + 14, key = `${id}|${known ? 1 : 0}|${k.toFixed(2)}`;
+  const k = VS * DPR, bw = 110, bh = hgt + 14, key = `${id}|${known ? 1 : 0}|${k.toFixed(2)}|${fig3dOk(base.kind) ? 3 : 2}`;
   let c = bioCache[key];
   if (!c) {
     c = bioCache[key] = document.createElement('canvas'); c.width = Math.ceil(bw * k); c.height = Math.ceil(bh * k);
@@ -3469,8 +3469,8 @@ function drawSaber() {
   const s = G.saber; if (!s) return;
   const a = ACT[s.id], arm = SABER_ARM[s.id]; if (!a || !arm || a.room !== viewRoomId()) return;
   const room = ROOMS[a.room], sc = roomScale(room, a.y) * (a.scaleMul || 1), d = a.dir || 1, po = pose(a, G.t);
-  const ang = po && po.front != null ? -0.12 * (1 - po.mix) + po.front * po.mix : -1.5;
-  const hx = arm[0] - arm[2] * Math.sin(ang), hy = arm[1] + arm[2] * Math.cos(ang), ph = ang - 1.1;
+  const ang = po && po.front != null ? -0.12 * (1 - po.mix) + po.front * po.mix : -1.5, f3 = !cx.isPix && a._fig;   // 3D-Figur: Hand aus dem Rendering
+  const hx = f3 ? f3[12] : arm[0] - arm[2] * Math.sin(ang), hy = f3 ? f3[13] : arm[1] + arm[2] * Math.cos(ang), ph = ang - 1.1;
   const grow = Math.min(1, (G.t - s.t0) / 220) * (s.off ? Math.max(0, 1 - (G.t - s.off) / 220) : 1), len = 92 * grow;
   const x0 = a.x + d * hx * sc, y0 = a.y + hy * sc, x1 = x0 + d * -Math.sin(ph) * len * sc, y1 = y0 + Math.cos(ph) * len * sc;
   if (len < 1) return;
