@@ -131,7 +131,7 @@ function drawRipples() {
 // light: [Seite der Hauptlichtquelle (-1 links, 1 rechts), Führungslicht, Schattenfarbe]
 const ROOM_FX = {
   lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic', 'air', 'chime'], motes: 'dust', music: 'lounge' },
-  labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps', 'hum'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
+  labor: { music: 'lab', verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps', 'hum'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
   gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak', 'chime', 'blub'], motes: 'warm', flicker: 'fire', music: 'tavern' },
   garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo', 'rain'], rain: true, motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, amb: ['future', 'rain'], motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars', storm: true, rain: true },
@@ -2106,7 +2106,7 @@ function drawJukebox(bx, by, bw) {
     txt(cx, lbl, px - tw / 2 + 14, base + 125, '700 13px "Baloo 2", sans-serif', '#ffe066', 'left');
   }
 }
-const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
+const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['lab', 'Dr. Freds Laborwalzer'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
 const HELP = [
   'Modern (HD): Linksklick = hingehen oder passende Aktion · Rechtsklick = Aktionsmenü',
   'Inventar: Maus an den unteren Rand oder I · Gegenstand anklicken, dann Ziel oder Gesicht',
@@ -2178,7 +2178,7 @@ function drawMenu() {
     y += ACH.length * 24 + 10;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
-  G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * 43, w: 340, h: 35 } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: Math.min(38, mst - 4) }));
+  G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * Math.min(43, (bh - 90) / items.length), w: 340, h: Math.min(35, (bh - 90) / items.length - 5) } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: Math.min(38, mst - 4) }));
   G.menuBtns.filter(b => !b.id.startsWith('ph_')).forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
   if (G.menu === 'album' && G.albumView != null && !cx.isPix) {
     const ph = albumList()[G.albumView];

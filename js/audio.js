@@ -165,6 +165,8 @@ const Sound = (() => {
         case 'fiddle': osc('sawtooth', f, t, d * 0.95, 0.04, bus, { lp: 2800, attack: 0.04, release: 0.06, vib: 5 }); osc('sawtooth', f, t, d * 0.95, 0.018, bus, { lp: 2000, attack: 0.05, detune: 6, vib: 4 }); break;
         case 'guitar': guitar(f, t, d * 0.92, 0.07, bus); break;
         case 'chug': guitar(f, t, d, 0.06, bus, true); break;
+        // Theremin: weicher Sinus mit langsamem Einschwingen und breitem Vibrato, dazu eine leise Oktave
+        case 'theremin': osc('sine', f, t, d * 0.97, 0.07, bus, { attack: 0.09, release: 0.18, vib: f * 0.014 }); osc('triangle', f * 2, t, d * 0.97, 0.01, bus, { attack: 0.12, release: 0.18, vib: f * 0.028 }); break;
         case 'organ': osc('triangle', f, t, d * 0.95, 0.035, bus, { attack: 0.06, release: 0.15 }); osc('sine', f * 2, t, d * 0.95, 0.015, bus, { attack: 0.06, release: 0.15 }); break;
         default: osc('triangle', f, t, d, 0.08, bus);
       }
@@ -262,6 +264,14 @@ const Sound = (() => {
       { inst: 'drum', seq: Array(8).fill('-:1 C:1 -:1 C:1').join(' ') },
       { inst: 'drum', seq: Array(64).fill('H:0.5').join(' ') },
     ] },
+    // Dr. Freds Laborwalzer: schauriger 3/4-Takt mit Theremin, Zupfbass auf der Eins und Orgel auf zwei und drei
+    lab: { bpm: 138, tracks: [
+      { inst: 'theremin', seq: 'A4:2 D5:1 F5:2 E5:1 D5:1.5 C5:0.5 Bb4:1 A4:3 Bb4:2 D5:1 G5:2 F5:1 E5:1 C#5:1 E5:1 A5:3 F5:2 E5:1 C5:2 A4:1 Bb4:1 D5:1 G5:1 F5:3 D5:1 F5:1 Bb5:1 G5:2 Bb4:1 A4:1 C#5:1 E5:1 D5:3' },
+      { inst: 'pizz', seq: 'D2:1 -:2 D2:1 -:2 G1:1 -:2 D2:1 -:2 Bb1:1 -:2 G1:1 -:2 A1:1 -:2 A1:1 -:2 D2:1 -:2 F1:1 -:2 G1:1 -:2 D2:1 -:2 Bb1:1 -:2 G1:1 -:2 A1:1 -:2 D2:1 -:2' },
+      { inst: 'organ', seq: ['D3+F3+A3', 'D3+F3+A3', 'G2+Bb2+D3', 'D3+F3+A3', 'Bb2+D3+F3', 'G2+Bb2+D3', 'A2+C#3+E3', 'A2+C#3+E3', 'D3+F3+A3', 'F2+A2+C3', 'G2+Bb2+D3', 'D3+F3+A3', 'Bb2+D3+F3', 'G2+Bb2+D3', 'A2+C#3+E3', 'D3+F3+A3'].map(c => `-:1 ${c}:1 ${c}:1`).join(' ') },
+      { inst: 'bell', lvl: 1, seq: 'A5:3 F5:3 G5:3 A5:3 F5:3 G5:3 E5:3 C#6:3 A5:3 A5:3 Bb5:3 F5:3 F5:3 D6:3 E5:3 D6:3' },
+      { inst: 'drum', lvl: 2, seq: Array(16).fill('K:1 H:1 H:1').join(' ') },
+    ] },
     // Wachparade: komischer Marsch für den Palast-Vorraum
     march: { fill: true, bpm: 112, tracks: [
       { inst: 'tuba', seq: x2('Bb1:1 F2:1 Bb1:1 F2:1 Eb2:1 Bb1:1 Eb2:1 Bb1:1 F2:1 C2:1 F2:1 C2:1 Bb1:1 F2:1 Bb1:2') },
@@ -304,7 +314,7 @@ const Sound = (() => {
   let partyOn = false;
   // Jede Spielfigur färbt die Leitmelodie: Bernard spielt sie auf dem E-Piano mit, Hoagie eine Oktave tiefer
   // auf der E-Gitarre, Laverne eine Oktave höher auf Glocken – beim Figurenwechsel wechselt die Klangfarbe sofort
-  const LEAD = { title: 1, past: 0, present: 1, future: 2, palace: 1, tavern: 0, lounge: 2, ending: 0, march: 1 };
+  const LEAD = { title: 1, past: 0, present: 1, future: 2, palace: 1, tavern: 0, lounge: 2, ending: 0, march: 1, lab: 0 };
   const HERO_INST = { bernard: ['epiano', 0, 0.85], hoagie: ['guitar', -12, 0.55], laverne: ['bell', 12, 0.65] };
   let hero = null, heroLayers = [], loopT0 = 0, loopN = 0;
   function scheduleHero(t0, from) {
