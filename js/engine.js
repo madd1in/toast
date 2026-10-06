@@ -259,7 +259,7 @@ function updateRain(dt) {
     if (rainFx.drops.length) { rainFx.drops = []; rainFx.splashes = []; }
     return;
   }
-  const want2 = G.quality < 1 ? 20 : 34;
+  const want2 = (G.quality < 1 ? 20 : 34) * (rainFx.era === 'past' ? 1.6 : 1) | 0;   // Sommerregen etwas dichter
   if (rainFx.drops.length > want2) rainFx.drops.length = want2;
   while (rainFx.drops.length < want2) rainFx.drops.push({ x: Math.random() * (W + 140), y: Math.random() * SH, land: 312 + Math.random() * 122, v: 660 + Math.random() * 260 });
   const s = dt / 1000;
@@ -275,9 +275,11 @@ function updateRain(dt) {
 }
 function drawRain() {
   if (!rainFx.drops.length) return;
-  cx.strokeStyle = 'rgba(188,216,255,0.4)'; cx.lineWidth = 1.5; cx.lineCap = 'round';
+  // vor dem hellen Sommerhimmel von 1776 dunklere, längere Striche, sonst sieht man den Regen kaum
+  const past = rainFx.era === 'past', len = past ? 14 : 9;
+  cx.strokeStyle = past ? 'rgba(70,96,140,0.5)' : 'rgba(188,216,255,0.4)'; cx.lineWidth = past ? 1.8 : 1.5; cx.lineCap = 'round';
   cx.beginPath();
-  for (const d of rainFx.drops) { cx.moveTo(d.x, d.y - 9); cx.lineTo(d.x + 1.4, d.y); }
+  for (const d of rainFx.drops) { cx.moveTo(d.x, d.y - len); cx.lineTo(d.x + len * 0.16, d.y); }
   cx.stroke();
   for (const sp of rainFx.splashes) {
     const k = (G.t - sp.t) / 240;
@@ -289,7 +291,7 @@ function drawRain() {
 // Sommerregen 1776: Spruch des Helden draußen, danach ein Regenbogen über dem Garten
 function showerTurn(room, wet) {
   if (!wet) { G.rainbow = G.t; if (room.id === 'garten1776') wait(1400).then(() => { if (viewRoomId() === 'garten1776' && !G.menu) Sound.sfx('rainbow', 0.2); }); }
-  if (room.id !== 'garten1776' || me().room !== room.id || G.busy || G.speech || G.dialog || G.bark) return;
+  if (room.id !== 'garten1776' || me().room !== room.id) return;   // ob gerade jemand spricht, zählt erst beim Spruch selbst
   wait(wet ? 1800 : 3600).then(() => { if (viewRoomId() === 'garten1776' && !G.busy && !G.speech && !G.dialog && !G.bark && !G.menu) startBark(curId(), pick(SHOWER_BARKS[wet ? 'wet' : 'bow'])); });
 }
 function showerDim() {
@@ -309,9 +311,9 @@ function drawRainbow(room) {
 function drawWindowRain(room) {
   if (room.id !== 'gasthaus' || !rainFx.on || rainFx.era !== 'past') return;
   cx.save(); cx.beginPath(); cx.rect(484, 72, 112, 104); cx.clip();
-  cx.fillStyle = 'rgba(40,50,70,0.28)'; cx.fillRect(484, 72, 112, 104);
-  cx.strokeStyle = 'rgba(214,232,255,0.65)'; cx.lineWidth = 1.4; cx.beginPath();
-  for (let i = 0; i < 14; i++) { const x = 480 + ((i * 53) % 120), y = 66 + ((G.t * 0.5 + i * 97) % 124); cx.moveTo(x, y); cx.lineTo(x - 2, y + 10); }
+  cx.fillStyle = 'rgba(40,50,70,0.3)'; cx.fillRect(484, 72, 112, 104);
+  cx.strokeStyle = 'rgba(60,84,124,0.6)'; cx.lineWidth = 1.5; cx.beginPath();
+  for (let i = 0; i < 22; i++) { const x = 480 + ((i * 53) % 120), y = 66 + ((G.t * 0.5 + i * 97) % 124); cx.moveTo(x, y); cx.lineTo(x - 2.4, y + 13); }
   cx.stroke(); cx.restore();
 }
 function updateWeather() {
@@ -1839,7 +1841,7 @@ function drawScene() {
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
   cx.restore();
-  { const dm = room.id === 'garten1776' ? showerDim() : 0; if (dm > 0) { cx.fillStyle = `rgba(44,56,80,${(0.32 * dm).toFixed(3)})`; cx.fillRect(0, 0, W, SH); } }
+  { const dm = room.id === 'garten1776' ? showerDim() : 0; if (dm > 0) { cx.fillStyle = `rgba(44,56,80,${(0.36 * dm).toFixed(3)})`; cx.fillRect(0, 0, W, SH); } }
   drawLightFx(!cx.isPix);
   drawDisco();
   if (!cx.isPix) { drawBloom((ROOM_FX[room.id] || {}).bloom); drawGrade(); drawVignette(); }
@@ -3355,12 +3357,12 @@ function batK() { const m = (G.t + 9000) % 23000; return m < 1500 ? m / 1500 : -
 // Kaminfunken im Gasthaus: steigen aus dem Feuer auf, glimmen und verlöschen
 function drawEmbers(room) {
   if (room.id !== 'gasthaus') return;
-  for (let i = 0; i < 9; i++) {
-    const q = ((G.t * 0.00042) + i * 0.137) % 1, x = 104 + ((i * 37) % 70) + Math.sin(G.t * 0.003 + i * 2.3) * 6 * q, y = 296 - q * 82;
+  for (let i = 0; i < 13; i++) {
+    const q = ((G.t * 0.00042) + i * 0.0769) % 1, x = 104 + ((i * 37) % 70) + Math.sin(G.t * 0.003 + i * 2.3) * 6 * q, y = 296 - q * 82;
     const a = Math.sin(q * Math.PI) * (0.6 + 0.4 * Math.sin(G.t * 0.02 + i * 5));
     if (a <= 0.05) continue;
-    if (!cx.isPix) glow(x, y, 7, '#ff9a40', 0.5 * a);
-    cx.globalAlpha = a; E(cx, x, y, 1.3, 1.3, q < 0.5 ? '#ffe080' : '#ff8a30', 0); cx.globalAlpha = 1;
+    if (!cx.isPix) glow(x, y, 10, '#ff9a40', 0.55 * a);
+    cx.globalAlpha = a; E(cx, x, y, 1.9, 1.9, q < 0.5 ? '#ffe080' : '#ff8a30', 0); cx.globalAlpha = 1;
   }
 }
 // Kerzen am Kronleuchter im Thronsaal: flackernde Flammen mit warmem Schein
