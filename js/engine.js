@@ -2331,6 +2331,34 @@ function drawLogo3d(t) {
   cx.restore();
   return true;
 }
+// Herrenhaus in 3D (in Blender modelliert: Holzverkleidung, Schindeldach, schiefe Fensterläden, Gaube).
+// Die Ankerpunkte (Anteile im Bild) kommen aus der Kamera-Projektion in Blender: Schornstein, Fenster, Laternen.
+const HAUS_IMG = new Image(); HAUS_IMG.src = 'img/haus.png';
+const HAUS_AT = {"chimney": [0.488, 0.224], "windows": [[0.176, 0.615], [0.176, 0.783], [0.353, 0.618], [0.353, 0.786], [0.53, 0.621], [0.53, 0.789], [0.707, 0.624], [0.707, 0.792], [0.194, 0.254], [0.194, 0.34], [0.194, 0.425], [0.66, 0.301], [0.66, 0.398]], "lamps": [[0.341, 0.889], [0.55, 0.892]]};
+function drawHaus3d(t) {
+  if (cx.isPix || !imgReady(HAUS_IMG)) return false;
+  const h = 522, w = h * HAUS_IMG.naturalWidth / HAUS_IMG.naturalHeight, x = 262 - w / 2, y = 606 - h, at = ([fx, fy]) => [x + fx * w, y + fy * h];
+  const [sx, sy] = at(HAUS_AT.chimney);
+  for (let i = 0; i < 3; i++) { const k = ((t * 0.0003) + i / 3) % 1; cx.save(); cx.globalAlpha = (1 - k) * 0.5; E(cx, sx + Math.sin(t * 0.002 + i) * 10, sy - 6 - k * 90, 10 + k * 18, 7 + k * 12, 'rgba(122,90,154,0.9)', 0); cx.restore(); }
+  cx.drawImage(HAUS_IMG, x, y, w, h);
+  HAUS_AT.windows.forEach((p, i) => { const [wx, wy] = at(p), k = 0.5 + 0.5 * Math.sin(t * 0.0021 + i * 1.7); glow(wx, wy, i < 8 ? 40 : 28, '#ffbe5a', 0.12 + 0.22 * k); });
+  HAUS_AT.lamps.forEach((p, i) => { const [lx, ly] = at(p), f = 0.85 + 0.15 * Math.sin(t * 0.017 + i * 2.3) * Math.sin(t * 0.007 + i); glow(lx, ly, 38, '#ffc86e', 0.5 * f); });
+  return true;
+}
+// Grüner und Lila Tentakel in 3D (Blender, Toon-Look mit Kontur); wippen und federn leicht.
+// Im Pixel-Modus und mit Partyhütchen bleiben die gezeichneten Figuren.
+const TENT_IMG = { green: Object.assign(new Image(), { src: 'img/tent_gruen.png' }), lila: Object.assign(new Image(), { src: 'img/tent_lila.png' }) };
+const TENT_AT = { green: [0.53, 205], lila: [0.491, 240] };   // Fußpunkt (Anteil der Breite) und Höhe im Titelbild
+function titleTent3d(id, x, y, seed) {
+  const im = TENT_IMG[id];
+  if (cx.isPix || G.settings.party || !imgReady(im)) return false;
+  const [fx, hh] = TENT_AT[id], h = hh, w = h * im.naturalWidth / im.naturalHeight, t = G.t, sq = Math.sin(t * 0.004 + seed * 1.3);
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.beginPath(); cx.ellipse(x, y + 2, w * 0.42, 8, 0, 0, Math.PI * 2); cx.fill();
+  cx.save(); cx.translate(x, y + 8 + Math.sin(t * 0.003 + seed) * 2); cx.scale(1 - sq * 0.012, 1 + sq * 0.022); cx.rotate(Math.sin(t * 0.0019 + seed) * 0.025);
+  cx.drawImage(im, -fx * w, -h, w, h);
+  cx.restore();
+  return true;
+}
 function drawTitle() {
   const t = G.t;
   const sky = () => {
@@ -2383,7 +2411,7 @@ function drawTitle() {
     const x = 374 + Math.cos(t * 0.0011 + i * 2.1) * (80 + i * 14) + scare * (i - 1) * 400, y = 150 + Math.sin(t * 0.0017 + i) * 40 - scare * 260 * (1 - scare * 0.5), wy = Math.sin(t * (scare ? 0.06 : 0.022) + i * 3) * 5;
     L(cx, [x - 9, y - wy, x - 4, y, x, y - 2, x + 4, y, x + 9, y - wy], 2.2, '#12081c');
   }
-  cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore();
+  if (!drawHaus3d(t)) { cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore(); }
   const fk = (t % 17000) / 3600;   // ab und zu saust das Chrono-Klo durch die Zeit
   if (fk < 1) {
     const kx = -90 + fk * (W + 180), ky = 262 - Math.sin(fk * Math.PI) * 70;
@@ -2397,11 +2425,11 @@ function drawTitle() {
   S(cx, grad(cx, 0, 520, 0, H, [[0, '#2a5236'], [1, '#0c2214']]), 0, () => { cx.moveTo(-4, 566); cx.quadraticCurveTo(260, 522, 500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 604); cx.lineTo(-4, 604); cx.closePath(); });
   S(cx, 'rgba(210,190,255,0.12)', 0, () => { cx.moveTo(500, 558); cx.quadraticCurveTo(740, 592, 964, 546); cx.lineTo(964, 552); cx.quadraticCurveTo(740, 598, 500, 564); cx.closePath(); });
   // die drei Helden im Mondlicht, gegenüber Lila Tentakel; Grüner Tentakel links
-  titleActor('green', 46, 604, 1.05, -1, 2);
+  if (!titleTent3d('green', 46, 604, 2)) titleActor('green', 46, 604, 1.05, -1, 2);
   titleActor('bernard', 292, 590, 0.6, 1, 1);
   titleActor('hoagie', 352, 592, 0.6, 1, 3);
   titleActor('laverne', 410, 588, 0.6, 1, 5);
-  titleActor('lila', 512, 604, 1.2, -1, 0);
+  if (!titleTent3d('lila', 504, 604, 0)) titleActor('lila', 512, 604, 1.2, -1, 0);
   // Gras und Glühwürmchen
   for (let i = 0; i < (cx.isPix ? 14 : 40); i++) {
     const gx = (i * 167 + 30) % W, gy = 566 + ((i * 71) % 34), sw = Math.sin(t * 0.002 + i) * 2;
