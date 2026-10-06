@@ -105,6 +105,28 @@ const LOOK_AGAIN = {
   laverne: ['Ich glaube, es fühlt sich langsam beobachtet.', 'Noch einmal und wir sind verlobt.', 'Spannend. Beim vierten Mal sogar noch spannender. Nicht.'],
 };
 // Spielfigur meldet sich, wenn 40 Sekunden lang nichts passiert
+// kleine Zwiegespräche: statt eines einzelnen Nebenbei-Spruchs unterhalten sich ab und zu zwei Figuren im selben Raum
+const NPC_CHATS = {
+  gasthaus: [
+    [['gertrude', 'Herr Hancock, Ihr kleckert schon wieder Tinte auf meinen Tisch.'], ['hancock', 'Das ist keine Kleckserei, Madam. Das ist Geschichte.'], ['gertrude', 'Dann wischt die Geschichte gefälligst selbst weg.']],
+    [['hancock', 'Gertrude, wie findet Ihr dieses „J“? Zu bescheiden?'], ['gertrude', 'Es ist größer als meine Küche.'], ['hancock', 'Perfekt.']],
+    [['gertrude', 'Noch eine Suppe, Herr Hancock?'], ['hancock', 'Erst nach der Unterschrift. Oder nach zwei.']],
+  ],
+  labor: [
+    [['drfred', 'Bernard! Hast du meinen Flux-Kompensator gesehen?'], ['bernard', 'Meinen Sie den Toaster?'], ['drfred', 'Psst! Nicht so laut, er hört mit.']],
+    [['drfred', 'Bernard, halt mal das hier. Und nicht loslassen.'], ['bernard', 'Was passiert, wenn ich loslasse?'], ['drfred', 'Das finden wir dann gemeinsam heraus!']],
+  ],
+  lobby: [
+    [['green', 'Bernard, willst du mein neues Lied hören?'], ['bernard', 'Hab ich eine Wahl?'], ['green', 'Nein! Eins, zwei, drei, vier …']],
+    [['green', 'Glaubst du, Tentakel können Gitarre spielen?'], ['bernard', 'Arme hättet ihr ja genug.'], ['green', 'Tentakel, Bernard. Das heißt Tentakel.']],
+  ],
+  vorraum: [
+    [['wache', 'Halt! Wer da?'], ['laverne', 'Niemand. Schlaf ruhig weiter.'], ['wache', 'Okay … zzz …']],
+  ],
+  thron: [
+    [['lila', 'Mensch! Knie nieder vor deinem Herrscher!'], ['laverne', 'Hast du überhaupt Knie?'], ['lila', '… Das tut nichts zur Sache!']],
+  ],
+};
 const IDLE = {
   bernard: ['Wenn ich nur wüsste, was als Nächstes kommt...', 'Ich könnte ja mal auf den Tipp-Knopf drücken.', 'Mein Taschenrechner und ich langweilen uns.', '*räusper* Ich warte.'],
   hoagie: ['Ich mach mal kurz Pause, Mann.', 'Hey, ist hier irgendwo was zu essen?', 'Tsss tsss tsss... Schlagzeug-Solo im Kopf.', 'Joa. Chillen kann ich.', 'Hinter dir! Ein dreiköpfiger Affe! ...Mist, schon weg.'],

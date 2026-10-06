@@ -132,7 +132,7 @@ function drawRipples() {
 const ROOM_FX = {
   lobby: { verb: [1.0, 0.16], light: [-1, '#ffe2b0', '#1c2c66'], bloom: 0.22, amb: ['crickets', 'traffic', 'air', 'chime'], motes: 'dust', music: 'lounge' },
   labor: { verb: [1.5, 0.2], light: [1, '#c0fff4', '#0c2a40'], bloom: 0.3, amb: ['drip', 'beeps', 'hum'], motes: 'dust', flicker: 'neon', reflect: 0.2 },
-  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak', 'chime'], motes: 'warm', flicker: 'fire', music: 'tavern' },
+  gasthaus: { verb: [0.7, 0.14], light: [-1, '#ffc070', '#3a1a10'], bloom: 0.3, amb: ['creak', 'chime', 'blub'], motes: 'warm', flicker: 'fire', music: 'tavern' },
   garten1776: { verb: [0.3, 0.06], light: [1, '#fff0c0', '#2a3a58'], bloom: 0.22, amb: ['wind', 'moo', 'rain'], rain: true, motes: 'leaf', fg: ['#1f3d1a', '#2c5222'], sky: 'birds' },
   fgarten: { verb: [0.6, 0.1], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.34, amb: ['future', 'rain'], motes: 'firefly', fg: ['#2a0f3e', '#45206a'], sky: 'cars', storm: true, rain: true },
   vorraum: { music: 'march', verb: [2.2, 0.24], light: [1, '#e4c8ff', '#1a0c3a'], bloom: 0.28, amb: ['rain', 'palace'], motes: 'magic', storm: true, reflect: 0.22 },
@@ -659,11 +659,28 @@ function updateBarks() {
   else if (b && G.settings.babble && !Voice.on && G.t < b.babbleEnd && G.t >= G.nextBlip) { b.a.vowel = Sound.blip(b.a.voice, panOf(b.a)); b.a.vowelT = G.t; G.nextBlip = G.t + 90 + Math.random() * 70; }
   if (G.mouse.x !== G.lastMx || G.mouse.y !== G.lastMy || G.busy || G.speech || G.dialog || G.menu) { G.lastMx = G.mouse.x; G.lastMy = G.mouse.y; G.idleSince = G.t; }
   const calm = !G.busy && !G.speech && !G.dialog && !G.menu && !G.inIntro && G.fade === 0 && !G.bark && !me().walking;
-  if (!calm) { G.barkNext = Math.max(G.barkNext, G.t + 5000); return; }
+  if (!calm) { G.barkNext = Math.max(G.barkNext, G.t + 5000); if (G.busy || G.speech || G.dialog || G.menu) G.chat = null; return; }
   const p = me();
   if (G.t - G.idleSince > 40000 && p.visible && IDLE[p.id]) { G.idleSince = G.t; startBark(p.id, pick(IDLE[p.id])); return; }
+  if (G.chat) {   // laufendes Zwiegespräch: nächste Zeile kurz nachdem die vorige verklungen ist
+    const c = G.chat, here = c.ids.every(id => ACT[id].room === viewRoomId() && ACT[id].visible);
+    if (c.i >= c.lines.length || !here) { G.chat = null; G.barkNext = G.t + 9000 + Math.random() * 8000; return; }
+    if (c.next == null) { c.next = G.t + 380; return; }
+    if (G.t < c.next) return;
+    const [id, text] = c.lines[c.i];
+    if (Lang.active && !Lang.has(text) && (c.tries = (c.tries || 0) + 1) < 8) { Lang.tAsync(text, 2000); c.next = G.t + 500; return; }
+    c.i++; c.next = null; c.tries = 0; startBark(id, text);
+    return;
+  }
   if (G.t < G.barkNext) return;
   G.barkNext = G.t + 11000 + Math.random() * 9000;
+  const chats = (NPC_CHATS[viewRoomId()] || []).filter(ch => ch.every(([id]) => ACT[id].room === viewRoomId() && ACT[id].visible && (!PLAYERS.includes(id) || id === p.id)));
+  if (chats.length && !G.settings.party && Math.random() < 0.4) {
+    const seen = G.chatSeen || (G.chatSeen = {}), fresh = chats.filter(ch => !seen[ch[0][1]]), ch = pick(fresh.length ? fresh : chats);
+    seen[ch[0][1]] = 1;
+    G.chat = { lines: ch, ids: [...new Set(ch.map(l => l[0]))], i: 0, next: G.t };
+    return;
+  }
   const npcs = NPCS.filter(id => ACT[id].room === viewRoomId() && ACT[id].visible && BARKS[id]);
   if (npcs.length) { const id = pick(npcs); startBark(id, pick(G.settings.party && PARTY_BARKS[id] && Math.random() < 0.6 ? PARTY_BARKS[id] : BARKS[id])); }
 }
@@ -1471,6 +1488,7 @@ function langStrings() {
     Object.values(CRITTERS).forEach(c => add(c.name)); Object.values(EGGS).forEach(e => add(e.name)); Object.values(VERB_LABEL).forEach(add);
     Object.values(ERA).forEach(e => add(e.label)); HUD_BTNS.forEach(b => add(b[1])); HELP.forEach(add); JUKEBOX.forEach(j => add(j[1]));
     ACH.forEach(a => { add(a.name); add(a.desc); }); NOTES.forEach(n => add(n[1]));
+    Object.values(NPC_CHATS).forEach(list => list.forEach(ch => ch.forEach(l => add(l[1]))));
     for (const m of ['main', 'settings', 'extras']) { const keep = G.menu; G.menu = m; try { menuItems().forEach(it => add(it.label)); } finally { G.menu = keep; } }
   } catch (e) { /* Liste ist nur ein Vorgriff */ }
   return out;
@@ -1837,6 +1855,8 @@ function drawScene() {
   try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
   drawSwanFlight();
   drawEmbers(room);
+  drawSteam(room);
+  drawLabArc(room);
   if (!cx.isPix) { drawRays(room); drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass) drawForeground(fg); }
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
@@ -3365,6 +3385,35 @@ function drawEmbers(room) {
     cx.globalAlpha = a; E(cx, x, y, 1.9, 1.9, q < 0.5 ? '#ffe080' : '#ff8a30', 0); cx.globalAlpha = 1;
   }
 }
+// Lichtbogen im Labor: zwischen Kabelende und Gut-O-Mat springt ab und zu ein Funke über
+function updateLabArc() {
+  const here = G.screen === 'game' && G.state && viewRoomId() === 'labor' && !G.menu;
+  if (!here) { G.arc = null; return; }
+  const a = G.arc || (G.arc = { next: G.t + 6000 + Math.random() * 8000, t0: -1e9 });
+  if (G.t >= a.next) { a.t0 = G.t; a.next = G.t + 14000 + Math.random() * 12000; Sound.sfx('crackle', panX(395)); }
+}
+function drawLabArc(room) {
+  if (room.id !== 'labor' || !G.arc) return;
+  const k = G.t - G.arc.t0; if (k < 0 || k > 480) return;
+  const flick = (Math.floor(k / 45) % 3) !== 1; if (!flick) return;
+  const seed = Math.floor(k / 45), pts = [392, 135];
+  const rn = i => { const r = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return r - Math.floor(r) - 0.5; };
+  for (let i = 1; i < 6; i++) pts.push(392 + i * 0.8 + rn(i) * 15, 135 + i * 5.6);
+  pts.push(397, 167);
+  const fork = [pts[6], pts[7], pts[6] + 7 + rn(9) * 6, pts[7] + 4, pts[6] + 12 + rn(11) * 6, pts[7] + 10];   // kleiner Seitenast
+  if (!cx.isPix) { glow(394, 150, 44, '#7ad8ff', 0.6); cx.save(); cx.globalAlpha = 0.08; cx.fillStyle = '#9ee4ff'; cx.fillRect(-200, -200, 2400, 900); cx.restore(); }
+  L(cx, pts, 4.6, 'rgba(110,210,255,0.7)'); L(cx, fork, 2.6, 'rgba(110,210,255,0.6)');
+  L(cx, pts, 1.6, '#ffffff'); L(cx, fork, 1, '#e8f8ff');
+}
+// Dampf über Gertrudes Kessel
+function drawSteam(room) {
+  if (room.id !== 'gasthaus') return;
+  for (let i = 0; i < 6; i++) {
+    const q = ((G.t / 3600) + i / 6) % 1, x = 140 + Math.sin(q * 3 + i * 1.7) * 7 + q * 6, y = 248 - q * 58;
+    const a = Math.sin(q * Math.PI) * 0.2; if (a <= 0.02) continue;
+    cx.globalAlpha = a; E(cx, x, y, 4 + q * 10, 3 + q * 8, '#fff8ee', 0); cx.globalAlpha = 1;
+  }
+}
 // Kerzen am Kronleuchter im Thronsaal: flackernde Flammen mit warmem Schein
 function drawCandles(room) {
   if (room.id !== 'thron') return;
@@ -3682,7 +3731,7 @@ function update(dt) {
   updateEnd(dt); updateRock(); updateToaster(dt); updatePoses(); updateVisits(); updateConfetti(dt); updateCritters(dt);
   const tb = G.titleBark;
   if (tb && G.screen === 'title' && G.t < tb.babbleEnd && G.t >= G.nextBlip && G.settings.babble) { Sound.blip(ACT[tb.id].voice, panX(tb.x)); G.nextBlip = G.t + 90 + Math.random() * 70; }
-  updateParts(dt); updateMotes(dt); updateEggs(); updateKloFunk(); updateFidget(); updateNpcFoley(); updateSnuggle(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
+  updateParts(dt); updateMotes(dt); updateEggs(); updateKloFunk(); updateLabArc(); updateFidget(); updateNpcFoley(); updateSnuggle(); updateWeather(); updateRain(dt); updateBarks(); updateCam(dt); updateCrystals(); updateSky(dt); updateGlint();
   Sound.muffle(!!G.menu && G.menu !== 'jukebox' && G.screen === 'game');
   if (G.jbOn && G.menu !== 'jukebox') { G.jbOn = false; music(); }
   while (G.ripples.length && G.t - G.ripples[0].t > 500) G.ripples.shift();
