@@ -53,6 +53,7 @@ const Sound = (() => {
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    loadSamples();
     // Raumhall: Effekte und Umgebung bekommen einen Hall-Anteil, die Musik nur einen Hauch
     verbIn = ac.createGain();   // Sammelpunkt für den Hall; die Faltungs-Knoten je Raumgröße hängen dahinter
     verbSend = ac.createGain(); verbSend.gain.value = verbWanted[1]; verbSend.connect(verbIn);
@@ -631,7 +632,31 @@ const Sound = (() => {
     try { fn(); } finally { sfxBus = keep; }
     later(() => { try { p.disconnect(); } catch (e) { /* ok */ } }, 4);
   }
-  function sfx(name, pan) { if (ac) { const f = SFX[name]; if (f) panned(pan, () => f(ac.currentTime + 0.01)); } listeners.forEach(fn => fn(name)); }
+  // Echte Geräusch-Aufnahmen (mit ElevenLabs erzeugt): ersetzen den Synthesizer, sobald sie geladen sind.
+  // Im Klassik-Modus bleibt der alte Soundkarten-Klang; fehlt eine Datei, spielt weiter die Synthese.
+  const SAMPLE_URLS = { chomp: ['sfx/chomp.mp3', 0.5] };
+  const samples = {};
+  function loadSamples() {
+    for (const [k, [u]] of Object.entries(SAMPLE_URLS)) {
+      if (samples[k]) continue;
+      samples[k] = 'loading';
+      fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then(b => ac.decodeAudioData(b)).then(buf => { samples[k] = buf; }).catch(() => { delete samples[k]; });
+    }
+  }
+  function playSample(name, pan) {
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = samples[name]; s.playbackRate.value = 0.95 + Math.random() * 0.1;   // kleine Tonhöhen-Variation gegen Wiederholung
+    g.gain.value = SAMPLE_URLS[name][1]; s.connect(g);
+    if (pan != null && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p); p.connect(sfxBus); } else g.connect(sfxBus);
+    s.start(ac.currentTime + 0.01);
+  }
+  function sfx(name, pan) {
+    if (ac) {
+      if (!retro && samples[name] instanceof AudioBuffer) playSample(name, pan);
+      else { const f = SFX[name]; if (f) panned(pan, () => f(ac.currentTime + 0.01)); }
+    }
+    listeners.forEach(fn => fn(name));
+  }
   function onSfx(fn) { listeners.push(fn); }
 
   // Plapperstimme: kurze Silben-Töne pro Figur (wenn keine Sprachausgabe aktiv ist)

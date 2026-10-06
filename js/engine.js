@@ -2296,6 +2296,18 @@ function titleActor(id, x, y, sc, dir, seed, extra) {
   else drawActorLit(a, sc, TITLE_LIGHT, 0);
   if (G.settings.party) { const [hx, hk] = HAT[base.kind] || [0, 0.97]; hatAt(x + hx * sc * dir, y - base.h * hk * sc + bobY(a, G.t) * sc, sc, dir, seed); }
 }
+// Titel-Logo in 3D (in Blender gerendert: Toast-Buchstaben mit Kruste, lila Tentakel mit Saugnäpfen).
+// Wippt sanft; im Pixel-Modus und solange das Bild lädt, bleibt das gezeichnete Logo.
+const LOGO_IMG = new Image(); LOGO_IMG.src = 'img/logo.png';
+function drawLogo3d(t) {
+  if (cx.isPix || !LOGO_IMG.complete || !LOGO_IMG.naturalWidth) return false;
+  const w = 590, h = w * LOGO_IMG.naturalHeight / LOGO_IMG.naturalWidth, x = W / 2 - w * 0.47, y = -2 + Math.sin(t * 0.0021) * 3;
+  const s = 1 + Math.sin(t * 0.0017) * 0.01;
+  cx.save(); cx.translate(x + w / 2, y + h / 2); cx.scale(s, s); cx.rotate(Math.sin(t * 0.0013) * 0.008);
+  cx.drawImage(LOGO_IMG, -w / 2, -h / 2, w, h);
+  cx.restore();
+  return true;
+}
 function drawTitle() {
   const t = G.t;
   const sky = () => {
@@ -2382,10 +2394,10 @@ function drawTitle() {
   }
   // Logo: dunkler Hof, Tiefe, Verlauf und ein Glanzlicht, das über die Buchstaben wandert
   if (!cx.isPix) { const lg = cx.createRadialGradient(W / 2, 100, 40, W / 2, 100, 380); lg.addColorStop(0, 'rgba(14,4,30,0.5)'); lg.addColorStop(1, 'rgba(14,4,30,0)'); cx.fillStyle = lg; cx.fillRect(0, 0, W, 260); }
-  const title = 'TENTAKEL-TOAST', font = '400 74px "Titan One", sans-serif';
+  const title = 'TENTAKEL-TOAST', font = '400 74px "Titan One", sans-serif', logo3d = drawLogo3d(t);
   cx.font = font;
   const tw = cx.measureText(title).width, gl = ((t * 0.0045) % 26) - 6; let x = W / 2 - tw / 2;
-  for (let i = 0; i < title.length; i++) {
+  for (let i = 0; i < (logo3d ? 0 : title.length); i++) {
     const ch = title[i], w = cx.measureText(ch).width, y = 106 + Math.sin(t * 0.004 + i * 0.6) * 6, hl = Math.max(0, 1 - Math.abs(gl - i) / 1.6);
     cx.save(); cx.translate(x + w / 2, y); cx.rotate(Math.sin(t * 0.003 + i) * 0.05);
     txt(cx, ch, 0, 8, font, '#6a1838', 'center', 12, '#2a0a3a');
