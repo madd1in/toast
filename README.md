@@ -71,7 +71,7 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 - **3D-Porträts:** Die Köpfe der Helden unten rechts, in der Klo-Post und auf der Karte sind in Blender gerendert – mit zweitem Bild für den offenen Mund beim Sprechen
 - **3D-Titelbild:** Das Herrenhaus ist in Blender neu modelliert (Holzverkleidung, Schindeldach, schiefe Fensterläden, Gaube, leuchtende Fenster), dazu der Grüne und der Lila Tentakel sowie Bernard, Hoagie und Laverne in 3D – im Pixel-Modus bleibt die gezeichnete Fassung
 - **Zeitreise in 3D:** Beim Figurenwechsel dreht sich ein in Unreal Engine gerenderter Zeitwirbel, davor taumelt ein in Blender gerendertes Chrono-Klo
-- **3D-Abspann:** Der Schriftzug „ENDE“ im selben Toast-Look wie das Titel-Logo
+- **3D-Abspann:** Der Schriftzug „ENDE“ im selben Toast-Look wie das Titel-Logo, davor die ganze Besetzung in 3D – neu in Blender modelliert auch Dr. Fred (mit Lupe), Gertrude, Hancock (Dreispitz und Federkiel) und die Tentakel-Wache mit Helm und Speer, dazu der nett gewordene, rosa Lila Tentakel
 - **3D-Gegenstände:** Alle 16 Inventar-Symbole – vom Taschenrechner über Münze, Kaffee und Eimer bis zum Toast – sind in Blender modelliert, mit Toon-Look und Comic-Kontur (im Pixel-Modus bleiben die gezeichneten Symbole)
 - **Echte Geräusch-Aufnahmen:** Das Spiel kann mit ElevenLabs erzeugte Geräusche abspielen (zuerst der Apfel-Biss); fehlt eine Datei oder ist der Klassik-Modus an, klingt weiter der Synthesizer
 - **Hologramm-Werbung:** Über einem Turm im Zukunftsgarten flackert pinke Werbung für Lila Tentakel – mit Lichtkegel und Bildstörung

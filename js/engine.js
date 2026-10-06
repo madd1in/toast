@@ -2346,15 +2346,23 @@ function drawHaus3d(t) {
 }
 // Grüner und Lila Tentakel in 3D (Blender, Toon-Look mit Kontur); wippen und federn leicht.
 // Im Pixel-Modus und mit Partyhütchen bleiben die gezeichneten Figuren.
-// Auch die drei Helden gibt es fürs Titelbild in 3D (gleicher Maßstab wie in Blender gerendert).
-const TENT_IMG = Object.fromEntries([['green', 'tent_gruen'], ['lila', 'tent_lila'], ['bernard', 'held_bernard'], ['hoagie', 'held_hoagie'], ['laverne', 'held_laverne']].map(([id, f]) => [id, loadImg(`img/${f}.png`)]));
-const TENT_AT = { green: [0.53, 205], lila: [0.491, 240], bernard: [0.512, 151], hoagie: [0.463, 122], laverne: [0.54, 137] };   // Fußpunkt (Anteil der Breite) und Höhe im Titelbild
-function titleTent3d(id, x, y, seed) {
+// Auch die drei Helden gibt es fürs Titelbild in 3D (gleicher Maßstab wie in Blender gerendert),
+// dazu Dr. Fred, Gertrude, Hancock, die Wache und der nett gewordene (rosa) Lila Tentakel für den Abspann.
+const TENT_IMG = Object.fromEntries([['green', 'tent_gruen'], ['lila', 'tent_lila'], ['nett', 'tent_nett'], ['bernard', 'held_bernard'], ['hoagie', 'held_hoagie'], ['laverne', 'held_laverne'],
+  ['drfred', 'npc_drfred'], ['gertrude', 'npc_gertrude'], ['hancock', 'npc_hancock'], ['wache', 'npc_wache']].map(([id, f]) => [id, loadImg(`img/${f}.png`)]));
+// Fußpunkt (Anteil der Breite), Höhe bei Maßstab sc0 und Blickrichtung im gerenderten Bild
+const TENT_AT = {
+  green: [0.53, 205, 1.05, -1], lila: [0.491, 240, 1.2, -1], nett: [0.491, 240, 1.2, -1],
+  bernard: [0.512, 151, 0.6, 1], hoagie: [0.463, 122, 0.6, 1], laverne: [0.54, 137, 0.6, 1],
+  drfred: [0.585, 143, 0.66, 1], gertrude: [0.48, 120, 0.62, 1], hancock: [0.59, 121, 0.62, 1], wache: [0.405, 228, 0.9, -1],
+};
+function titleTent3d(id, x, y, seed, sc, dir) {
   const im = TENT_IMG[id];
   if (cx.isPix || G.settings.party || !imgOk(im)) return false;
-  const [fx, hh] = TENT_AT[id], h = hh, w = h * im.naturalWidth / im.naturalHeight, t = G.t, sq = Math.sin(t * 0.004 + seed * 1.3);
-  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.beginPath(); cx.ellipse(x, y + 2, w * 0.42, 8, 0, 0, Math.PI * 2); cx.fill();
-  cx.save(); cx.translate(x, y + 8 + Math.sin(t * 0.003 + seed) * 2); cx.scale(1 - sq * 0.012, 1 + sq * 0.022); cx.rotate(Math.sin(t * 0.0019 + seed) * 0.025);
+  const [fx, hh, sc0, d0] = TENT_AT[id], h = sc ? hh * sc / sc0 : hh, w = h * im.naturalWidth / im.naturalHeight, t = G.t, sq = Math.sin(t * 0.004 + seed * 1.3);
+  const flip = dir && dir !== d0 ? -1 : 1;
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.beginPath(); cx.ellipse(x, y + 2, Math.min(w * 0.42, h * 0.24), 8, 0, 0, Math.PI * 2); cx.fill();
+  cx.save(); cx.translate(x, y + 8 + Math.sin(t * 0.003 + seed) * 2); cx.scale((1 - sq * 0.012) * flip, 1 + sq * 0.022); cx.rotate(Math.sin(t * 0.0019 + seed) * 0.025);
   cx.drawImage(im, -fx * w, -h, w, h);
   cx.restore();
   return true;
@@ -2596,7 +2604,12 @@ function drawEnd() {
   const cast = [['green', 70, 1.0, 1], ['bernard', 180, 0.62, 1], ['hoagie', 262, 0.62, 1], ['laverne', 344, 0.62, 1], ['lila', 480, 0.92, 1], ['drfred', 614, 0.66, -1], ['gertrude', 704, 0.62, -1], ['hancock', 792, 0.62, -1], ['wache', 892, 0.9, -1]];
   cast.forEach(([id, x, sc, dir], i) => {
     const y = 586 - Math.sin((x - 480) / 480 * Math.PI / 2 + Math.PI / 2) * 0 - Math.abs(Math.sin(t * 0.004 + i * 1.3)) * 6;
-    titleActor(id, x, y, sc, dir, i, { talking: Math.sin(t * 0.0021 + i * 2.2) > 0.7, nice: id === 'lila' ? 1 : 0 });
+    if (titleTent3d(id === 'lila' ? 'nett' : id, x, y, i, sc, dir)) {
+      if (id === 'lila') for (let k = 0; k < 4; k++) {   // Herzchen über dem nett gewordenen Tentakel
+        const f = (t * 0.0006 + k * 0.25) % 1;
+        cx.globalAlpha = 1 - f; heart(cx, x + (-20 + k * 16 + Math.sin(t * 0.004 + k) * 6) * sc, y - (205 + f * 70) * sc, 7 * sc, '#ff5fa8'); cx.globalAlpha = 1;
+      }
+    } else titleActor(id, x, y, sc, dir, i, { talking: Math.sin(t * 0.0021 + i * 2.2) > 0.7, nice: id === 'lila' ? 1 : 0 });
   });
   // Konfetti
   for (const c of (hd ? FW.conf : FW.conf.slice(0, 16))) { cx.save(); cx.translate(c.x, c.y); cx.rotate(c.r); cx.scale(1, Math.abs(Math.cos(c.r * 1.7)) + 0.2); cx.fillStyle = c.col; cx.fillRect(-3, -2, 6, 4); cx.restore(); }
