@@ -2294,18 +2294,6 @@ function drawMansion(c, t) {
   for (const lx of [222, 320]) {   // Laternen neben der Tür
     R(c, lx - 6, 534, 12, 18, '#ffcf6a', 2, 3);
     if (!c.isPix) { const g = c.createRadialGradient(lx, 543, 2, lx, 543, 40); g.addColorStop(0, 'rgba(255,200,110,0.45)'); g.addColorStop(1, 'rgba(255,200,110,0)'); c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.fillRect(lx - 40, 503, 80, 80); c.restore(); }
-    // ein Vogel sitzt auf dem Laternendach – Tipper auf dem Titel
-    const scare = G.lanternScare && t - G.lanternScare < 2600 ? (t - G.lanternScare) / 2600 : 0;
-    if (scare > 0 && scare < 1) {
-      const d = lx < 280 ? -1 : 1, bx = lx + d * (14 + scare * 210), by = 526 - Math.sin(scare * Math.PI) * 90 - scare * 40, fw = Math.sin(t * 0.05) * 6;
-      E(c, bx, by, 3.2, 2.4, '#8a5a3a', 1.2); L(c, [bx - 7, by - fw, bx, by, bx + 7, by - fw], 1.8, '#8a5a3a');
-    } else {
-      const hop = Math.max(0, Math.sin(t * 0.006 + lx)) * 1.4, look = Math.sin(t * 0.0009 + lx) > 0 ? 1 : -1;
-      E(c, lx + 1, 529 - hop, 3.6, 3, '#8a5a3a', 1.1);
-      E(c, lx + 1 + look * 3, 526 - hop, 2.2, 2, '#8a5a3a', 0.9);
-      P(c, [lx + 1 + look * 4.6, 526.2 - hop, lx + 1 + look * 6.8, 526.8 - hop, lx + 1 + look * 4.6, 527.4 - hop], '#e8a040', 0.7);
-      if (Math.sin(t * 0.0035 + lx) > 0.95) txt(c, '♪', lx + 7, 522 - hop, '700 7px "Baloo 2", sans-serif', '#3a2410');
-    }
   }
   for (let i = 0; i < 3; i++) { const k = ((t * 0.0003) + i / 3) % 1; c.save(); c.globalAlpha = (1 - k) * 0.5; E(c, 264 + Math.sin(t * 0.002 + i) * 10, 200 - k * 90, 10 + k * 18, 7 + k * 12, 'rgba(122,90,154,0.9)', 0); c.restore(); }
 }
@@ -2350,6 +2338,28 @@ function drawLogo3d(t) {
 // Die Ankerpunkte (Anteile im Bild) kommen aus der Kamera-Projektion in Blender: Schornstein, Fenster, Laternen.
 const HAUS_IMG = loadImg('img/haus.png');
 const HAUS_AT = {"chimney": [0.488, 0.224], "windows": [[0.176, 0.615], [0.176, 0.783], [0.353, 0.618], [0.353, 0.786], [0.53, 0.621], [0.53, 0.789], [0.707, 0.624], [0.707, 0.792], [0.194, 0.254], [0.194, 0.34], [0.194, 0.425], [0.66, 0.301], [0.66, 0.398]], "lamps": [[0.341, 0.889], [0.55, 0.892]]};
+// Laternen am Herrenhaus (3D-Haus: aus den Blender-Ankern, sonst die gezeichneten): [x, Oberkante]
+function titleLamps() {
+  if (!cx.isPix && imgOk(HAUS_IMG)) { const h = 522, w = h * HAUS_IMG.naturalWidth / HAUS_IMG.naturalHeight, x = 262 - w / 2, y = 606 - h; return HAUS_AT.lamps.map(([fx, fy]) => [x + fx * w, y + fy * h - LAMP_TOP]); }
+  return [[212, 534], [310, 534]];   // gezeichnetes Haus steht 10 px weiter links
+}
+const LAMP_TOP = 14;
+// auf jedem Laternendach sitzt ein Vogel – Tipper auf dem Titel lässt ihn auffliegen
+function drawLampBirds(c, t) {
+  const scare = G.lanternScare && t - G.lanternScare < 2600 ? (t - G.lanternScare) / 2600 : 0;
+  titleLamps().forEach(([lx, top], i) => {
+    if (scare > 0 && scare < 1) {
+      const d = i ? 1 : -1, bx = lx + d * (14 + scare * 210), by = top - 8 - Math.sin(scare * Math.PI) * 90 - scare * 40, fw = Math.sin(t * 0.05) * 6;
+      E(c, bx, by, 3.2, 2.4, '#8a5a3a', 1.2); L(c, [bx - 7, by - fw, bx, by, bx + 7, by - fw], 1.8, '#8a5a3a');
+      return;
+    }
+    const hop = Math.max(0, Math.sin(t * 0.006 + lx)) * 1.4, look = Math.sin(t * 0.0009 + lx) > 0 ? 1 : -1, by = top - 5 - hop;
+    E(c, lx + 1, by, 3.6, 3, '#8a5a3a', 1.1);
+    E(c, lx + 1 + look * 3, by - 3, 2.2, 2, '#8a5a3a', 0.9);
+    P(c, [lx + 1 + look * 4.6, by - 2.8, lx + 1 + look * 6.8, by - 2.2, lx + 1 + look * 4.6, by - 1.6], '#e8a040', 0.7);
+    if (Math.sin(t * 0.0035 + lx) > 0.95) txt(c, '♪', lx + 7, by - 7, '700 7px "Baloo 2", sans-serif', '#3a2410');
+  });
+}
 function drawHaus3d(t) {
   if (cx.isPix || !imgOk(HAUS_IMG)) return false;
   const h = 522, w = h * HAUS_IMG.naturalWidth / HAUS_IMG.naturalHeight, x = 262 - w / 2, y = 606 - h, at = ([fx, fy]) => [x + fx * w, y + fy * h];
@@ -2436,6 +2446,7 @@ function drawTitle() {
     L(cx, [x - 9, y - wy, x - 4, y, x, y - 2, x + 4, y, x + 9, y - wy], 2.2, '#12081c');
   }
   if (!drawHaus3d(t)) { cx.save(); cx.translate(-10, 0); drawMansion(cx, t); cx.restore(); }
+  drawLampBirds(cx, t);
   const fk = (t % 17000) / 3600;   // ab und zu saust das Chrono-Klo durch die Zeit
   if (fk < 1) {
     const kx = -90 + fk * (W + 180), ky = 262 - Math.sin(fk * Math.PI) * 70;
@@ -2521,8 +2532,8 @@ function drawTitle() {
 const TITLE_HITS = [['green', 0, 440, 92, 600], ['bernard', 270, 450, 316, 592], ['hoagie', 326, 476, 386, 594], ['laverne', 390, 456, 434, 590], ['lila', 468, 396, 562, 604]];
 function titleEgg(x, y) {
   if (Math.hypot(x - 800, y - 140) < 66) { G.moonWink = G.t; Sound.sfx('wink'); return true; }
-  for (const lx of [222, 320]) {   // Vögel auf den Laternen verscheuchen
-    if (Math.abs(x - lx) < 26 && y > 498 && y < 556 && !(G.lanternScare && G.t - G.lanternScare < 2600)) { G.lanternScare = G.t; Sound.sfx('flutter'); Sound.sfx('chirp'); return true; }
+  for (const [lx, top] of titleLamps()) {   // Vögel auf den Laternen verscheuchen
+    if (Math.abs(x - lx) < 26 && y > top - 36 && y < top + 22 && !(G.lanternScare && G.t - G.lanternScare < 2600)) { G.lanternScare = G.t; Sound.sfx('flutter'); Sound.sfx('chirp'); return true; }
   }
   for (let i = 0; i < 3; i++) {
     const t = G.t, bx = 374 + Math.cos(t * 0.0011 + i * 2.1) * (80 + i * 14), by = 150 + Math.sin(t * 0.0017 + i) * 40;

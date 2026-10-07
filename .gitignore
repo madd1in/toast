@@ -6,3 +6,4 @@ media/
 .claude/
 *.blend1
 art/render/
+__pycache__/
