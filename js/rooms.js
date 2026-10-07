@@ -572,6 +572,13 @@ function drawPuddles(c, t, spots, skyCol) {
     const g1 = Math.sin(t * 0.004 + x), g2 = Math.sin(t * 0.005 + y * 2);
     if (g1 > 0.4) { c.save(); c.globalAlpha = a * (g1 - 0.4); E(c, x + w * 0.22, y - w * 0.05, 1.6, 1.1, '#ffffff', 0); c.restore(); }
     if (g2 > 0.55) { c.save(); c.globalAlpha = a * (g2 - 0.55) * 1.6; E(c, x - w * 0.18, y - w * 0.03, 1.2, 0.8, '#ffffff', 0); c.restore(); }
+    // während der Regenbogen steht, spiegelt sich ein Farbstreifen in der größten Pfütze
+    if (viewRoomId() === 'garten1776' && G.rainbow && t - G.rainbow > 800 && t - G.rainbow < 30000) {
+      const [rx, ry, rw] = spots[1] || spots[0];
+      ['rgba(255,90,90,0.32)', 'rgba(255,220,120,0.32)', 'rgba(120,220,255,0.32)'].forEach((col, i) => {
+        E(c, rx - rw * 0.24 + i * rw * 0.22, ry - 1, rw * 0.15, rw * 0.045, col, 0);
+      });
+    }
   }
 }
 

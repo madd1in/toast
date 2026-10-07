@@ -192,6 +192,8 @@ function updateMotes(dt) {
       // ziellos herumschwirren und der Spielfigur ausweichen
       m.vx += (Math.sin(G.t * 0.0013 + m.seed) * 30 - m.vx) * s; m.vy += (Math.cos(G.t * 0.0017 + m.seed * 1.3) * 18 - m.vy) * s;
       if (p.room === viewRoomId()) { const dx = m.x - p.x, dy = m.y - (p.y - 70), d = Math.hypot(dx, dy) || 1; if (d < 95) { m.vx += dx / d * 240 * s; m.vy += dy / d * 240 * s; } }
+      // im Zukunftsgarten ziehen die Laternen die Glühwürmchen sanft an
+      if (viewRoomId() === 'fgarten' && !rainFx.on) { const lx = 545 - m.x, ly = 60 - m.y, ld = Math.hypot(lx, ly); if (ld > 95) { m.vx += lx / ld * 70 * s; m.vy += ly / ld * 70 * s; } }
     } else if (kind === 'leaf') { m.rot += m.spin * s; m.vx = 18 + Math.sin(G.t * 0.0009 + m.seed) * 26; }
     else m.vx += (Math.random() - 0.5) * 4 * s;
     m.x += m.vx * s; m.y += m.vy * s;
@@ -831,7 +833,8 @@ function updateActors(dt) {
         puff(a.x + (Math.random() - 0.5) * 30, a.y - a.h * roomScale(room, a.climbY) * 0.5, pick(['#6ac26a', '#4f9a4a', '#9ad86a']), 2, { vy: -10, vx: 30, r: 3, max: 900, spread: 30 });
       } else if (Math.floor(a.phase / Math.PI) !== before && a.room === view && room) {
         const st = STEP_STYLE[a.id] || [null, (a.bw || 50) / 55];
-        Sound.step(room.floor, panX(a.x), st[1], rainFx.on && !!(ROOM_FX[room.id] || {}).rain, st[0]);
+        const inPuddle = !rainFx.on && rainFx.t0 && G.t - rainFx.t0 < 40000 && (room.era === 'past' || room.era === 'future');
+        Sound.step(room.floor, panX(a.x), st[1], (rainFx.on && !!(ROOM_FX[room.id] || {}).rain) || inPuddle, st[0]);   // nasse Füße auch in den Pfützen nach der Schauer
         puff(a.x, a.y, DUST[room.floor] || '#b0a8a0', 2, { vy: 10, r: 2.4, max: 420, spread: 18 });
         if (room.id === 'garten1776' && Math.random() < 0.5) puff(a.x, a.y - 2, pick(['#e0782e', '#e8b040', '#c8501e']), 1, { vy: 30, vx: 70, r: 2.6, max: 700, spread: 12 });   // Laub wirbelt auf
       }
