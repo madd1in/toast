@@ -540,6 +540,8 @@ const Sound = (() => {
     run: t => { for (let i = 0; i < 8; i++) nz(t + i * 0.11, 0.05, 0.25, sfxBus, { type: 'bandpass', f: 600 + (i % 2) * 200, q: 2 }); },
     hearts: t => { for (let i = 0; i < 7; i++) osc('sine', 880 * Math.pow(1.19, i), t + i * 0.09, 0.3, 0.06, sfxBus, { decay: true }); },
     climb: t => { for (let i = 0; i < 5; i++) nz(t + i * 0.18, 0.12, 0.25, sfxBus, { type: 'bandpass', f: 1500, q: 1.5 }); },
+    flutter: t => { for (let i = 0; i < 8; i++) nz(t + i * 0.042, 0.035, 0.09, sfxBus, { type: 'bandpass', f: 850 + (i % 3) * 380 + Math.random() * 220, q: 1.4 }); },
+    chirp: t => { osc('sine', 1900, t, 0.07, 0.05, sfxBus, { f2: 2900, decay: true }); osc('sine', 2200, t + 0.09, 0.06, 0.045, sfxBus, { f2: 3200, decay: true }); },
     bake: t => ['E5', 'G5', 'C6'].forEach((n, i) => osc('sine', freq(n), t + i * 0.3, 0.5, 0.1, sfxBus, { decay: true })),
     bad: t => { osc('sawtooth', 220, t, 0.25, 0.07, sfxBus, { lp: 900, decay: true }); osc('sawtooth', 165, t + 0.25, 0.45, 0.07, sfxBus, { lp: 900, decay: true }); },
     click2: t => osc('triangle', 1200, t, 0.05, 0.08, sfxBus, { decay: true }),

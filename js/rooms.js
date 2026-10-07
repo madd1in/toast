@@ -553,6 +553,9 @@ function drawBeet(c, t) {
   }
 }
 
+// Vögel auf der Zaunlatte im Garten 1776 (Zustand: Zeitpunkt des Aufflatterns)
+const fenceBirds = { fly: 0 };
+
 room({
   id: 'garten1776', era: 'past', name: 'Garten 1776', klo: 'plumpsklo', floor: 'grass', amb: ['birds', 'wind'],
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
@@ -581,6 +584,31 @@ room({
     for (let i = 0; i < 2; i++) {
       const x = (t * 0.03 + i * 420) % (W + 200) - 100, y = 110 + i * 30 + Math.sin(t * 0.003 + i) * 8, f = Math.sin(t * 0.02 + i) * 5;
       L(c, [x - 8, y - f, x, y, x + 8, y - f], 2);
+    }
+    // Lichtbänder fallen durch die Baumkronen
+    c.save(); c.globalAlpha = 0.055 + 0.025 * Math.sin(t * 0.0006);
+    for (const [x0, w] of [[240, 95], [430, 125], [665, 85]]) P(c, [x0, 0, x0 + w, 0, x0 + w + 135, 305, x0 + 135, 305], '#fff2c8', 0);
+    c.restore();
+    // Vögel auf der Zaunlatte: flattern auf, wenn jemand näher kommt
+    const B = fenceBirds, spots = [[376, 247], [478, 245], [640, 247]], cols = ['#8a5a3a', '#4a6a9a', '#b04a4a'];
+    const near = Object.values(ACT).some(a => a.room === 'garten1776' && a.visible && a.x > 300 && a.x < 745 && a.y < 372);
+    if (!B.fly && near) { B.fly = t; Sound.sfx('flutter'); Sound.sfx('chirp'); }
+    if (B.fly) {
+      const k = (t - B.fly) / 1000;
+      if (k > 8) { if (!near) B.fly = 0; }   // erst zurück, wenn die Küste klar ist
+      else for (let i = 0; i < 3; i++) {
+        const [sx, sy] = spots[i], d = i % 2 ? 1 : -1;
+        const bx = sx + d * (40 + k * 130 + i * 24), by = sy - 26 - k * 26 - Math.abs(Math.sin(t * 0.028 + i)) * 7, fw = Math.sin(t * 0.045 + i * 1.3) * 6;
+        E(c, bx, by, 3.4, 2.6, cols[i], 1.2);
+        L(c, [bx - 8, by - fw, bx, by, bx + 8, by - fw], 1.8, cols[i]);
+      }
+    } else for (let i = 0; i < 3; i++) {
+      const [sx, sy] = spots[i], hop = Math.max(0, Math.sin(t * 0.005 + i * 2.4)) * 1.6, look = Math.sin(t * 0.0007 + i) > 0 ? 1 : -1;
+      E(c, sx, sy - 3 - hop, 4.4, 3.6, cols[i], 1.2);
+      E(c, sx + look * 3.6, sy - 7.4 - hop, 2.6, 2.4, cols[i], 1);
+      P(c, [sx + look * 5.6, sy - 7.6 - hop, sx + look * 8.4, sy - 6.8 - hop, sx + look * 5.6, sy - 6 - hop], '#e8a040', 0.8);
+      L(c, [sx - look * 3.6, sy - 3 - hop, sx - look * 7.5, sy - 1 - hop], 1.6, cols[i]);
+      if (Math.sin(t * 0.003 + i * 1.7) > 0.93) txt(c, '♪', sx + look * 6, sy - 13 - hop, '700 7px "Baloo 2", sans-serif', '#5a3a20');
     }
   },
   objs: [

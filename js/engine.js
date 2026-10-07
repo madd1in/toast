@@ -1921,6 +1921,7 @@ function drawScene() {
   drawTransition();
   cx.save(); camApply(); drawBark(); drawSpeech(); cx.restore();
   if (G.photoFlash && G.t - G.photoFlash < 260) { cx.fillStyle = `rgba(255,255,255,${(0.7 * (1 - (G.t - G.photoFlash) / 260)).toFixed(3)})`; cx.fillRect(0, 0, W, SH); }
+  if (G.inIntro) { cx.fillStyle = '#08030e'; cx.fillRect(0, 0, W, 24); cx.fillRect(0, SH - 24, W, 24); }   // Kino-Balken im Intro
   drawCaption(SH - 70);
   drawToasts();
   if (G.inIntro && !G.fast && !G.skipAll) {
