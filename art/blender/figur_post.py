@@ -11,6 +11,15 @@ CFG = {
     'bernard': dict(top=2.05, h=214, skip=[]),
     'hoagie': dict(top=1.72, h=186, skip=['climb0', 'climb1', 'climb2', 'climb3', 'glasses', 'yawn']),
     'laverne': dict(top=1.96, h=212, skip=['dig0', 'dig1', 'rope0', 'rope1', 'airguitar0', 'airguitar1', 'belly0', 'belly1', 'pour', 'glasses']),
+    # Nebenfiguren: Scheitel (mit Haarbüscheln, Haube, Dreispitz) auf die Höhe der gezeichneten Figur
+    'drfred': dict(top=2.041, h=180, skip=[]),
+    'gertrude': dict(top=1.84, h=190, skip=[]),
+    'hancock': dict(top=1.91, h=202, skip=[]),
+    # Tentakel (tent_build.py): Kuppe bei 1,951 m auf die Scheitelhöhe der gezeichneten Tentakel
+    'green': dict(top=1.951, h=157, skip=[]),
+    'lila': dict(top=1.951, h=177, skip=[]),
+    'nett': dict(top=1.951, h=177, skip=[]),
+    'guard': dict(top=1.951, h=170, skip=[]),
 }[NAME]
 CONTRAST, SATUR = 1.18, 1.25   # Raumlicht und Papierstruktur im Spiel legen sich darüber und machen die Figur sonst blass
 SRC = f'art/render/{NAME}/'

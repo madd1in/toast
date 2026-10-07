@@ -866,15 +866,7 @@ CHAR.drfred = (c, a, t) => {
   if (mo) { const k = mouthK(a, t); E(c, 25, -125, 6.5 * k[0], 4.8 * k[1], '#6a1a1a', 2); R(c, 25 - 4.5 * k[0], -125 - 4 * k[1], 9 * k[0], 2.4, '#fffaf0', 0, 1); }
   else { S(c, null, 2.5, () => { c.moveTo(18, -127); c.quadraticCurveTo(24, -122, 31, -128); }, OUT); if (hd(c)) L(c, [31, -129.5, 32.5, -126.5], 1.4); }   // schiefes Grinsen
   const gF = gesture(a, t);
-  if (gF > 0.15) {   // Geistesblitz: Glühbirne über dem Kopf
-    const by = -186 - gF * 10;
-    c.save(); c.globalAlpha *= Math.min(1, gF * 1.6);
-    if (hd(c) && !HDS.ink) { const g = c.createRadialGradient(8, by, 2, 8, by, 32); g.addColorStop(0, 'rgba(255,240,140,0.6)'); g.addColorStop(1, 'rgba(255,240,140,0)'); c.fillStyle = g; c.fillRect(-24, by - 32, 64, 64); }
-    E(c, 8, by, 8, 9, '#fff3a0', 2.5); R(c, 4, by + 7, 8, 6, '#a8a8b8', 2, 1.5);
-    L(c, [5, by + 3, 8, by - 3, 11, by + 3], 1.4, '#d8a020');
-    if (gF > 0.5) for (let i = 0; i < 5; i++) { const an = -Math.PI / 2 + (i - 2) * 0.5; L(c, [8 + Math.cos(an) * 14, by + Math.sin(an) * 14, 8 + Math.cos(an) * 20, by + Math.sin(an) * 20], 2, '#ffd23a'); }
-    c.restore();
-  }
+  if (gF > 0.15) ideaBulb(c, gF, 8, -186);
   arm(c, 8, -118, (-0.2 + sw * 0.3 + talkArm(a, t)) * (1 - gF) + (-2.35 + Math.sin(t * 0.025) * 0.12) * gF, coat, 40, skin, 46, 10, 5.5, elbow(a, 1) * (1 - gF) + gF * 0.9);
   c.restore();
 };
@@ -967,15 +959,27 @@ CHAR.hancock = (c, a, t) => {
   S(c, '#fffdf4', 2.5, () => { c.moveTo(0, 0); c.quadraticCurveTo(14, -30, 6, -64); c.quadraticCurveTo(-8, -34, 0, 0); c.closePath(); });
   L(c, [0, 0, 6, -60], 1.5, '#b8b0a0');
   c.restore(); c.restore();
-  if (sk >= 0) {   // goldener Schnörkel, als würde er in die Luft unterschreiben
-    const n = Math.floor(sk * 30), pts = [];
-    for (let i = 0; i <= n; i++) { const s = i / 30; pts.push(40 + s * 48 + Math.cos(s * 22) * 6, -170 + Math.sin(s * 22) * 7 - s * 10); }
-    c.save(); c.globalAlpha *= se;
-    if (pts.length > 3) { L(c, pts, 3.4, 'rgba(60,30,0,0.35)'); L(c, pts, 1.8, '#ffd86a'); }
-    c.restore();
-  }
+  if (sk >= 0) signSquiggle(c, sk, se, 40, -170);
   c.restore();
 };
+// Dr. Freds Geistesblitz: Glühbirne über dem Kopf (gF 0..1); auch über der 3D-Figur
+function ideaBulb(c, gF, x, y) {
+  const by = y - gF * 10;
+  c.save(); c.globalAlpha *= Math.min(1, gF * 1.6);
+  if (hd(c) && !HDS.ink) { const g = c.createRadialGradient(x, by, 2, x, by, 32); g.addColorStop(0, 'rgba(255,240,140,0.6)'); g.addColorStop(1, 'rgba(255,240,140,0)'); c.fillStyle = g; c.fillRect(x - 32, by - 32, 64, 64); }
+  E(c, x, by, 8, 9, '#fff3a0', 2.5); R(c, x - 4, by + 7, 8, 6, '#a8a8b8', 2, 1.5);
+  L(c, [x - 3, by + 3, x, by - 3, x + 3, by + 3], 1.4, '#d8a020');
+  if (gF > 0.5) for (let i = 0; i < 5; i++) { const an = -Math.PI / 2 + (i - 2) * 0.5; L(c, [x + Math.cos(an) * 14, by + Math.sin(an) * 14, x + Math.cos(an) * 20, by + Math.sin(an) * 20], 2, '#ffd23a'); }
+  c.restore();
+}
+// Hancocks goldener Schnörkel, als würde er in die Luft unterschreiben (sk Fortschritt 0..1, se Deckkraft)
+function signSquiggle(c, sk, se, x, y) {
+  const n = Math.floor(sk * 30), pts = [];
+  for (let i = 0; i <= n; i++) { const s = i / 30; pts.push(x + s * 48 + Math.cos(s * 22) * 6, y + Math.sin(s * 22) * 7 - s * 10); }
+  c.save(); c.globalAlpha *= se;
+  if (pts.length > 3) { L(c, pts, 3.4, 'rgba(60,30,0,0.35)'); L(c, pts, 1.8, '#ffd86a'); }
+  c.restore();
+}
 
 // ---------- Tentakel ----------
 function tentacleBody(c, a, t, col, dark, lite, o = {}) {

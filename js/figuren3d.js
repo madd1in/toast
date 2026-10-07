@@ -90,6 +90,77 @@ const FIG3D = {
     think: [1498,472,130,470,-29.3,-209.7,13.7,-155.8,9.1,-171.5,16.6,-172.4,12.5,-149.5],
     eat: [1630,472,130,470,-29.3,-209.7,13.7,-155.8,9.1,-171.5,16.6,-172.4,17.5,-155.3],
   } },
+  drfred: { src: 'img/figuren/drfred.png', upp: 0.3675, lid: [4.2, 4.4, "#e4f4ff"], mouth: [5.6, 4.4], f: {
+    idle: [0,0,149,498,-27.6,-180.9,15.0,-141.8,12.6,-155.8,19.7,-156.7,-5.4,-82.6],
+    walk0: [151,0,154,497,-26.8,-181.3,17.6,-141.0,15.6,-154.9,22.8,-155.8,-4.5,-82.2],
+    walk1: [307,0,163,495,-25.0,-180.1,17.6,-140.0,15.6,-153.9,22.8,-154.8,-14.4,-81.0],
+    walk2: [472,0,179,495,-25.4,-179.0,17.6,-139.0,15.6,-152.9,22.8,-153.8,-18.4,-80.9],
+    walk3: [653,0,163,497,-25.0,-180.1,17.6,-140.0,15.6,-153.9,22.8,-154.8,-14.4,-81.0],
+    walk4: [818,0,149,499,-25.0,-181.3,17.6,-141.0,15.6,-154.9,22.8,-155.8,-4.5,-82.2],
+    walk5: [969,0,149,495,-25.0,-180.1,17.6,-140.0,15.6,-153.9,22.8,-154.8,10.3,-89.8],
+    walk6: [1120,0,157,492,-25.0,-179.0,17.6,-139.0,15.6,-152.9,22.8,-153.8,14.7,-94.7],
+    walk7: [1279,0,164,495,-30.5,-180.1,17.6,-140.0,15.6,-153.9,22.8,-154.8,10.3,-89.8],
+    talk0: [1445,0,149,498,-27.6,-180.9,15.0,-141.8,12.6,-155.8,19.7,-156.7,19.1,-104.2],
+    talk1: [1596,0,149,498,-27.6,-180.9,15.0,-141.8,12.6,-155.8,19.7,-156.7,4.7,-89.1],
+    idea: [1747,0,149,497,-30.9,-180.5,11.9,-142.6,9.1,-156.7,16.2,-157.5,-22.0,-161.6],
+  } },
+  gertrude: { src: 'img/figuren/gertrude.png', upp: 0.4303, lid: [2.8, 3.4, "#ffd19e"], mouth: [4.4, 3.6], f: {
+    idle: [0,0,180,450,-37.4,-190.7,14.9,-151.7,10.3,-167.9,16.9,-168.6,-6.9,-99.3],
+    walk0: [182,0,180,450,-40.0,-190.7,16.7,-151.0,12.6,-167.2,19.1,-167.9,-6.6,-99.0],
+    walk1: [364,0,180,450,-38.3,-190.7,15.6,-150.8,11.2,-166.8,17.8,-167.9,-14.1,-97.9],
+    walk2: [546,0,180,450,-37.9,-190.7,15.2,-150.8,10.7,-166.6,17.3,-167.9,-17.2,-98.1],
+    walk3: [728,0,180,450,-38.3,-190.7,15.6,-150.8,11.2,-166.8,17.8,-167.9,-14.1,-97.9],
+    walk4: [910,0,180,450,-40.0,-190.7,16.7,-151.0,12.6,-167.2,19.1,-167.9,-6.6,-99.0],
+    walk5: [1092,0,180,451,-41.3,-191.1,17.6,-151.1,13.9,-167.5,20.4,-167.9,4.4,-106.8],
+    walk6: [1274,0,179,451,-41.7,-191.1,18.1,-151.1,14.4,-167.6,20.9,-167.8,7.8,-111.7],
+    walk7: [1455,0,180,451,-41.3,-191.1,17.6,-151.1,13.9,-167.5,20.4,-167.9,4.4,-106.8],
+    talk0: [1637,0,180,450,-37.4,-190.7,14.9,-151.7,10.3,-167.9,16.9,-168.6,10.1,-116.3],
+    talk1: [1819,0,180,450,-37.4,-190.7,14.9,-151.7,10.3,-167.9,16.9,-168.6,0.5,-104.6],
+    rub0: [0,453,180,450,-37.4,-190.7,14.9,-151.7,10.3,-167.9,16.9,-168.6,12.2,-120.9],
+    rub1: [182,453,180,450,-37.4,-190.7,14.9,-151.7,10.3,-167.9,16.9,-168.6,10.3,-118.5],
+  } },
+  hancock: { src: 'img/figuren/hancock.png', upp: 0.4407, lid: [2.8, 3.4, "#ffd9a6"], mouth: [4.4, 3.6], f: {
+    idle: [0,0,138,465,-29.5,-202.8,14.8,-159.6,10.2,-176.2,16.7,-176.9,25.1,-131.8],
+    walk0: [140,0,162,462,-38.8,-202.8,16.9,-158.9,12.8,-175.4,19.3,-176.2,26.4,-130.3],
+    walk1: [304,0,154,459,-30.0,-201.0,16.9,-157.1,12.8,-173.7,19.3,-174.5,26.4,-128.6],
+    walk2: [460,0,168,459,-30.0,-199.3,16.9,-155.4,12.8,-172.0,19.3,-172.8,26.4,-126.8],
+    walk3: [630,0,165,463,-34.8,-201.0,16.9,-157.1,12.8,-173.7,19.3,-174.5,26.4,-128.6],
+    walk4: [797,0,142,465,-30.0,-202.8,16.9,-158.9,12.8,-175.4,19.3,-176.2,26.4,-130.3],
+    walk5: [941,0,142,460,-30.0,-201.0,16.9,-157.1,12.8,-173.7,19.3,-174.5,26.4,-128.6],
+    walk6: [1085,0,176,456,-33.5,-199.3,16.9,-155.4,12.8,-172.0,19.3,-172.8,26.4,-126.8],
+    walk7: [1263,0,190,460,-45.0,-201.0,16.9,-157.1,12.8,-173.7,19.3,-174.5,26.4,-128.6],
+    talk0: [1455,0,138,465,-29.5,-202.8,14.8,-159.6,10.2,-176.2,16.7,-176.9,20.3,-122.9],
+    talk1: [1595,0,135,465,-29.5,-202.8,14.8,-159.6,10.2,-176.2,16.7,-176.9,10.0,-106.4],
+    sign0: [1732,0,156,465,-29.5,-202.8,14.8,-159.6,10.2,-176.2,16.7,-176.9,32.7,-149.2],
+    sign1: [1890,0,141,465,-29.5,-202.8,14.8,-159.6,10.2,-176.2,16.7,-176.9,26.4,-161.8],
+    sign2: [0,467,167,465,-29.5,-202.8,14.8,-159.6,10.2,-176.2,16.7,-176.9,34.5,-140.9],
+  } },
+  green: { src: 'img/figuren/green.png', upp: 0.3353, tent: true, f: {
+    idle: [0,0,187,477,-25.8,-157.3,20.4,-110.5,20.4,-110.5,20.4,-110.5,0.0,-156.5],
+    talk: [189,0,188,477,-25.8,-157.3,20.4,-110.5,20.4,-110.5,20.4,-110.5,0.0,-156.5],
+  } },
+  lila: { src: 'img/figuren/lila.png', upp: 0.378, tent: true, f: {
+    idle: [0,0,265,477,-48.4,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a0: [267,0,228,477,-39.3,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a1: [497,0,265,477,-48.4,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a2: [764,0,287,477,-54.8,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a0o: [1053,0,228,477,-39.3,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a1o: [1283,0,265,477,-48.4,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a2o: [1550,0,287,477,-54.8,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+  } },
+  nett: { src: 'img/figuren/nett.png', upp: 0.378, tent: true, f: {
+    idle: [0,0,265,477,-48.4,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a0: [267,0,228,477,-39.3,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a1: [497,0,265,477,-48.4,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a2: [764,0,287,477,-54.8,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a0o: [1053,0,228,477,-39.3,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a1o: [1283,0,265,477,-48.4,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+    a2o: [1550,0,287,477,-54.8,-177.4,22.9,-124.6,22.9,-124.6,22.9,-124.6,0.0,-176.5],
+  } },
+  guard: { src: 'img/figuren/guard.png', upp: 0.3631, tent: true, f: {
+    idle: [0,0,208,661,-35.6,-237.2,22.0,-119.7,22.0,-119.7,22.0,-119.7,0.0,-169.5],
+    talk: [210,0,209,661,-35.6,-237.2,22.0,-119.7,22.0,-119.7,22.0,-119.7,0.0,-169.5],
+  } },
 };
 // </figuren-daten>
 for (const d of Object.values(FIG3D)) d.img = loadImg(d.src);
@@ -98,7 +169,7 @@ const FIG3D_POSE = { reach: 'reach', pick: 'pick', pull: 'pull', eat: 'eat', gla
 const FIG3D_ALT = { glasses: 'think', think: 'reach', eat: 'reach', yawn: 'wave', pour: 'reach', dig: 'pick', rope: 'yawn', airguitar: 'talk0', belly: 'talk1' };
 // Posen mit zwei Bildern im Wechsel – im Takt der gezeichneten Bewegung (Graben, Seil, Bauchtrommel, Luftgitarre)
 const FIG3D_CYC = { dig: 0.012, rope: 0.012, belly: 0.03, airguitar: 0.034 };
-function fig3dOk(kind) { const d = FIG3D[kind]; return !!d && imgOk(d.img); }
+function fig3dOk(kind) { const d = FIG3D[(TENT3D[kind] || [kind])[0]]; return !!d && imgOk(d.img); }
 function fig3dHas(d, n) { return !!(d.f[n] || d.f[n + '0']); }
 function fig3dFrame(d, a, t) {
   if (a.climb) return 'climb' + ((Math.round((a.phase || 0) / (Math.PI / 2)) % 4) + 4) % 4;   // Arme greifen abwechselnd
@@ -112,9 +183,17 @@ function fig3dFrame(d, a, t) {
   // Schrittgeräusch fällt auf phase = 0, π – dann soll gerade ein Fuß aufsetzen (Bild 2 bzw. 6)
   if (a.walking) return 'walk' + ((Math.round(((a.phase || 0) + Math.PI / 2) / (Math.PI / 4)) % 8) + 8) % 8;
   if (a.talking) return talkArm(a, t) < -0.32 ? 'talk0' : 'talk1';
+  const npc = FIG3D_IDLE[a.kind];
+  if (npc) return npc(a, t) || 'idle';
   if (gesture(a, t) > 0.45) return 'wave';
   return 'idle';
 }
+// Leben der Nebenfiguren im Stand – dieselben Zeitgeber wie bei den gezeichneten Figuren in draw.js
+const FIG3D_IDLE = {
+  drfred: (a, t) => gesture(a, t) > 0.3 && 'idea',   // Geistesblitz: Zeigefinger hoch
+  gertrude: (a, t) => actEnv(idleAct(a, t, 11000, 2600)) > 0.35 && (Math.sin(t * 0.022) > 0 ? 'rub0' : 'rub1'),   // Hände an der Schürze abwischen
+  hancock: (a, t) => { const se = actEnv(idleAct(a, t, 8000, 1700)); return se > 0.35 && ['sign0', 'sign1', 'sign2'][Math.floor(t / 130) % 3]; },   // Unterschrift in die Luft
+};
 function fig3d(c, a, t) {
   const d = FIG3D[a.kind];
   if (!d || !hd(c) || !imgOk(d.img) || (a.climb && !d.f.climb0)) { a._fig = null; return false; }   // ohne Kletterbilder bleibt die gezeichnete Figur
@@ -132,5 +211,54 @@ function fig3dExtras(c, a, t, id) {
   if (id === 'bernard' && po && a.pose.kind === 'think') floaters(c, a, t, 30, -214, 2, (x, y, s) => txt(c, '?', x, y, `800 ${Math.round(18 * s)}px "Baloo 2", sans-serif`, '#ffe066', 'center', 4, OUT), po.mix);
   if (id === 'hoagie' && po && a.pose.kind === 'airguitar') floaters(c, a, t, 44, -168, 3, (x, y, s, i) => noteGlyph(c, x, y, s, ['#ffd23a', '#ff7ab8', '#7fe8ff'][i]), po.mix);
   if (id === 'laverne') drawGnat(c, a, t);
+  const f = a._fig;
+  if (id === 'drfred') { const gF = gesture(a, t); if (gF > 0.15) ideaBulb(c, gF, 4, -190); }
+  if (id === 'gertrude') {   // summt vor sich hin: kleiner runder Mund und Noten
+    const hk = idleAct(a, t, 13000, 3800, 6000);
+    if (hk >= 0) { if (!a.talking) E(c, f[6], f[7] + 1, 2.4, 2.7, '#7a2222', 1.4); floaters(c, a, t, 24, -192, 2, (x, y, s) => noteGlyph(c, x, y, s, '#ff7ab8'), actEnv(hk)); }
+  }
+  if (id === 'hancock') { const sk = idleAct(a, t, 8000, 1700); if (sk >= 0) signSquiggle(c, sk, actEnv(sk), f[12] + 14, f[13] - 34); }   // ab der Federspitze
 }
-for (const id of Object.keys(FIG3D)) { const drawn = CHAR[id]; CHAR[id] = (c, a, t) => { if (fig3d(c, a, t)) { fig3dExtras(c, a, t, id); return; } drawn(c, a, t); }; }
+for (const id of Object.keys(FIG3D)) { if (FIG3D[id].tent) continue; const drawn = CHAR[id]; CHAR[id] = (c, a, t) => { if (fig3d(c, a, t)) { fig3dExtras(c, a, t, id); return; } drawn(c, a, t); }; }
+
+// ---------- Tentakel in 3D ----------
+// Mund zu/offen und (bei Lila) drei Armhaltungen sind gerendert; Wippen, Hüpfen und das Federn beim Singen
+// verformt das Spiel wie bei den gezeichneten Tentakeln (tentacleBody in draw.js). Lila wird beim Nettwerden rosa überblendet.
+const TENT3D = { green: ['green'], purple: ['lila', 'nett'], guard: ['guard'] };
+function tentWave(a, t, nice) {   // dieselbe Armbewegung wie CHAR.purple
+  const se = actEnv(idleAct(a, t, 10000, 2400, 4000)) * (1 - nice);
+  return a.talking ? Math.sin(t * 0.012) * 0.35 : Math.sin(t * 0.003) * 0.1 + se * Math.sin(t * 0.032) * 0.32;
+}
+function tent3d(c, a, t) {
+  const ids = TENT3D[a.kind], d = ids && FIG3D[ids[0]];
+  if (!d || !hd(c) || !imgOk(d.img)) return false;
+  const nice = a.nice ? Math.max(0, Math.min(1, (t - a.nice) / 1200)) : 0;
+  const sk = a.kind === 'green' ? idleAct(a, t, 9000, 3400, 2500) : -1, sing = actEnv(sk);   // Grün singt und wippt im Takt
+  const open = mouthOpen(a, t) || (sing > 0.3 && Math.floor(t / 240) % 2 === 0);
+  let n = open ? 'talk' : 'idle';
+  if (d.f.a1) { const w = tentWave(a, t, nice); n = 'a' + (w < -0.12 ? 0 : w > 0.12 ? 2 : 1) + (open ? 'o' : ''); }
+  const hop = a.walking ? Math.abs(Math.sin(a.phase)) * 14 : 0;
+  const sway = Math.sin(t * 0.0025 + (a.seed || 0)) * 4 + (a.walking ? Math.sin(a.phase) * 5 : 0);
+  const bop = sing * Math.abs(Math.sin(t * 0.0105)), f0 = d.f[n] || d.f.idle, top = -f0[5];
+  c.save(); c.translate(0, -hop); c.scale(1 + bop * 0.05, 1 - bop * 0.06);
+  c.transform(1, 0, -sway / top, 1, 0, 0);   // Scherung: oben schwankt die Kuppe um ±sway, der Fuß bleibt stehen
+  ids.forEach((id, i) => {
+    const dd = FIG3D[id], f = dd.f[n] || dd.f.idle, u = dd.upp, al = i ? nice : 1;
+    if (al <= 0 || !imgOk(dd.img)) return;
+    c.save(); c.globalAlpha *= al; c.drawImage(dd.img, f[0], f[1], f[2], f[3], f[4], f[5], f[2] * u, f[3] * u); c.restore();
+  });
+  c.restore();
+  a._fig = null;
+  // die 2D-Begleiter wie bei den gezeichneten Tentakeln
+  if (sk >= 0) floaters(c, a, t, 34, -150, 3, (x, y, s, i) => noteGlyph(c, x, y, s, ['#ffd23a', '#7fe8ff', '#ff7ab8'][i]), sing);
+  if (a.kind === 'purple' && nice > 0) for (let i = 0; i < 4; i++) {
+    const k = ((t * 0.0006 + i * 0.25) % 1);
+    c.globalAlpha = 1 - k; heart(c, -20 + i * 16 + Math.sin(t * 0.004 + i) * 6, -190 - k * 70, 7, '#ff5fa8'); c.globalAlpha = 1;
+  }
+  if (a.kind === 'guard') {
+    const awake = typeof G !== 'undefined' && G.state && G.state.flags.guardGone;
+    if (!awake && !a.talking && a.x != null) floaters(c, a, t, 26, -200, 3, (x, y, s) => zGlyph(c, x, y, s * 1.1, '#cfe0ff', a.dir < 0 ? -1 : 1));   // döst im Stehen
+  }
+  return true;
+}
+for (const kind of Object.keys(TENT3D)) { const drawn = CHAR[kind]; CHAR[kind] = (c, a, t) => { if (!tent3d(c, a, t)) drawn(c, a, t); }; }

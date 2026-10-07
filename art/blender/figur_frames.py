@@ -5,12 +5,13 @@ from mathutils import Euler, Matrix, Vector
 from bpy_extras.object_utils import world_to_camera_view
 
 cfg = CHARS[NAME]
-P, pre = cfg['pre'][0], cfg['pre']
+P = cfg['rp']
 SC = bpy.data.scenes[cfg['scene']]
 OB = bpy.data.objects
 OUT = REPO + f'/art/render/{NAME}/'
 os.makedirs(OUT, exist_ok=True)
-hz = cfg['hip'][0]
+legs = bool(cfg['hip'])
+hz = cfg['hip'][0] if legs else 0.9
 SH_AT = {'R': Vector((0, -cfg['sh'][1], cfg['sh'][0] - hz)), 'L': Vector((0, cfg['sh'][1], cfg['sh'][0] - hz))}   # Schulter im Rumpf-Raum
 
 
@@ -37,7 +38,8 @@ def ik(k, target, start=(0.0, -1.5, -1.0)):
 
 
 ab = cfg['abd']
-BASE = dict(aR=-0.12, aL=0.12, eR=0.12, eL=0.12, xR=-ab, xL=ab, tR=0, tL=0, kR=0, kL=0, fR=1, fL=1, lean=0, ground=True)
+BASE = dict(aR=-0.12, aL=0.12, eR=0.12, eL=0.12, xR=-ab, xL=ab, tR=0, tL=0, kR=0, kL=0, fR=1, fL=1, lean=0, roll=0, ground=True)
+BASE.update(cfg.get('base', {}))   # eigene Grundhaltung (Hancock hält die Feder vor sich)
 
 
 def Pz(**kw):
@@ -51,9 +53,14 @@ st, kn = cfg['stride'], cfg['knee']
 for i in range(8):
     ph = 2 * math.pi * i / 8
     s, c = math.sin(ph), math.cos(ph)
-    FRAMES.append((f'walk{i}', Pz(tR=-st * s, tL=st * s, kR=max(0, c) * kn, kL=max(0, -c) * kn,
-                                  fR=1 - 0.4 * max(0, c), fL=1 - 0.4 * max(0, -c),
-                                  aR=-0.12 + 0.4 * s, aL=0.12 - 0.4 * s, eR=0.12 + max(0, -s) * 0.5, eL=0.12 + max(0, s) * 0.5, lean=0.035)))
+    w = Pz(tR=-st * s, tL=st * s, kR=max(0, c) * kn, kL=max(0, -c) * kn,
+           fR=1 - 0.4 * max(0, c), fL=1 - 0.4 * max(0, -c),
+           aR=-0.12 + 0.4 * s, aL=0.12 - 0.4 * s, eR=0.12 + max(0, -s) * 0.5, eL=0.12 + max(0, s) * 0.5, lean=0.035)
+    if not legs:
+        w['roll'] = 0.045 * s   # ohne sichtbare Beine (langer Rock): watscheln
+    if cfg.get('base'):
+        w.update({k: v for k, v in cfg['base'].items() if k[0] in 'axe' and k[1] == 'R'})   # Feder-Arm bleibt vorn
+    FRAMES.append((f'walk{i}', w))
 FRAMES += [
     ('talk0', Pz(aR=-0.7, eR=0.65, xR=-ab * 0.4)),
     ('talk1', Pz(aR=-0.18, eR=0.6)),
@@ -74,30 +81,44 @@ FRAMES += [
     ('airguitar1', Pz(aR=-0.25, eR=1.2, xR=0.35, aL=-1.2, eL=0.5, xL=-0.1, tR=-0.17, tL=-0.17, kR=0.35, kL=0.35, lean=-0.09)),
     ('belly0', Pz(aR=-0.75, eR=1.6, xR=0.2, aL=-0.2, eL=1.5, xL=-0.15)),
     ('belly1', Pz(aR=-0.25, eR=1.6, xR=0.2, aL=-0.7, eL=1.5, xL=-0.15)),
+    # Nebenfiguren: Dr. Freds Geistesblitz (Zeigefinger-Arm hoch), Gertrude wischt die Hände an der Schürze ab,
+    # Hancock unterschreibt schwungvoll in die Luft
+    ('idea', Pz(aR=-2.95, eR=0.3, xR=-0.38, lean=-0.04)),
+    ('rub0', Pz(aR=-0.55, eR=1.05, xR=0.32, aL=-0.4, eL=1.15, xL=-0.3)),
+    ('rub1', Pz(aR=-0.38, eR=1.15, xR=0.3, aL=-0.58, eL=1.05, xL=-0.32)),
+    ('sign0', Pz(aR=-1.6, eR=0.1, xR=0.3)),
+    ('sign1', Pz(aR=-1.78, eR=0.32, xR=0.14)),
+    ('sign2', Pz(aR=-1.45, eR=0.0, xR=0.46)),
 ]
 for i in range(4):   # Klettern: Arme greifen abwechselnd nach oben, Knie hoch; Füße stehen dabei nicht auf dem Boden
     cl = math.sin(i * math.pi / 2)
     FRAMES.append((f'climb{i}', Pz(tR=-0.55 - cl * 0.45, kR=0.9 - cl * 0.5, tL=-0.55 + cl * 0.45, kL=0.9 + cl * 0.5,
                                    aR=-2.55 - cl * 0.45, eR=0.35, aL=-2.75 + cl * 0.45, eL=0.35, xR=-0.15, xL=0.15, ground=False)))
 # Hand ans Gesicht per IK: Kinn (Grübeln), Mund (Essen), Augenhöhe (Brille/Stirn)
-mouth_at = (bpy.data.objects[cfg['src']].matrix_world.inverted() @ OB[pre + cfg['mouth']].matrix_world).translation
-eye_at = (bpy.data.objects[cfg['src']].matrix_world.inverted() @ OB[pre + cfg['eyes'][0]].matrix_world).translation
+inv = bpy.data.objects[cfg['src']].matrix_world.inverted()
+mouth_at = (inv @ OB[cfg['mouth']].matrix_world).translation
+eye_at = (inv @ OB[cfg['eyes'][0]].matrix_world).translation
 for nm, tgt in (('think', (mouth_at.x, -0.03, mouth_at.z - 0.06 - hz)), ('eat', (mouth_at.x + 0.06, -0.03, mouth_at.z - hz)), ('glasses', (eye_at.x + 0.04, -0.06, eye_at.z - hz))):
+    if cfg.get('frames') and nm not in cfg['frames']:
+        continue
     (rx, ry, ey), e = ik('R', tgt)
     print(nm, 'ik', round(rx, 2), round(ry, 2), round(ey, 2), 'err', round(e, 3))
     FRAMES.append((nm, Pz(xR=rx, aR=ry, eR=-ey)))
+if cfg.get('frames'):
+    FRAMES = [f for f in FRAMES if f[0] in cfg['frames']]
 
 
 def apply(p):
     for k in 'RL':
-        t, kn_, f = p['t' + k], p['k' + k], p['f' + k]
-        OB[f'{P}R_Hip{k}'].rotation_euler = (0, t, 0)
-        OB[f'{P}R_Knie{k}'].rotation_euler = (0, kn_, 0)
-        OB[f'{P}R_Knoechel{k}'].rotation_euler = (0, -(t + kn_) * f, 0)
+        if legs:
+            t, kn_, f = p['t' + k], p['k' + k], p['f' + k]
+            OB[f'{P}R_Hip{k}'].rotation_euler = (0, t, 0)
+            OB[f'{P}R_Knie{k}'].rotation_euler = (0, kn_, 0)
+            OB[f'{P}R_Knoechel{k}'].rotation_euler = (0, -(t + kn_) * f, 0)
         OB[f'{P}R_Schulter{k}'].rotation_euler = (p['x' + k], p['a' + k], 0)
         OB[f'{P}R_Ellbogen{k}'].rotation_euler = (0, -p['e' + k], 0)
-    OB[f'{P}R_Torso'].rotation_euler = (0, p['lean'], 0)
-    drop = min(hz - cfg['sole'] - cfg['thigh'] * math.cos(p['t' + k]) - cfg['shin'] * math.cos(p['t' + k] + p['k' + k]) for k in 'RL') if p['ground'] else 0
+    OB[f'{P}R_Torso'].rotation_euler = (p['roll'], p['lean'], 0)
+    drop = min(hz - cfg['sole'] - cfg['thigh'] * math.cos(p['t' + k]) - cfg['shin'] * math.cos(p['t' + k] + p['k' + k]) for k in 'RL') if legs and p['ground'] else 0
     OB[f'{P}R_Body'].location = (0, 0, -drop)
 
 
@@ -121,9 +142,9 @@ try:
             continue
         apply(p)
         bpy.context.view_layer.update()
-        meta['frames'].append({'name': nm, 'foot': px(OB[f'{P}Rig'].matrix_world.translation), 'mouth': px(OB['R' + pre + cfg['mouth']].matrix_world.translation),
-                               'eyes': [px(OB['R' + pre + e].matrix_world.translation) for e in cfg['eyes']],
-                               'hand': px(OB['R' + pre + cfg['hand'] + 'R'].matrix_world.translation)})
+        meta['frames'].append({'name': nm, 'foot': px(OB[f'{P}Rig'].matrix_world.translation), 'mouth': px(OB['R' + cfg['mouth']].matrix_world.translation),
+                               'eyes': [px(OB['R' + e].matrix_world.translation) for e in cfg['eyes']],
+                               'hand': px(OB['R' + cfg['hand'].format(k='R')].matrix_world.translation)})
         SC.render.filepath = OUT + f'{nm}.png'
         bpy.ops.render.render(write_still=True, scene=SC.name)
     apply(Pz())

@@ -3,19 +3,26 @@
 # Aufruf aus dem Repo-Ordner:  python art/blender/figur_js.py
 import io, json, re
 
-FIGS = ['bernard', 'hoagie', 'laverne']
+FIGS = ['bernard', 'hoagie', 'laverne', 'drfred', 'gertrude', 'hancock', 'green', 'lila', 'nett', 'guard']
+TENT = {'green', 'lila', 'nett', 'guard'}   # Tentakel: ohne Augen, das Spiel verformt das Bild (tent3d in figuren3d.js)
 # Blinzeln: Lid-Ellipse (Halbachsen, Farbe; None = Hautfarbe aus dem Rendering) über den Augen-Ankern; Mund-Ellipse beim Reden
 LOOK = {
     'bernard': dict(lid=[3.3, 3.6, '#eef2f6'], mouth=[4.4, 3.6]),   # Augen hinter Brillengläsern
     'hoagie': dict(lid=[2.8, 3.3, None], mouth=[5.4, 4.2]),
     'laverne': dict(lid=[4.2, 6.2, None], mouth=[3.8, 3.2]),
+    'drfred': dict(lid=[4.2, 4.4, '#e4f4ff'], mouth=[5.6, 4.4]),   # Augen hinter dicken Brillengläsern
+    'gertrude': dict(lid=[2.8, 3.4, None], mouth=[4.4, 3.6]),
+    'hancock': dict(lid=[2.8, 3.4, None], mouth=[4.4, 3.6]),
 }
 rows = []
 for n in FIGS:
     d = json.load(open(f'art/render/{n}_sprite.json'))
+    fr = ',\n'.join(f'    {k}: {json.dumps(v, separators=(",", ":"))}' for k, v in d['frames'].items())
+    if n in TENT:
+        rows.append(f"  {n}: {{ src: 'img/figuren/{n}.png', upp: {d['upp']}, tent: true, f: {{\n{fr},\n  }} }},")
+        continue
     lk = LOOK[n]
     lid = lk['lid'][:2] + [lk['lid'][2] or d['skin']]
-    fr = ',\n'.join(f'    {k}: {json.dumps(v, separators=(",", ":"))}' for k, v in d['frames'].items())
     rows.append(f"  {n}: {{ src: 'img/figuren/{n}.png', upp: {d['upp']}, lid: {json.dumps(lid)}, mouth: {json.dumps(lk['mouth'])}, f: {{\n{fr},\n  }} }},")
 block = '// <figuren-daten> (erzeugt von art/blender/figur_js.py)\nconst FIG3D = {\n' + '\n'.join(rows) + '\n};\n// </figuren-daten>\n'
 p = 'js/figuren3d.js'
