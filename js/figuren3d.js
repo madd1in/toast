@@ -262,3 +262,57 @@ function tent3d(c, a, t) {
   return true;
 }
 for (const kind of Object.keys(TENT3D)) { const drawn = CHAR[kind]; CHAR[kind] = (c, a, t) => { if (!tent3d(c, a, t)) drawn(c, a, t); }; }
+
+// <tiere-daten> (erzeugt von art/blender/tiere_post.py)
+const TIER3D = { src: 'img/figuren/tiere.png',
+  cat: { upp: 0.2267, f: {
+    sit: [0,0,223,173,-23.6,-37.1,14.7,-23.2],
+    walk0: [225,0,224,173,-23.6,-37.1,14.8,-23.0],
+    walk1: [451,0,226,166,-24.3,-36.7,14.6,-23.4],
+    walk2: [679,0,229,170,-24.7,-36.5,14.8,-23.0],
+    walk3: [0,175,226,168,-24.3,-36.7,14.6,-23.4],
+    groom: [228,175,226,171,-23.6,-37.1,14.9,-21.2],
+    sleep: [456,175,183,106,-14.7,-22.6,13.6,-10.1],
+    rub: [641,175,237,162,-28.6,-36.0,13.1,-26.1],
+  } },
+  hen: { upp: 0.2302, f: {
+    idle: [0,348,163,203,-17.5,-44.4,4.7,-101.0],
+    walk0: [165,348,167,200,-17.5,-43.7,4.7,-101.0],
+    walk1: [334,348,158,205,-17.5,-44.8,4.7,-101.0],
+    walk2: [494,348,167,200,-17.5,-43.7,4.7,-101.0],
+    walk3: [663,348,158,205,-17.5,-44.8,4.7,-101.0],
+    peck0: [823,348,177,176,-16.6,-37.9,4.7,-101.0],
+    peck1: [0,555,179,169,-14.7,-36.8,4.7,-101.0],
+  } },
+  bot: { upp: 0.2283, f: {
+    b0: [181,555,196,104,-22.4,-14.2,7.8,-2.7],
+    b1: [379,555,196,108,-22.4,-14.2,7.8,-2.7],
+    b2: [577,555,196,109,-22.4,-14.2,7.8,-2.7],
+  } },
+};
+// </tiere-daten>
+// ---------- Tiere in 3D (Blender: art/blender/tiere_build.py) ----------
+// Haltung aus demselben Zustand wie CRITTER_DRAW in draw.js; Herzchen, Zzz und die blinkende Leuchte bleiben 2D
+TIER3D.img = loadImg(TIER3D.src);
+function tierFrame(kind, cr, t) {
+  const walk = cr.mode === 'walk' || cr.mode === 'flee';
+  if (kind === 'bot') return 'b' + Math.floor(t * (walk ? 0.03 : 0.012) / (Math.PI * 2 / 9)) % 3;   // Seitenbürste: 40° pro Bild
+  if (walk) return 'walk' + ((Math.round((cr.phase || 0) / (Math.PI / 2)) % 4) + 4) % 4;
+  if (kind === 'cat') return { sleep: 'sleep', groom: 'groom', rub: 'rub' }[cr.mode] || 'sit';
+  if (cr.mode === 'peck') { const p = Math.max(0, Math.sin(t * 0.018)); return p > 0.6 ? 'peck1' : p > 0.2 ? 'peck0' : 'idle'; }
+  return 'idle';
+}
+for (const kind of ['cat', 'hen', 'bot']) {
+  const drawn = CRITTER_DRAW[kind];
+  CRITTER_DRAW[kind] = (c, cr, t) => {
+    const d = TIER3D[kind];
+    if (!d || !hd(c) || !imgOk(TIER3D.img)) return drawn(c, cr, t);
+    const n = tierFrame(kind, cr, t), f = d.f[n] || d.f.sit || d.f.idle || d.f.b0, u = d.upp;
+    const sw = n === 'rub' ? Math.sin(t * 0.006) * 3 : 0;   // schmiegt sich hin und her
+    c.drawImage(TIER3D.img, f[0], f[1], f[2], f[3], f[4] + sw, f[5], f[2] * u, f[3] * u);
+    if (cr.x == null) return;
+    if (n === 'rub') floaters(c, cr, t, f[6] + 2, f[7] - 14, 2, (x, y, s) => heart(c, x, y, 5 * s, '#ff6fae', 1.6));
+    if (n === 'sleep') floaters(c, cr, t, f[6] + 4, f[7] - 10, 2, (x, y, s) => zGlyph(c, x, y, s * 0.7, '#cfe0ff', cr.dir < 0 ? -1 : 1));
+    if (kind === 'bot' && Math.floor(t / 400) % 2) { E(c, f[6], f[7], 4, 2.6, 'rgba(125,255,122,0.35)', 0); E(c, f[6], f[7], 1.8, 1.2, '#b8ffb0', 0); }   // Leuchte blinkt
+  };
+}
