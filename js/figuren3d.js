@@ -107,4 +107,11 @@ function fig3d(c, a, t) {
   a._fig = f;
   return true;
 }
-for (const id of Object.keys(FIG3D)) { const drawn = CHAR[id]; CHAR[id] = (c, a, t) => { if (!fig3d(c, a, t)) drawn(c, a, t); }; }
+// die kleinen 2D-Begleiter der Figuren schweben auch über den 3D-Bildern
+function fig3dExtras(c, a, t, id) {
+  const po = pose(a, t);
+  if (id === 'bernard' && po && a.pose.kind === 'think') floaters(c, a, t, 30, -214, 2, (x, y, s) => txt(c, '?', x, y, `800 ${Math.round(18 * s)}px "Baloo 2", sans-serif`, '#ffe066', 'center', 4, OUT), po.mix);
+  if (id === 'hoagie' && po && a.pose.kind === 'airguitar') floaters(c, a, t, 44, -168, 3, (x, y, s, i) => noteGlyph(c, x, y, s, ['#ffd23a', '#ff7ab8', '#7fe8ff'][i]), po.mix);
+  if (id === 'laverne') drawGnat(c, a, t);
+}
+for (const id of Object.keys(FIG3D)) { const drawn = CHAR[id]; CHAR[id] = (c, a, t) => { if (fig3d(c, a, t)) { fig3dExtras(c, a, t, id); return; } drawn(c, a, t); }; }
