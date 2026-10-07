@@ -2291,6 +2291,18 @@ function drawMansion(c, t) {
   for (const lx of [222, 320]) {   // Laternen neben der Tür
     R(c, lx - 6, 534, 12, 18, '#ffcf6a', 2, 3);
     if (!c.isPix) { const g = c.createRadialGradient(lx, 543, 2, lx, 543, 40); g.addColorStop(0, 'rgba(255,200,110,0.45)'); g.addColorStop(1, 'rgba(255,200,110,0)'); c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.fillRect(lx - 40, 503, 80, 80); c.restore(); }
+    // ein Vogel sitzt auf dem Laternendach – Tipper auf dem Titel
+    const scare = G.lanternScare && t - G.lanternScare < 2600 ? (t - G.lanternScare) / 2600 : 0;
+    if (scare > 0 && scare < 1) {
+      const d = lx < 280 ? -1 : 1, bx = lx + d * (14 + scare * 210), by = 526 - Math.sin(scare * Math.PI) * 90 - scare * 40, fw = Math.sin(t * 0.05) * 6;
+      E(c, bx, by, 3.2, 2.4, '#8a5a3a', 1.2); L(c, [bx - 7, by - fw, bx, by, bx + 7, by - fw], 1.8, '#8a5a3a');
+    } else {
+      const hop = Math.max(0, Math.sin(t * 0.006 + lx)) * 1.4, look = Math.sin(t * 0.0009 + lx) > 0 ? 1 : -1;
+      E(c, lx + 1, 529 - hop, 3.6, 3, '#8a5a3a', 1.1);
+      E(c, lx + 1 + look * 3, 526 - hop, 2.2, 2, '#8a5a3a', 0.9);
+      P(c, [lx + 1 + look * 4.6, 526.2 - hop, lx + 1 + look * 6.8, 526.8 - hop, lx + 1 + look * 4.6, 527.4 - hop], '#e8a040', 0.7);
+      if (Math.sin(t * 0.0035 + lx) > 0.95) txt(c, '♪', lx + 7, 522 - hop, '700 7px "Baloo 2", sans-serif', '#3a2410');
+    }
   }
   for (let i = 0; i < 3; i++) { const k = ((t * 0.0003) + i / 3) % 1; c.save(); c.globalAlpha = (1 - k) * 0.5; E(c, 264 + Math.sin(t * 0.002 + i) * 10, 200 - k * 90, 10 + k * 18, 7 + k * 12, 'rgba(122,90,154,0.9)', 0); c.restore(); }
 }
@@ -2506,6 +2518,9 @@ function drawTitle() {
 const TITLE_HITS = [['green', 0, 440, 92, 600], ['bernard', 270, 450, 316, 592], ['hoagie', 326, 476, 386, 594], ['laverne', 390, 456, 434, 590], ['lila', 468, 396, 562, 604]];
 function titleEgg(x, y) {
   if (Math.hypot(x - 800, y - 140) < 66) { G.moonWink = G.t; Sound.sfx('wink'); return true; }
+  for (const lx of [222, 320]) {   // Vögel auf den Laternen verscheuchen
+    if (Math.abs(x - lx) < 26 && y > 498 && y < 556 && !(G.lanternScare && G.t - G.lanternScare < 2600)) { G.lanternScare = G.t; Sound.sfx('flutter'); Sound.sfx('chirp'); return true; }
+  }
   for (let i = 0; i < 3; i++) {
     const t = G.t, bx = 374 + Math.cos(t * 0.0011 + i * 2.1) * (80 + i * 14), by = 150 + Math.sin(t * 0.0017 + i) * 40;
     if (Math.hypot(x - bx, y - by) < 22 && !(G.batScare && G.t - G.batScare < 2500)) { G.batScare = G.t; Sound.sfx('squeak'); return true; }

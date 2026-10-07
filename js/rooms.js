@@ -556,6 +556,25 @@ function drawBeet(c, t) {
 // Vögel auf der Zaunlatte im Garten 1776 (Zustand: Zeitpunkt des Aufflatterns)
 const fenceBirds = { fly: 0 };
 
+// Pfützen nach der Schauer: spiegeln den Himmel und glitzern, solange der Boden noch nass ist
+function drawPuddles(c, t, spots, skyCol) {
+  if (rainFx.on) return;
+  const nass = 40000 - (t - rainFx.t0);
+  if (nass <= 0) return;
+  const a = Math.min(1, (t - rainFx.t0) / 1800, nass / 8000);
+  for (const [x, y, w] of spots) {
+    c.save(); c.globalAlpha = a * 0.9;
+    E(c, x, y, w, w * 0.26, 'rgba(20,28,46,0.34)', 0);
+    E(c, x, y - w * 0.05, w * 0.84, w * 0.19, skyCol, 0);
+    E(c, x + w * 0.18, y - w * 0.07, w * 0.4, w * 0.07, 'rgba(255,255,255,0.13)', 0);
+    E(c, x - w * 0.3, y - w * 0.06, w * 0.26, w * 0.045, 'rgba(255,255,255,0.3)', 0);
+    c.restore();
+    const g1 = Math.sin(t * 0.004 + x), g2 = Math.sin(t * 0.005 + y * 2);
+    if (g1 > 0.4) { c.save(); c.globalAlpha = a * (g1 - 0.4); E(c, x + w * 0.22, y - w * 0.05, 1.6, 1.1, '#ffffff', 0); c.restore(); }
+    if (g2 > 0.55) { c.save(); c.globalAlpha = a * (g2 - 0.55) * 1.6; E(c, x - w * 0.18, y - w * 0.03, 1.2, 0.8, '#ffffff', 0); c.restore(); }
+  }
+}
+
 room({
   id: 'garten1776', era: 'past', name: 'Garten 1776', klo: 'plumpsklo', floor: 'grass', amb: ['birds', 'wind'],
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
@@ -610,6 +629,8 @@ room({
       L(c, [sx - look * 3.6, sy - 3 - hop, sx - look * 7.5, sy - 1 - hop], 1.6, cols[i]);
       if (Math.sin(t * 0.003 + i * 1.7) > 0.93) txt(c, '♪', sx + look * 6, sy - 13 - hop, '700 7px "Baloo 2", sans-serif', '#5a3a20');
     }
+    // Pfützen vom letzten Regenguss (der Regenbogen-Zeitpunkt passt genau dazu)
+    drawPuddles(c, t, [[150, 390, 46], [530, 404, 56], [830, 384, 40]], 'rgba(120,180,235,0.5)');
   },
   objs: [
     { id: 'tuer_gasthaus', name: 'Gasthaus', rect: [18, 118, 92, 222], walk: [66, 354], exit: ['gasthaus', 815, 386, -1], look: 'Die Hintertür des Gasthauses.' },
@@ -719,6 +740,8 @@ room({
   walk: [[20, 334], [945, 330], [955, 432], [5, 432]], yTop: 330,
   draw: bgFGarten,
   dyn: (c, t) => {
+    // Pfützen vom letzten Schauer
+    drawPuddles(c, t, [[210, 396, 48], [600, 408, 58], [880, 386, 40]], 'rgba(230,160,240,0.45)');
     // Tentakel-Ufo patrouilliert am Himmel
     const uk = (t % 14000) / 14000, ux = -80 + uk * (W + 160), uy = 120 + Math.sin(uk * Math.PI * 4) * 14;
     c.save(); c.globalAlpha = 0.18; P(c, [ux - 8, uy + 6, ux + 8, uy + 6, ux + 40, uy + 150, ux - 40, uy + 150], '#a6ff8f', 0); c.restore();
