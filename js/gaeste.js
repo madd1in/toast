@@ -475,10 +475,10 @@ const INSULTS = [
 ];
 const DECOYS = ['Ach ja? Ach JA?!', 'Hinter dir! Ein dreiköpfiger Affe!', 'Das sag ich meiner Mama.', 'Ich bin Gummi, du bist Kleber!', 'Äh … Rock ’n’ Roll?', 'Na und? Ich hab ’ne Mütze.', 'Deine Nudel ist … äh … nudelig!'];
 const FECHTER = {
-  guybrush: { label: 'GUYBRUSH', runde: 1, spezial: 'GROG-SPRITZER!', insults: INSULTS,
+  guybrush: { label: 'GUYBRUSH', runde: 1, musik: 'kampf_basis', spezial: 'GROG-SPRITZER!', insults: INSULTS,
     hit: ['Touché!', 'Argh. Das saß.', 'Woher kennst du die?!'], miss: ['Ha! Das war schwach.', 'Netter Versuch, Landratte.', 'Damit beleidigst du höchstens meine Nudel.'],
     ko: 'Uaaah … Ich bin besiegt! Mit Worten!', win: 'Und das war’s! Ich bin der Größte!' },
-  jack: { label: 'KÄPT’N JACK', runde: 2, spezial: 'RUM-SPRITZER!', insults: [
+  jack: { label: 'KÄPT’N JACK', runde: 2, musik: 'kampf_basis', spezial: 'RUM-SPRITZER!', insults: [
     ['Du hast so viel Mut wie ein Fass ohne Rum!', 'Und du so viel Rum wie ein Fass ohne Boden.'],
     ['Mein Kompass zeigt auf alles – nur nie auf dich!', 'Kein Wunder, er zeigt ja auch nie auf dein Schiff.'],
     ['Ich bin der berühmteste Pirat aller Zeiten!', 'Berühmt fürs Schiff-Verlieren, ja.'],
@@ -487,7 +487,7 @@ const FECHTER = {
     ['Du riechst nach Landratte und nach Angst!', 'Und du nach Rum und nach Ausreden.'],
   ], hit: ['Autsch. Das war … fast elegant.', 'Hm. Darauf trinke ich später.', 'Na schön, das war gut. Sag’s keinem.'], miss: ['Savvy? Nein? Dachte ich mir.', 'Das war so schwach, dass mein Hut lacht.', 'Ein Pirat lacht über so was. Ha. Ha.'],
     ko: 'Besiegt … von einem Mann mit Kappe. Das schreibe ich nicht ins Logbuch.', win: 'Und so endet die Legende vom Mann mit der Kappe. Kurz.' },
-  affe: { label: 'DREIKÖPFIGER AFFE', runde: 3, spezial: 'BANANEN-SPRITZER!', insults: [
+  affe: { label: 'DREIKÖPFIGER AFFE', runde: 3, musik: 'kampf_dschungel', spezial: 'BANANEN-SPRITZER!', insults: [
     ['„Wir sind …“ – „… dreimal …“ – „… so klug wie du!“', 'Dreimal null ist immer noch null.'],
     ['„Drei Köpfe …“ – „… denken besser …“ – „… als einer!“', 'Bei euch denkt ja auch keiner von dreien.'],
     ['„Sechs Augen …“ – „… sind auf dich …“ – „… gerichtet!“', 'Und trotzdem habt ihr nichts gesehen.'],
@@ -496,7 +496,7 @@ const FECHTER = {
     ['„Hinter dir …“ – „… ein einköpfiger …“ – „… Mensch!“', 'Den Trick kenne ich – mit mehr Köpfen.'],
   ], hit: ['„Au!“ – „Au!“ – „Wieso hat’s mich auch getroffen?“', '„Der war gut.“ – „Nein.“ – „Doch.“', '„Wir hassen ihn.“ – „Ein bisschen.“ – „Ich mag ihn.“'], miss: ['„Ha!“ – „Ha!“ – „Haha!“', '„Schwach.“ – „Sehr schwach.“ – „Dreifach schwach.“', '„Der hat …“ – „… keine …“ – „… Ahnung!“'],
     ko: '„Wir …“ – „… sind …“ – „… besiegt.“ *plumps*', win: '„Gewonnen!“ – „Gewonnen!“ – „Wer hat eigentlich gekämpft?“' },
-  salad: { label: 'SALAD FINGERS', runde: 4, spezial: 'ROSTWASSER-SPRITZER!', insults: [
+  salad: { label: 'SALAD FINGERS', runde: 4, musik: 'kampf_tempel', spezial: 'ROSTWASSER-SPRITZER!', insults: [
     ['Deine Finger sind so kurz … und so traurig …', 'Und deine so lang, dass sie zweimal traurig sind.'],
     ['Ich habe mit Löffeln gekämpft, die mehr Rost hatten als du Mut.', 'Dann hattest du endlich mal Gegner in deiner Größe.'],
     ['Du fühlst dich an wie ein nasser Teppich …', 'Und du siehst aus wie einer.'],
@@ -519,7 +519,7 @@ async function insultDuel(p, opp = 'guybrush') {
   g.duel = h.duel = 1;
   let hpP = DUEL_HP, hpG = DUEL_HP, strP = 0, strG = 0;
   G.duelHud = { p, opp, hp: { p: 1, g: 1 }, show: { p: 1, g: 1 }, trail: { p: 1, g: 1 }, hitT: { p: -1e9, g: -1e9 }, str: { p: 0, g: 0 }, t0: G.t, last: G.t, timer: 99, msg: `RUNDE ${D.runde}`, msgT: G.t, jet: null };
-  Sound.sfx('ding');
+  Sound.sfx('ding'); music();   // Kampfmusik der Runde
   try {
     await wait(1000); duelMsg('FECHTET!'); await wait(800);
     let pool = shuffled(D.insults);
@@ -548,7 +548,7 @@ async function insultDuel(p, opp = 'guybrush') {
     }
     duelMsg(hpG === 0 ? (hpP === DUEL_HP ? 'PERFEKT!' : 'K.O.!') : 'K.O. …'); Sound.sfx(hpG === 0 ? 'achieve' : 'bad');
     await wait(1500);
-  } finally { g.duel = h.duel = 0; G.duelHud = null; h.frameOverride = fo; }
+  } finally { g.duel = h.duel = 0; G.duelHud = null; h.frameOverride = fo; music(); }
   return hpG === 0;
 }
 // Spezial-Kombo: der Angreifer zückt den Super-Spritzer, ein Wasserstrahl trifft den Gegner am Kopf
@@ -559,6 +559,9 @@ async function spritzer(from, to, name) {
   await wait(700); Sound.sfx('splash'); shake(520, 6); ACT[to].nassT = G.t;
   await wait(800);
 }
+{ const musikOhneDuell = music; music = function () { if (G.duelHud && G.screen === 'game' && !G.jbOn) { Sound.setHero(null); return Sound.play(FECHTER[G.duelHud.opp].musik); } return musikOhneDuell(); }; }
+JUKEBOX.splice(JUKEBOX.findIndex(j => j[0] === 'samba') + 1, 0, ['kampf_basis', 'Fliegerhorst-Fight'], ['kampf_dschungel', 'Dschungel-Fight'], ['kampf_tempel', 'Tempel-Fight']);
+Object.assign(JB_COL, { kampf_basis: '#7fa8d8', kampf_dschungel: '#5ac85a', kampf_tempel: '#e84a4a' });
 function duelMsg(text) { if (G.duelHud) { G.duelHud.msg = text; G.duelHud.msgT = G.t; } }
 // Wasserstrahl und Tropfen (in Raum-Koordinaten, nach den Figuren gezeichnet)
 function drawDuelFx() {

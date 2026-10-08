@@ -318,6 +318,38 @@ const Sound = (() => {
       { inst: 'drum', lvl: 2, pan: 0.35, seq: Array(8).fill('-:2.5 Cu:0.5 Cd:0.5 Cu:0.5 -:4').join(' ') },
       { inst: 'drum', lvl: 2, seq: x2('-:28 Wh:0.5 -:0.5 Wh:0.5 Wh:0.5 Wh:2') },
     ] },
+    // Fecht-Turnier: drei eigene Arcade-Kampfthemen im 16-Bit-Stil (eigene Melodien und Harmonien)
+    // Fliegerhorst-Fight: treibender Rock in e-Moll – Powerchords, Achtelbass, Bläser-Stöße, Gitarren-Lead
+    kampf_basis: { fill: true, bpm: 150, tracks: [
+      { inst: 'guitar', seq: 'E4:0.5 G4:0.5 B4:1 A4:0.5 G4:0.5 E4:1 D4:0.5 G4:0.5 B4:1 D5:1 B4:1 C#5:1 A4:0.5 B4:0.5 C#5:1 E5:1 D5:1.5 C5:0.5 B4:1 A4:1 ' +
+        'G4:0.5 B4:0.5 E5:1 D5:0.5 B4:0.5 G4:1 A4:0.5 B4:0.5 D5:1 G5:1 F#5:1 E5:1 C#5:0.5 E5:0.5 A5:1 G5:0.5 E5:0.5 F#5:2 D#5:1 B4:1' },
+      { inst: 'synbass', seq: [['E', 'E'], ['G', 'G'], ['A', 'A'], ['C', 'D'], ['E', 'E'], ['G', 'G'], ['A', 'A'], ['B', 'B']].map(([a, b]) => `${a}2:0.5 ${a}2:0.5 ${a}3:0.5 ${a}2:0.5 ${b}2:0.5 ${b}2:0.5 ${b}3:0.5 ${b}2:0.5`).join(' ') },
+      { inst: 'chug', seq: [['E3+B3', 'E3+B3'], ['G2+D3', 'G2+D3'], ['A2+E3', 'A2+E3'], ['C3+G3', 'D3+A3'], ['E3+B3', 'E3+B3'], ['G2+D3', 'G2+D3'], ['A2+E3', 'A2+E3'], ['B2+F#3', 'B2+F#3']].map(([a, b]) => `${a}:0.5 ${a}:0.5 -:0.5 ${a}:0.5 ${b}:0.5 ${b}:0.5 -:0.5 ${b}:0.5`).join(' ') },
+      { inst: 'brass', seq: ['E4+G4+B4', 'D4+G4+B4', 'C#4+E4+A4', 'C4+E4+G4', 'E4+G4+B4', 'D4+G4+B4', 'C#4+E4+A4', 'D#4+F#4+B4'].map(c => `${c}:0.5 -:1 ${c}:0.5 -:2`).join(' ') },
+      { inst: 'drum', seq: Array(8).fill('K:0.5 K:0.5 S:1 K:0.5 K:0.5 S:0.5 S:0.5').join(' ') },
+      { inst: 'drum', seq: Array(128).fill('H:0.25').join(' ') },
+    ] },
+    // Dschungel-Fight: d-dorisch, Samba-Trommeln mit Pauken-Schlägen, synkopierter Bass, Bläser und Marimba-Arpeggien
+    kampf_dschungel: { fill: true, bpm: 140, tracks: [
+      { inst: 'brass', seq: 'D4:0.5 F4:0.5 A4:0.5 C5:0.5 A4:1 G4:1 B4:0.5 A4:0.5 G4:0.5 F4:0.5 G4:2 A4:0.5 C5:0.5 D5:1 C5:0.5 A4:0.5 F4:1 E4:1 G4:1 C5:1.5 -:0.5 ' +
+        'D5:0.5 C5:0.5 A4:0.5 C5:0.5 D5:1 F5:1 F5:0.5 E5:0.5 D5:0.5 Bb4:0.5 D5:2 E5:1 C5:0.5 G4:0.5 C5:1 E5:1 C#5:1.5 E5:0.5 A5:2' },
+      { inst: 'harp', seq: ['D4 F4 A4 D5', 'G4 B4 D5 G5', 'D4 F4 A4 D5', 'C4 E4 G4 C5', 'D4 F4 A4 D5', 'Bb3 D4 F4 Bb4', 'C4 E4 G4 C5', 'A3 C#4 E4 A4'].map(c => { const n = c.split(' '); return [...n, ...n.slice().reverse()].map(x => x + ':0.5').join(' '); }).join(' ') },
+      { inst: 'synbass', seq: [['D', 'A'], ['G', 'D'], ['D', 'A'], ['C', 'G'], ['D', 'A'], ['Bb', 'F'], ['C', 'G'], ['A', 'E']].map(([r, f]) => `${r}2:0.75 ${r}2:0.25 ${r}3:0.5 ${r}2:0.5 ${f}2:0.75 ${r}2:0.25 ${r}3:1`).join(' ') },
+      { inst: 'drum', seq: Array(8).fill('K:1 Su:1 K:0.5 Sm:0.5 Su:1').join(' ') },
+      { inst: 'drum', pan: 0.25, seq: Array(8).fill('Tb:0.5 Tb:0.25 Tb:0.5 Tb:0.5 Tb:0.25 Tb:0.5 Tb:0.25 Tb:0.5 Tb:0.5 Tb:0.25').join(' ') },
+      { inst: 'drum', pan: -0.2, seq: Array(128).fill('Sh:0.25').join(' ') },
+      { inst: 'drum', pan: -0.35, seq: Array(8).fill('Ah:0.5 Al:0.5 -:1 Ah:0.5 Al:0.5 U:0.5 M:0.5').join(' ') },
+    ] },
+    // Tempel-Fight: Pentatonik mit Koto-Zupfen, Taiko-Trommeln, Glocken und Streichern – fürs Finale im Garten
+    kampf_tempel: { fill: true, bpm: 132, tracks: [
+      { inst: 'fiddle', seq: 'E5:1 B4:0.5 C5:0.5 B4:1 G4:1 F#4:0.5 G4:0.5 B4:1 E4:2 C5:1 B4:0.5 G4:0.5 C5:1 E5:1 F#5:1.5 E5:0.5 B4:2 ' +
+        'E5:0.5 G5:0.5 F#5:0.5 E5:0.5 B4:1 C5:1 A4:1 C5:0.5 B4:0.5 A4:1 E4:1 G4:0.5 B4:0.5 C5:1 E5:1 G5:1 F#5:1 E5:0.5 B4:0.5 E5:2' },
+      { inst: 'pluck', seq: ['E4 B4 E5 B4', 'E4 G4 B4 G4', 'C4 G4 C5 G4', 'B3 F#4 B4 F#4', 'E4 B4 E5 B4', 'A3 E4 A4 E4', 'C4 G4 C5 G4', 'B3 F#4 E4 B3'].map(c => c.split(' ').map(x => x + ':0.5').join(' ') + ' ' + c.split(' ').map(x => x + ':0.5').join(' ')).join(' ') },
+      { inst: 'strings', seq: 'E3+B3+E4:4 E3+G3+B3:4 C3+G3+C4:4 B2+F#3+B3:4 E3+B3+E4:4 A2+E3+A3:4 C3+G3+C4:4 B2+F#3+B3:2 E3+B3+E4:2' },
+      { inst: 'bell', seq: 'B5:4 -:4 E6:4 -:4 B5:4 -:4 G5:4 E6:4' },
+      { inst: 'drum', seq: Array(8).fill('U:1 -:0.5 U:0.5 M:1 U:0.5 K:0.5').join(' ') },
+      { inst: 'drum', seq: Array(16).fill('-:1 R:0.5 R:0.5').join(' ') },
+    ] },
     // Tentakel-Rock: Begleitung fürs Minispiel – die Lead-Gitarre spielt der Spieler selbst
     rock: { bpm: 120, tracks: [
       { inst: 'drum', seq: Array(16).fill('K:1 S:1 K:0.5 K:0.5 S:1').join(' ') },
