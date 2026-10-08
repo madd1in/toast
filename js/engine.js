@@ -1336,7 +1336,7 @@ const RUMBLE = { flush: [450, 0.6, 0.4], pop: [160, 0.5, 0.3], coin: [70, 0, 0.5
 Sound.onSfx(n => { const r = RUMBLE[n]; if (r) rumble(...r); });
 function navTargets() {
   if (G.menu) return G.menuBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
-  if (G.screen === 'title') return G.titleBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
+  if (G.screen === 'title') return [...(G.langPills || []).map(p => [p.x + p.w / 2, p.y + p.h / 2]), ...G.titleBtns.map(b => [b.x + b.w / 2, b.y + b.h / 2])];
   if (G.screen === 'end') return G.endBtn ? [[G.endBtn.x + G.endBtn.w / 2, G.endBtn.y + G.endBtn.h / 2]] : [];
   if (G.screen === 'game' && modernUI()) return navTargetsModern();
   if (G.dialog) return G.dialog.opts.map((o, i) => [60, 484 + i * 24]);
@@ -1504,6 +1504,38 @@ function cycleLang() {
   if (!Lang.supported()) { note('Weitere Sprachen brauchen den eingebauten Übersetzer von Chrome (ab Version 138, am PC).'); return; }
   const i = LANGS.findIndex(q => q.id === (G.settings.lang || 'de'));
   setLang(LANGS[(i + 1) % LANGS.length].id, true);
+}
+// ---------- Sprachleiste auf dem Titelbild: jede Sprache direkt anklickbar ----------
+const LANG_SHORT = { de: 'DE', en: 'EN', fr: 'FR', es: 'ES', ja: '日本語', zh: '中文', ko: '한국어' };
+function langPills() {
+  cx.font = '800 15px "Baloo 2", sans-serif';
+  const out = [];
+  let x = 16, y = 34;
+  for (const l of LANGS) {
+    const w = Math.max(34, cx.measureText(LANG_SHORT[l.id]).width + 18);
+    if (x + w > 16 + 252) { x = 16; y += 30; }
+    out.push({ id: l.id, x, y, w, h: 24 });
+    x += w + 6;
+  }
+  out.rows = Math.ceil(out.length ? (out[out.length - 1].y - 34) / 30 + 1 : 1);
+  return out;
+}
+function drawLangPills() {
+  const pills = langPills();
+  G.langPills = pills;
+  cx.save();
+  txt(cx, 'Sprache · Language', 16, 24, '700 13px "Baloo 2", sans-serif', 'rgba(255,240,255,0.85)', 'left', 3, 'rgba(20,4,30,0.8)');
+  for (const p of pills) {
+    const aktiv = (G.settings.lang || 'de') === p.id;
+    const hot = inRect(G.mouse.x, G.mouse.y, p, 3);
+    const lade = aktiv && Lang.state === 'loading';
+    if (lade) cx.globalAlpha = 0.55 + Math.sin(G.t * 0.008) * 0.3;
+    R(cx, p.x, p.y, p.w, p.h, aktiv ? '#ffd23a' : hot ? '#3a2758' : 'rgba(30,17,50,0.82)', 2, 12, aktiv ? '#5a2a10' : hot ? '#ffe066' : '#6a52a0');
+    txt(cx, LANG_SHORT[p.id], p.x + p.w / 2, p.y + 16.5, '800 15px "Baloo 2", sans-serif', aktiv ? '#2a0a3a' : hot ? '#ffe066' : '#e6dcff');
+    cx.globalAlpha = 1;
+    if (lade) txt(cx, Math.round(Lang.progress * 100) + ' %', p.x + p.w / 2, p.y - 5, '700 10px "Baloo 2", sans-serif', '#7dff7a', 'center', 2, '#0b0610');
+  }
+  cx.restore();
 }
 // Texte, die oft vorkommen, gleich im Hintergrund übersetzen lassen
 function langStrings() {
@@ -2506,6 +2538,7 @@ function drawTitle() {
   P(cx, [x0, 132, x1, 132, x1, 162, x0, 162], '#8a2a6a', 3);
   txt(cx, sub, W / 2, 153, '700 19px "Baloo 2", sans-serif', '#fff0fa', 'center', 4, '#3a0a2a');
   if (G.photoMode) return;   // Foto vom Titelbild: ohne Menü
+  drawLangPills();
   const bx = 596, bw = 300, btns = [];
   if (G.saved) btns.push({ id: 'cont', label: 'Weiterspielen', big: true });
   btns.push({ id: 'new', label: G.saved ? 'Neues Spiel' : 'Spiel starten', big: !G.saved });
@@ -2562,6 +2595,7 @@ function drawTitleBark() {
 }
 function titleClick(x, y) {
   if (G.menu) return menuClick(x, y);
+  for (const p of G.langPills || []) if (inRect(x, y, p, 3)) { Sound.sfx('click'); setLang(p.id, true); return; }
   const b = G.titleBtns.find(b => inRect(x, y, b)); if (!b) { titleEgg(x, y); return; }
   Sound.sfx('click');
   if (b.id === 'load') G.menu = 'load';
@@ -2964,7 +2998,7 @@ function mapThumb(room, w, h) {
   const g = c.getContext('2d'), keep = cx;
   g.setTransform(s * w / W, 0, 0, s * h / SH, 0, 0);
   try {
-    cx = g; drawBg(room);
+    cx = g; drawBg(room); if (room.thumb) room.thumb(g);
     HDS.deco = true;
     for (const o of room.objs) if (o.draw && isVisible(o)) o.draw(g, G.t);
   } catch (e) { /* die Vorschau bleibt beim Hintergrund */ }
