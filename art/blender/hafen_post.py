@@ -95,6 +95,21 @@ for r, row in enumerate(tiles):
         at.alpha_composite(c, (k * tw + (tw - c.width) // 2, r * th + (th - c.height) // 2))
 save_png(at, OUT + 'voegel.png')
 data['vogel'] = [round(tw * K, 1), round(th * K, 1), tw, th]   # Zeilen: Ara rot, Ara blau, Tukan; Spalten: Flügel oben, Mitte, unten
+# Jacks „geliehene“ Schaufel: das 3D-Requisit aus props_build.py mit Tusche-Kontur, für den Steg neben Jack
+if os.path.exists('art/render/props/schaufel.png'):
+    from PIL import ImageFilter
+    sh = Image.open('art/render/props/schaufel.png').convert('RGBA')
+    sh = sh.crop(sh.getbbox())
+    sh = sh.resize((round(sh.width * 220 / sh.height), 220), Image.LANCZOS)
+    pad = 6
+    big = Image.new('RGBA', (sh.width + 2 * pad, sh.height + 2 * pad), (0, 0, 0, 0))
+    big.alpha_composite(sh, (pad, pad))
+    ring = big.split()[3].point(lambda v: 255 if v > 60 else 0).filter(ImageFilter.MaxFilter(7))
+    ink = Image.new('RGBA', big.size, (26, 12, 36, 255))
+    ink.putalpha(ring)
+    ink.alpha_composite(big)
+    ink.save(OUT + 'schaufel.png', optimize=True)
+    data['schaufel'] = [ink.width, ink.height]
 block = '// <hafen-daten> (erzeugt von art/blender/hafen_post.py): [x, y, Breite, Höhe] in Spiel-Einheiten; Schiff/Schlange dazu Atlas-Kachel (px), Schiff Drehpunkt und Kiellinie\nconst HAFEN_EBENEN = ' + json.dumps(data) + ';\n// </hafen-daten>\n'
 p = 'js/gaeste.js'
 s = io.open(p, encoding='utf-8').read()

@@ -119,7 +119,7 @@ raum3d('hafen', 'img/raum_hafen.jpg', {
     { id: 'lagerhaus', name: 'Lagerhaus-Tor', rect: [50, 189, 102, 132], walk: [110, 362], look: 'Ein Lagerhaus. Auf dem Schild steht „Rum, Seile und anderes Zeug“. Das Tor ist zu. Das Zeug bleibt drin.' },
     { id: 'faesser', name: 'Fässer', rect: [258, 262, 170, 74], walk: [330, 362], look: 'Fässer. Auf einem steht „RUM“, auf dem anderen „AUCH RUM“, auf dem dritten „KEIN RUM (LÜGE)“.' },
     { id: 'seilrolle', name: 'Tau', rect: [488, 308, 72, 30], walk: [520, 362], look: 'Eine Rolle Tau. Ein Seemann würde jetzt einen Knoten machen. Ich mach höchstens einen Knoten rein.' },
-    { id: 'insel', name: 'Insel', rect: [140, 145, 260, 70], look: 'Eine Insel mit drei Palmen. Sieht aus wie ein Ort, an dem man Affen trifft. Mit mehr als einem Kopf.' },
+    { id: 'insel', name: 'Insel', rect: [140, 145, 260, 70], look: 'Eine Insel mit acht Palmen, einer Strohhütte und einem Ruderboot. Sieht aus wie ein Ort, an dem man Affen trifft. Mit mehr als einem Kopf.' },
   ],
 });
 raum3d('landeplatz', 'img/raum_landeplatz.jpg', {
@@ -178,7 +178,7 @@ JB_COL.samba = '#3ad06a';
 MAP_ORDER.future.push('testkammer', 'landeplatz');
 
 // <hafen-daten> (erzeugt von art/blender/hafen_post.py): [x, y, Breite, Höhe] in Spiel-Einheiten; Schiff/Schlange dazu Atlas-Kachel (px), Schiff Drehpunkt und Kiellinie
-const HAFEN_EBENEN = {"wolken": [121.5, 0.0, 813.0, 124.0], "vorn": [0.0, 34.5, 960.0, 405.5], "schiff": [528.0, 22.0, 433.0, 283.0, 866, 566, 687.3, 257.1], "kiel": [[540.0, 261.0], [552.0, 273.0], [564.0, 275.0], [576.0, 276.5], [588.0, 278.0], [600.0, 279.5], [612.0, 281.0], [624.0, 282.5], [636.0, 284.0], [648.0, 285.5], [660.0, 287.0], [672.0, 288.5], [684.0, 290.0], [696.0, 291.5], [708.0, 293.0], [720.0, 294.0], [732.0, 295.5], [744.0, 297.0], [756.0, 298.5], [768.0, 300.0], [780.0, 301.0], [792.0, 302.5]], "schlange": [0.0, 10.0, 317.0, 148.5, 634, 297, 8], "vogel": [105.0, 92.5, 210, 185]};
+const HAFEN_EBENEN = {"wolken": [121.5, 0.0, 813.0, 124.0], "vorn": [0.0, 34.5, 960.0, 405.5], "schiff": [528.0, 22.0, 433.0, 283.0, 866, 566, 687.3, 257.1], "kiel": [[540.0, 261.0], [552.0, 273.0], [564.0, 275.0], [576.0, 276.5], [588.0, 278.0], [600.0, 279.5], [612.0, 281.0], [624.0, 282.5], [636.0, 284.0], [648.0, 285.5], [660.0, 287.0], [672.0, 288.5], [684.0, 290.0], [696.0, 291.5], [708.0, 293.0], [720.0, 294.0], [732.0, 295.5], [744.0, 297.0], [756.0, 298.5], [768.0, 300.0], [780.0, 301.0], [792.0, 302.5]], "schlange": [0.0, 10.0, 317.0, 148.5, 634, 297, 8], "vogel": [105.0, 92.5, 210, 185], "schaufel": [86, 232]};
 // </hafen-daten>
 
 // ---------- die Gäste ----------
@@ -380,35 +380,27 @@ ACT.sam.talk = async () => {
   if (!fl().metSam) { fl().metSam = 1; await say(s_, 'Freiberufliche Polizei! Bleiben Sie ruhig, Bürger. Wir ermitteln in einem Fall von unerlaubtem Zeitreisen.'); await say(m, 'Und wir haben einen Durchsuchungsbefehl! Den hab ich selbst gemalt.'); }
   else await say(s_, 'Ah, unser Lieblingszeuge. Noch eine Aussage?');
   for (;;) {
-    const c = await choose([{ id: 'fall', text: 'Was für ein Fall?' }, { id: 'max', text: 'Was genau ist dein Partner?' }, !gbOk(s_) && { id: 'verhoer', text: 'Unterschreibt ihr in Dr. Freds Gästebuch?' }, { id: 'bye', text: 'Viel Erfolg bei den Ermittlungen.' }]);
+    const frei = fl().tatortFrei;
+    const c = await choose([{ id: 'fall', text: 'Was für ein Fall?' }, { id: 'max', text: 'Was genau ist dein Partner?' },
+      !frei && { id: 'verhoer', text: 'Gebt den Gut-O-Mat frei! Ich brauche den Hebel.' }, frei && !gbOk(s_) && { id: 'gb', text: 'Unterschreibt ihr in Dr. Freds Gästebuch?' },
+      { id: 'bye', text: 'Viel Erfolg bei den Ermittlungen.' }]);
     if (c === 'bye') { await say(b, 'Viel Erfolg bei den Ermittlungen.'); await say(s_, 'Danke. Und verlassen Sie die Zeitzone nicht.'); return; }
     if (c === 'fall') {
       await say(b, 'Was für ein Fall?');
       await say(s_, 'Ein lila Tentakel hat die Weltherrschaft an sich gerissen. Zufälligerweise ist das in unserer Welt verboten. Und in Ihrer vermutlich auch.');
-      await say(m, 'Ich verdächtige den Toaster. Er hat so schuldige Schlitze.');
+      await say(m, 'Ich verdächtige den Toaster. Er hat so schuldige Schlitze. Darum haben wir ihn abgesperrt.');
+    }
+    if (c === 'gb') {
+      await say(b, 'Unterschreibt ihr in Dr. Freds Gästebuch?');
+      await say(s_, 'Für unseren Kronzeugen? Selbstverständlich. Ich mit Füller, Max mit Ketchup.');
+      await gbSign(s_, m);
     }
     if (c === 'max') {
       await say(b, 'Was genau ist dein Partner?');
       await say(s_, 'Ein hyperkinetisches Kaninchending. Er ist gesetzlich nicht erfasst.');
       await say(m, 'Ich bin wie ein Hase, nur mit mehr Zähnen und weniger Skrupeln.');
     }
-    if (c === 'verhoer') {
-      await say(b, 'Unterschreibt ihr in Dr. Freds Gästebuch?');
-      await say(s_, 'Gern. Nach einem kurzen Verhör. Reine Routine. Frage eins: Wer ist der Täter?');
-      const v = await choose([{ id: 'fred', text: 'Dr. Fred.' }, { id: 'lila', text: 'Lila Tentakel.' }, { id: 'toast', text: 'Der Toaster.' }, { id: 'ich', text: 'Ich war’s. Glaube ich.' }]);
-      if (v === 'lila') {
-        await say(b, 'Lila Tentakel.');
-        await say(s_, 'Korrekt. Max, notier das.'); await say(m, 'Ich habe „Toaster“ notiert. Aus Prinzip.');
-        await say(s_, 'Dann unterschreiben wir. Ich mit Füller, Max mit Ketchup.');
-        await gbSign(s_, m);
-      } else if (v === 'ich') {
-        await say(b, 'Ich war’s. Glaube ich.'); await say(m, 'Ein Geständnis! Verhaften wir ihn, Sam!'); await say(s_, 'Max, wir verhaften niemanden, der so nervös schwitzt. Das ist unter unserer Würde.');
-      } else {
-        await say(b, v === 'fred' ? 'Dr. Fred.' : 'Der Toaster.');
-        await say(m, v === 'toast' ? 'HA! Ich wusste es!' : 'Der Mann mit der Frisur? Plausibel.');
-        await say(s_, 'Interessante Theorie. Leider falsch. Denken Sie noch mal nach – wer hat denn die Welt an sich gerissen?');
-      }
-    }
+    if (c === 'verhoer') await TATORT_VERHOER(b);
   }
 };
 ACT.max.talk = async () => {
@@ -437,7 +429,10 @@ ACT.salad.talk = async () => {
     const c = await choose([{ id: 'wer', text: 'Wer bist du, Mann?' }, { id: 'tun', text: 'Was machst du da?' }, !gbOk(s_) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Ich geh dann mal … ganz langsam.' }]);
     if (c === 'bye') { await say(h, 'Ich geh dann mal … ganz langsam.'); await say(s_, 'Pass auf dich auf. Und auf deine Finger. Finger sind kostbar.'); return; }
     if (c === 'wer') { await say(h, 'Wer bist du, Mann?'); await say(s_, 'Ich bin Salad Fingers. Ich fühle gern Dinge. Am liebsten rostige Dinge. Rost ist wie eine Umarmung, die nach Metall riecht.'); }
-    if (c === 'tun') { await say(h, 'Was machst du da?'); await say(s_, 'Ich höre dem Brunnen zu. Er hat einen sehr schönen Eimer. Ich wünschte, ich dürfte ihn halten.'); }
+    if (c === 'tun') {
+      await say(h, 'Was machst du da?'); await say(s_, 'Ich höre dem Brunnen zu. Er hat einen sehr schönen Eimer. Ich wünschte, ich dürfte ihn halten.');
+      if (!fl().schaufel) { await say(s_, 'Herr Schaufel war auch mein Freund. Ein schwankender Mann mit Hut hat ihn mit zum Hafen genommen. Er hat nicht einmal Tschüss gesagt.'); fl().knowsSchaufel = 1; }
+    }
     if (c === 'gb') {
       await say(h, 'Unterschreibst du in einem Gästebuch?');
       await say(s_, has('eimer', h) || has('wasser', h) ? 'Vielleicht … wenn ich einmal den Eimer halten dürfte, den du da trägst …' : 'Ich unterschreibe nur, wenn ich vorher etwas Schönes fühlen darf. Der Eimer am Brunnen ist sehr schön.');
@@ -489,8 +484,9 @@ ACT.guybrush.talk = async () => {
       const pts = await insultDuel(h);
       if (pts === 3) {
         await say(g, 'Drei von drei … Du kämpfst wie ein Roadie! Das ist ein Kompliment.');
-        unlock('fechten');
+        unlock('fechten'); fl().fechtSieg = 1;
         if (!gbOk(g)) { await say(g, 'Ich trage mich in dein Buch ein. Mit Schnörkel, wie ein echter Pirat.'); await gbSign(g); }
+        if (!fl().schaufel) await say(g, 'Und sag Käpt’n Jack, dass du mich besiegt hast. Dann hält er dich für einen echten Piraten. Mich hält er für einen Pudel.');
       } else await say(g, `${pts} von 3. Übung macht den Piraten. Merk dir: Die Antwort muss die Beleidigung umdrehen!`);
     }
   }
@@ -501,7 +497,10 @@ ACT.jack.talk = async () => {
   await say(j, fl().metJack ? 'Ah. Der Mann mit der Kappe. Wieder da. Das ist entweder Treue oder Langeweile.' : 'Ah. Ein Mann mit Hut. Mütze. Kappe. Das zählt. Willkommen an Bord. Es gibt kein Bord.');
   fl().metJack = 1;
   for (;;) {
-    const c = await choose([{ id: 'wer', text: 'Wer bist du?' }, { id: 'kompass', text: 'Was ist das für ein Kompass?' }, { id: 'hier', text: 'Was machst du in 1776?' }, !gbOk(j) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Tschüss, Käpt’n.' }]);
+    const c = await choose([{ id: 'wer', text: 'Wer bist du?' }, { id: 'kompass', text: 'Was ist das für ein Kompass?' }, { id: 'hier', text: 'Was machst du in 1776?' },
+      !fl().schaufel && { id: 'schaufel', text: fl().fechtSieg ? 'Ich hab Guybrush besiegt. Jetzt gib mir die Schaufel!' : 'Das ist Oma Gertrudes Schaufel! Kann ich die haben?' },
+      !gbOk(j) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Tschüss, Käpt’n.' }]);
+    if (c === 'schaufel') await JACK_SCHAUFEL(h);
     if (c === 'bye') { await say(h, 'Tschüss, Käpt’n.'); await say(j, 'Merk dir diesen Tag als den Tag, an dem du fast Käpt’n Jack Sparrow begegnet bist.'); return; }
     if (c === 'wer') { await say(h, 'Wer bist du?'); await say(j, 'Käpt’n. Käpt’n Jack Sparrow. Mit Käpt’n davor. Das ist wichtig. Ohne Käpt’n bin ich nur ein Vogel.'); }
     if (c === 'kompass') {
@@ -528,6 +527,10 @@ ACT.jack.talk = async () => {
 
 // Bender „leiht“ sich jeden Gegenstand kurz aus – und gibt ihn (widerwillig) zurück
 for (const it of Object.keys(ITEMS)) multi(['give', 'use'], `i:${it} a:bender`, async () => {
+  if (fl().benderToast && !fl().toastZurueck) {
+    if (it === 'steth') return say('bender', 'Ein Stethoskop?! Weg damit! Ich lasse mich nicht untersuchen! Schon gar nicht von dir. Und erst recht nicht von dem mit den Scheren!');
+    return say('bender', 'Ein Tausch? Nee. In meiner Brustklappe liegt schon was Knuspriges. Da passt nichts mehr rein. Außer Rum.');
+  }
   await say('bender', `Danke, Fleischsack! *steckt ${ITEMS[it].name} in die Brustklappe* Meins!`);
   await say(curId(), 'Hey! Das brauche ich noch!');
   await say('bender', 'Na gut, na gut. *klapp* Hier. Aber nur, weil du so jämmerlich guckst.');
@@ -538,7 +541,15 @@ ACT.bender.talk = async () => {
   await say(b_, fl().metBender ? 'Du schon wieder. Hast du was Glänzendes dabei?' : 'Hey, Fleischsack! Was guckst du so? Noch nie einen gutaussehenden Roboter gesehen?');
   fl().metBender = 1;
   for (;;) {
-    const c = await choose([{ id: 'wer', text: 'Wer bist du?' }, { id: 'schiff', text: 'Ist das euer Raumschiff?' }, !gbOk(b_) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Tschüss, Blechbüchse.' }]);
+    const geklaut = fl().benderToast && !fl().toastZurueck;
+    const c = await choose([{ id: 'wer', text: 'Wer bist du?' }, geklaut && { id: 'toast', text: 'Gib sofort den Toast zurück!' }, { id: 'schiff', text: 'Ist das euer Raumschiff?' },
+      !geklaut && !gbOk(b_) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Tschüss, Blechbüchse.' }]);
+    if (c === 'toast') {
+      await say(l, 'Gib sofort den Toast zurück! Der ist für Lila.');
+      await say(b_, 'Welchen Toast? *knusper* … Ich meine: Welchen Toast? Hier ist kein Toast. Nur meine Brustklappe. Und die bleibt zu.');
+      await say(b_, 'Die geht nur bei einer ärztlichen Untersuchung auf. Und Ärzte hasse ich. Alle. Besonders den mit den Scheren.');
+      fl().benderSchwach = 1;
+    }
     if (c === 'bye') { await say(l, 'Tschüss, Blechbüchse.'); await say(b_, 'Blech? Ich bin zu 40 Prozent aus Titan!'); return; }
     if (c === 'wer') { await say(l, 'Wer bist du?'); await say(b_, 'Bender. Biegeroboter. Ich biege Träger, Löffel und Regeln.'); await say(l, 'Darf ich dich aufschrauben? Nur ein bisschen?'); await say(b_, 'Lady, du machst mir Angst. Ich mag das.'); }
     if (c === 'schiff') { await say(l, 'Ist das euer Raumschiff?'); await say(b_, 'Das ist das Firmenschiff. Ich bin quasi der Chef. Der Professor sieht das anders. Der Professor sieht nicht mehr gut.'); }
@@ -549,7 +560,17 @@ ACT.prof.talk = async () => {
   const p = 'prof', l = curId();
   await say(p, 'Gute Nachrichten, alle zusammen! … Ach, nur eine. Gute Nachricht, du da!');
   for (;;) {
-    const c = await choose([{ id: 'wer', text: 'Wer sind Sie?' }, { id: 'fred', text: 'Kennen Sie Dr. Fred?' }, !gbOk(p) && { id: 'gb', text: 'Unterschreiben Sie in Dr. Freds Gästebuch?' }, { id: 'bye', text: 'Auf Wiedersehen, Professor.' }]);
+    const c = await choose([{ id: 'wer', text: 'Wer sind Sie?' }, { id: 'fred', text: 'Kennen Sie Dr. Fred?' },
+      fl().benderToast && !fl().toastZurueck && { id: 'bender', text: 'Ihr Roboter hat meinen Toast geklaut!' },
+      !gbOk(p) && { id: 'gb', text: 'Unterschreiben Sie in Dr. Freds Gästebuch?' }, { id: 'bye', text: 'Auf Wiedersehen, Professor.' }]);
+    if (c === 'bender') {
+      await say(l, 'Ihr Roboter hat meinen Toast geklaut!');
+      await say(p, 'Gute Nachrichten! Ich weiß, wie man ihn wiederkriegt. Bender hat panische Angst vor Arztbesuchen.');
+      await say(p, 'Sobald ihn jemand mit einem richtigen Doktor-Werkzeug untersuchen will, klappt er vor Schreck die Brustklappe auf.');
+      await say(p, 'Dr. Zoidberg würde ihn liebend gern untersuchen. Er hat nur leider kein Werkzeug. Und keine Approbation. Und keinen Plan.');
+      await say(l, 'Ein richtiges Doktor-Werkzeug … Ich glaube, ich habe da was.');
+      fl().benderSchwach = 1;
+    }
     if (c === 'bye') { await say(l, 'Auf Wiedersehen, Professor.'); await say(p, 'Wiedersehen? Wo? Wann? Ach, egal.'); return; }
     if (c === 'wer') { await say(l, 'Wer sind Sie?'); await say(p, 'Ich habe eine Lieferfirma gegründet. Mit Raumschiff. Und eine Zeitmaschine gebaut, die nur vorwärts fährt. Das kann jeder, sagen die Leute. Pah!'); }
     if (c === 'fred') { await say(l, 'Kennen Sie Dr. Fred?'); await say(p, 'Edison? Der mit dem Toaster? Ein Amateur! Meine Maschinen explodieren viel schöner.'); await say(l, 'Er hat aber ein Zeitklo gebaut.'); await say(p, '… Verdammt. Das ist gut.'); }
@@ -562,6 +583,7 @@ ACT.prof.talk = async () => {
 };
 ACT.zoid.refuse = item => item === 'steth' ? null : 'Ist das essbar? *schnüffel* … Nein. Hier, nimm es zurück, bevor ich es doch esse.';
 multi(['give', 'use'], 'i:steth a:zoid', async () => {
+  if (fl().benderToast && !fl().toastZurueck) return ZOIDBERG_VISITE();
   await say('zoid', 'Ein Stethoskop! Ein echtes Doktor-Werkzeug! *horcht an seiner Schere* … Ich höre das Meer!');
   await say('laverne', 'Das ist dein Blut.'); await say('zoid', 'Dann höre ich mein Blut, und es klingt wie das Meer! Herrlich!');
   await say('zoid', 'Hier, Kollegin, zurück damit. Zum Dank trage ich mich in Ihr Buch ein. Mit Tinte! Meiner eigenen!');
@@ -585,7 +607,9 @@ ACT.glados.talk = async () => {
   await say(k, fl().metKi ? 'Oh. Du schon wieder. Ich hatte gehofft, die Testkammer hätte dich … umgeleitet.' : 'Oh. Hallo. Willkommen in der Testkammer. Diese Begrüßung wurde automatisch erstellt und bedeutet nichts.');
   fl().metKi = 1;
   for (;;) {
-    const c = await choose([{ id: 'wer', text: 'Wer oder was bist du?' }, { id: 'kuchen', text: 'Gibt es hier wirklich Kuchen?' }, !gbOk(k) && { id: 'test', text: 'Ich mache deinen Test. Unterschreibst du dann im Gästebuch?' }, { id: 'bye', text: 'Ich geh dann mal.' }]);
+    const c = await choose([{ id: 'wer', text: 'Wer oder was bist du?' }, { id: 'kuchen', text: 'Gibt es hier wirklich Kuchen?' },
+      (!gbOk(k) || !fl().kiFrei) && { id: 'test', text: fl().kiTuer && !fl().kiFrei ? 'Mach die Tür zum Thronsaal auf! Ich mache deinen Test.' : 'Ich mache deinen Test. Unterschreibst du dann im Gästebuch?' },
+      { id: 'bye', text: 'Ich geh dann mal.' }]);
     if (c === 'bye') { await say(l, 'Ich geh dann mal.'); await say(k, 'Gute Idee. Bitte nehmen Sie Ihre Begeisterung mit. Sie stört die Messungen.'); return; }
     if (c === 'wer') { await say(l, 'Wer oder was bist du?'); await say(k, 'Ich bin die neue Sicherheits-KI Seiner Lilaheit. Ich wurde wegen meiner Persönlichkeit eingestellt.'); await say(l, 'Und die Wache?'); await say(k, 'Die Wache ist ein Test. Sie besteht ihn seit vierzig Jahren nicht.'); }
     if (c === 'kuchen') { await say(l, 'Gibt es hier wirklich Kuchen?'); await say(k, 'Natürlich. Er ist in einer anderen Kammer. Die Kammer ist in Planung. Die Planung ist ein Gerücht.'); }
@@ -609,6 +633,7 @@ ACT.glados.talk = async () => {
         await say(k, 'Glückwunsch. Sie haben bestanden. Hier ist Ihr Kuchen: *zeigt ein Foto von einem Kuchen*.');
         await say(l, 'Das ist ein Foto.'); await say(k, 'Und das ist eine Unterschrift in Ihrem Gästebuch. Ein noch größeres Geschenk. Bitte weinen Sie leise.');
         await gbSign(k);
+        if (!fl().kiFrei) { fl().kiFrei = 1; Sound.sfx('door'); await say(k, 'Außerdem habe ich die Thronsaaltür entriegelt. Getestete Subjekte dürfen zu Seiner Lilaheit. Viel Spaß. Ich meine das nicht so.'); }
       } else await say(k, `${pts} von 3. Der Test wird wiederholt, bis jemand lacht. Ich lache nie.`);
     }
   }
@@ -635,3 +660,194 @@ ACT.simon.talk = async () => {
 
 // Gegenstände an Gäste geben, die keine eigene Regel haben
 for (const id of GUESTS) if (!ACT[id].refuse) ACT[id].refuse = () => pick(['Danke, aber das brauche ich nicht. Ich bin nur zu Besuch.', 'Nett gemeint. Aber das passt nicht in meine Welt.', 'Behalt das lieber. Du hast offenbar eine Aufgabe.']);
+
+// ============================================================
+//  Die Gäste in der Hauptgeschichte: in jeder Zeit hängt ein Schritt der Rettung an den neuen Orten und Gästen
+//  Gegenwart: Sam & Max sperren den Hebel des Gut-O-Mats als Tatort ab – erst nach ihrem Verhör ist er frei.
+//  1776: Käpt’n Jack hat sich die Gartenschaufel „geliehen“ und gibt sie nur einem echten Piraten (Guybrush besiegen).
+//  Zukunft: Bender klaut den Gut-Toast am Klo, Zoidberg holt ihn mit Lavernes Stethoskop zurück;
+//  und GLaDOS lässt nach der Wache nur getestete Subjekte in den Thronsaal.
+// ============================================================
+
+// ---------- Gegenwart: der Tatort im Labor ----------
+function drawAbsperrband(c, t) {
+  const w = Math.sin(t * 0.003) * 1.5;
+  for (const [x0, y0, x1, y1] of [[566, 200 + w, 660, 240 - w], [570, 250 - w, 656, 210 + w]]) {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    c.save(); c.translate(x0, y0); c.rotate(Math.atan2(y1 - y0, x1 - x0));
+    R(c, 0, -7, len, 14, '#ffd23a', 2, 1, OUT);
+    txt(c, 'TATORT', len / 2, 4, '800 10px "Baloo 2", sans-serif', '#1b1020', 'center');
+    c.restore();
+  }
+  // lose Enden flattern
+  L(c, [660, 240 - w, 672, 252 + w * 2, 668, 266], 5, OUT); L(c, [660, 240 - w, 672, 252 + w * 2, 668, 266], 3, '#ffd23a');
+}
+ROOMS.labor.objs.push({ id: 'absperrband', name: 'Absperrband', rect: [566, 176, 96, 104], walk: [604, 362], visible: () => !fl().tatortFrei && !fl().toast,
+  look: 'Gelbes Absperrband, zweimal um den Hebel des Gut-O-Mats gewickelt: „TATORT – FREIBERUFLICHE POLIZEI – NICHT ZIEHEN“.', draw: drawAbsperrband });
+async function TATORT_STOPP() {
+  await say('sam', 'Halt! Finger weg vom Hebel. Das ist ein Tatort. Freiberufliche Polizei.');
+  await say('max', 'Wir haben ihn abgesperrt! Mit Band! Das Band war teuer. Also, geklaut.');
+  if (!fl().tatortGesehen) {
+    fl().tatortGesehen = 1;
+    await say('bernard', 'Ein Tatort? Das ist Dr. Freds Gut-O-Mat! Den brauchen wir, um die Welt zu retten!');
+    await say('sam', 'Das sagen alle Verdächtigen. Wenn Sie uns helfen, den Fall zu lösen, geben wir ihn frei. Sprechen Sie mich an, wenn Sie bereit sind fürs Verhör.');
+  }
+}
+multi(['pull', 'push', 'use', 'pick', 'open'], 'o:absperrband', TATORT_STOPP);
+for (const v of ['pull', 'push', 'use']) {
+  const orig = RULES[`${v} o:hebel`];
+  RULES[`${v} o:hebel`] = () => !fl().tatortFrei && !fl().toast ? TATORT_STOPP() : orig();
+}
+async function TATORT_VERHOER(b) {
+  const s_ = 'sam', m = 'max';
+  await say(b, 'Gebt den Gut-O-Mat frei! Ich brauche den Hebel.');
+  await say(s_, 'Der Toaster bleibt ein Tatort, bis der Fall gelöst ist. Aber Sie dürfen helfen. Drei Fragen. Reine Routine.');
+  await say(m, 'Und wenn du lügst, beiße ich den Toaster!');
+  const Q = [
+    ['Frage eins: Wer ist der Täter?', 'lila', { lila: 'Lila Tentakel.', fred: 'Dr. Fred.', toast: 'Der Toaster.', ich: 'Ich war’s. Glaube ich.' },
+      { fred: [[m, 'Der Mann mit der Frisur? Plausibel!'], [s_, 'Leider falsch. Wer hat denn die Welt an sich gerissen?']],
+        toast: [[m, 'HA! Ich wusste es!'], [s_, 'Max, der Toaster hat ein Alibi. Er war die ganze Zeit hier und hat getoastet.']],
+        ich: [[m, 'Ein Geständnis! Verhaften wir ihn, Sam!'], [s_, 'Max, wir verhaften niemanden, der so nervös schwitzt. Das ist unter unserer Würde.']] }],
+    ['Frage zwei: Was hat der Täter hier im Labor gestohlen?', 'zelle', { zelle: 'Dr. Freds Energiezelle. Und das letzte Freundlichkeits-Brot hat er aufgefressen.', hut: 'Sams Hut.', welt: 'Nichts. Die Welt hat er sich nur ausgeliehen.' },
+      { hut: [[s_, 'Mein Hut ist hier. Auf meinem Kopf. Ich habe gerade nachgesehen.']],
+        welt: [[s_, 'Ausleihen ohne Zurückgeben heißt bei uns Diebstahl. Oder Bibliothek. Gefragt war aber, was hier im Labor fehlt.']] }],
+    ['Frage drei: Und womit wollen Sie ihn aufhalten?', 'toast', { toast: 'Mit einem Gut-Toast. Aus genau diesem Gut-O-Mat.', max: 'Mit Max.', blick: 'Mit einem sehr strengen Blick.' },
+      { max: [[m, 'Ja! Ja! JA!'], [s_, 'Nein, Max. Du bist kein Gegenmittel. Du bist eher eine Nebenwirkung.']],
+        blick: [[s_, 'Strenge Blicke haben bei Tentakeln noch nie gewirkt. Die haben keine Augenbrauen.']] }],
+  ];
+  for (const [frage, richtig, antworten, falsch] of Q) {
+    await say(s_, frage);
+    const a = await choose(shuffled(Object.entries(antworten)).map(([id, text]) => ({ id, text })));
+    await say(b, antworten[a]);
+    if (a !== richtig) {
+      for (const [w, t] of falsch[a]) await say(w, t);
+      await say(s_, 'Kommen Sie wieder, wenn Sie den Fall durchschaut haben. Dr. Fred redet viel, wenn man ihn fragt.');
+      return;
+    }
+    await say(s_, pick(['Korrekt. Max, notier das.', 'Stimmt. Das deckt sich mit unseren Ermittlungen.', 'Richtig. Sie sind ein vorbildlicher Zeuge.']));
+  }
+  await say(s_, 'Der Fall ist gelöst! Täter: Lila. Beute: Strom und Brot. Gegenmittel: Toast. Max, gib den Tatort frei.');
+  await say(m, 'Ich reiße das Band ab! Mit den Zähnen!');
+  const mx = ACT.max, home = [mx.x, mx.y, mx.dir];
+  await walkTo('max', 650, 384); mx.dir = -1;
+  Sound.sfx('pop'); shake(300, 3); fl().tatortFrei = 1;
+  await say(m, '*rrrratsch* Frei! Und das Band schmeckt nach Abenteuer.');
+  await walkTo('max', home[0], home[1]); mx.dir = home[2];
+  if (!gbOk(s_)) { await say(s_, 'Für unseren Kronzeugen unterschreiben wir auch gleich in Dr. Freds Gästebuch. Ich mit Füller, Max mit Ketchup.'); await gbSign(s_, m); }
+}
+
+// ---------- 1776: Jacks „geliehene“ Schaufel am Hafen ----------
+const JACK_SCHAUFEL_IMG = loadImg('img/hafen/schaufel.png');
+{ const gs = ROOMS.garten1776.objs.find(o => o.id === 'schaufel'); if (gs) gs.visible = () => false; }   // lehnt nicht mehr am Zaun
+ROOMS.hafen.objs.push({ id: 'jack_schaufel', name: 'Schaufel', rect: [664, 300, 56, 120], walk: [672, 410], visible: () => !fl().schaufel,
+  look: 'Oma Gertrudes Schaufel! Jack hat damit ein Loch in den Steg gegraben. Der Steg ist aus Holz. Das Loch ist sehr flach.',
+  draw: c => {
+    if (!imgOk(JACK_SCHAUFEL_IMG) || typeof HAFEN_EBENEN === 'undefined' || !HAFEN_EBENEN.schaufel) return;
+    const [w, h] = HAFEN_EBENEN.schaufel, s = 104 / h;
+    E(c, 694, 414, 15, 4, 'rgba(30,15,10,0.55)', 0);   // das Loch im Steg
+    if (c.isPix) { c.drawSprite(JACK_SCHAUFEL_IMG, 0, 0, w, h, 694 - w * s / 2, 416 - h * s, w * s, h * s); return; }
+    c.save(); c.translate(694, 416); c.rotate(0.2); c.drawImage(JACK_SCHAUFEL_IMG, -w * s / 2, -h * s, w * s, h * s); c.restore();
+  } });
+multi(['pick', 'pull', 'use'], 'o:jack_schaufel', async () => {
+  if (fl().fechtSieg) return JACK_SCHAUFEL(curId());
+  await say('jack', 'Finger weg von meiner Schatzschaufel, Kumpel! Die gehört einem echten Piraten. Also mir. Gefühlt.');
+});
+async function JACK_SCHAUFEL(h) {
+  const j = 'jack';
+  if (!fl().fechtSieg) {
+    await say(h, 'Das ist Oma Gertrudes Schaufel! Kann ich die haben?');
+    await say(j, 'Gertrude? Nie gehört. Die Schaufel hat mich gefunden. Mein Kompass sagt: Grab hier. Also grabe ich. Seit drei Stunden. Im Holz.');
+    await say(j, 'Ich gebe sie nur einem echten Piraten. Und ein echter Pirat besiegt einen anderen Piraten im Duell. Mit Worten, natürlich. Säbel sind so laut.');
+    await say(j, 'Der Blonde da drüben hält sich für einen Fechtmeister. Besieg ihn, dann reden wir.');
+    fl().jackDuell = 1;
+    return;
+  }
+  await say(h, 'Ich hab Guybrush besiegt. Drei Beleidigungen, drei Konter.');
+  await say(j, 'Den Blonden? Mit Worten? Dann bist du ein Pirat. Ein haariger, aber ein Pirat.');
+  await say(j, 'Hier, die Schaufel. Der Schatz ist eh nicht da drunter. Er ist nie da, wo man gräbt. Das ist das Geheimnis aller Schätze.');
+  Sound.sfx('pick'); fl().schaufel = true; addItem('schaufel', h);
+  await say(h, 'Danke, Käpt’n! Jetzt kann ich endlich den Apfelbaum pflanzen.');
+  if (!gbOk(j)) { await say(j, 'Und weil du Stil hast: *kritzelt ein Herz mit Totenkopf ins Buch* Unterschrieben.'); await gbSign(j); }
+}
+
+// ---------- Zukunft: Bender klaut den Toast, Zoidberg holt ihn zurück ----------
+const sendItemOhneBender = sendItem;
+sendItem = async function (item, to) {
+  await sendItemOhneBender(item, to);
+  if (item === 'toast' && to === 'laverne' && !fl().benderToast && whereItem('toast') === 'laverne') await BENDER_KLAUT();
+};
+async function BENDER_KLAUT() {
+  const b = ACT.bender, home = { room: b.room, x: b.x, y: b.y, dir: b.dir }, keep = G.viewRoom;
+  await fadeTo(1, 300, 'black');
+  G.viewRoom = 'fgarten'; G.caption = 'Unterdessen in der Zukunft ...';
+  Object.assign(b, { room: 'fgarten', x: -40, y: 380, dir: 1, visible: true });
+  await fadeTo(0, 300); await wait(900); G.caption = null;
+  await walkTo('bender', 196, 374, true); b.dir = -1;
+  await say('bender', 'Oh! Ein Toast aus dem Klo! Warm, knusprig, herrenlos. MEINS!');
+  Sound.sfx('pick'); takeItem('toast', 'laverne'); fl().benderToast = 1;
+  if (ACT.laverne.room === 'fgarten') await say('laverne', 'Hey! Der ist für Lila!');
+  await say('bender', '*steckt den Toast in die Brustklappe* Beweis es, Fleischsack!');
+  await walkTo('bender', -60, 380, true);
+  Object.assign(b, home);
+  await fadeTo(1, 300, 'black'); G.viewRoom = keep; await fadeTo(0, 300);
+  if (curId() === 'bernard') await say('bernard', 'Laverne? Hallo? Ist der Toast angekommen? … Warum höre ich Knuspern?');
+}
+async function ZOIDBERG_VISITE() {
+  const z = ACT.zoid, b = ACT.bender, home = [z.x, z.y, z.dir];
+  await say('laverne', 'Doktor Zoidberg, ich hätte einen Patienten für Sie. Und hier: ein echtes Stethoskop.');
+  await say('zoid', 'Ein Stethoskop! Und ein PATIENT! Heute ist der schönste Tag meines Lebens!');
+  await walkTo('zoid', b.x - 74, b.y + 2); z.dir = 1;
+  await say('zoid', 'So, Herr Roboter. Einmal tief einatmen und die Klappe aufmachen!');
+  await say('bender', 'NEIN! Keine Untersuchung! Ich bin kerngesund! Hier, nimm, was du willst, aber geh WEG!');
+  Sound.sfx('door'); shake(400, 3); await wait(500); Sound.sfx('pop');
+  addItem('toast', 'laverne'); fl().toastZurueck = 1;
+  await say('bender', '*Klappe auf* … Hups. Da fällt ja ein Toast raus. Wie kommt der denn da rein?');
+  await say('zoid', '*horcht* Ich höre … ein leeres Fach. Und Reue. Der Patient ist geheilt! Ich bin ein Arzt!');
+  await say('laverne', 'Toast zurück, Patient geheilt. Sie können das Stethoskop behalten, Herr Kollege. Für fünf Minuten.');
+  await walkTo('zoid', home[0], home[1]); z.dir = home[2];
+  await say('zoid', 'Hier, Kollegin, zurück damit. Zum Dank trage ich mich in Ihr Buch ein. Mit Tinte! Meiner eigenen!');
+  await say('bender', 'Und ich unterschreibe auch. Aber nur, wenn der Krebs mich nie wieder anfasst.');
+  await gbSign('zoid', 'bender');
+}
+
+// ---------- Zukunft: GLaDOS sichert den Thronsaal ----------
+async function KI_SPERRE() {
+  Sound.sfx('botbeep');
+  await say('glados', 'Oh. Hallo. Die Wache ist weg. Wie bedauerlich. Für Sie.');
+  await say('glados', 'Ab sofort sichere ich den Thronsaal. Zutritt nur für getestete Testsubjekte. Sie sind ungetestet. Man sieht es Ihnen an.');
+  await say('glados', 'Bitte nehmen Sie den Aufzug zur Testkammer. Er ist gleich rechts. Er beißt nur selten.');
+  fl().kiTuer = 1;
+}
+for (const v of ['walk', 'open', 'use']) {
+  const orig = RULES[`${v} o:thron_tuer`];
+  RULES[`${v} o:thron_tuer`] = () => fl().guardGone && !fl().kiFrei ? KI_SPERRE() : orig();
+}
+
+// ---------- Fortschritt, Notizbuch und Tipps ----------
+MILESTONES.splice(MILESTONES.indexOf('tree'), 0, 'schaufel');
+MILESTONES.splice(MILESTONES.indexOf('toast'), 0, 'tatortFrei');
+MILESTONES.splice(MILESTONES.indexOf('toast') + 1, 0, 'toastZurueck');
+MILESTONES.push('kiFrei');
+Object.assign(CHAPTERS, { schaufel: 'Die Schatzschaufel', tatortFrei: 'Der Fall ist gelöst', toastZurueck: 'Doktor Zoidbergs Hausbesuch', kiFrei: 'Getestet und für gut befunden' });
+NOTES.splice(NOTES.findIndex(n => n[0] === 'tree'), 0, ['schaufel', 'Hoagie hat Guybrush im Beleidigungsfechten besiegt und von Käpt’n Jack die Schaufel bekommen.']);
+NOTES.splice(NOTES.findIndex(n => n[0] === 'toast'), 0, ['tatortFrei', 'Bernard hat das Verhör von Sam & Max bestanden – der Hebel ist kein Tatort mehr.']);
+NOTES.splice(NOTES.findIndex(n => n[0] === 'toast') + 1, 0, ['toastZurueck', 'Bender hat den Toast geklaut – Zoidberg hat ihn mit Lavernes Stethoskop „untersucht“ und zurückgeholt.']);
+NOTES.push(['kiFrei', 'Laverne hat GLaDOS’ Test bestanden – die Thronsaaltür ist offen.']);
+const hintTextOhneGaeste = hintText;
+hintText = function () {
+  const f = fl(), base = hintTextOhneGaeste();
+  if (base === 'Hoagie: Im Garten lehnt eine Schaufel am Zaun.')
+    return f.fechtSieg ? 'Hoagie: Sag Käpt’n Jack am Hafen, dass du Guybrush besiegt hast – dann rückt er die Schaufel raus.'
+      : f.jackDuell ? 'Hoagie: Jack gibt die Schaufel nur einem echten Piraten. Besieg Guybrush im Beleidigungsfechten – die Antwort muss die Beleidigung umdrehen.'
+        : f.knowsSchaufel ? 'Hoagie: Ein schwankender Mann mit Hut hat die Schaufel zum Hafen mitgenommen. Sprich mit Käpt’n Jack.'
+          : 'Hoagie: Die Schaufel lehnt nicht mehr am Zaun. Frag Salad Fingers im Garten, was er gesehen hat – oder schau gleich am Hafen nach.';
+  if (!f.toast && !f.tatortFrei && /^Bernard: (Der Regler|Zieh den Hebel)/.test(base))
+    return 'Bernard: Sam & Max haben den Hebel als Tatort abgesperrt. Sprich mit Sam im Labor und besteh das Verhör: Täter, Beute, Gegenmittel.';
+  if (f.benderToast && !f.toastZurueck && f.guardGone)
+    return f.benderSchwach ? 'Laverne: Bender hat Angst vor Ärzten. Gib Dr. Zoidberg am Landeplatz dein Stethoskop.'
+      : 'Laverne: Bender hat den Toast geklaut. Frag den Professor am Landeplatz nach Benders Schwachstelle.';
+  if (base === 'Laverne: Ab in den Thronsaal und gib Lila den Toast!' && !f.kiFrei)
+    return f.kiTuer ? 'Laverne: GLaDOS lässt nur getestete Subjekte durch. Nimm im Palast-Vorraum den Aufzug zur Testkammer und besteh ihren Test.'
+      : 'Laverne: Geh zur Thronsaaltür im Palast-Vorraum.';
+  return base;
+};
