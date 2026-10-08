@@ -2456,7 +2456,7 @@ const TENT_IMG = Object.fromEntries([['green', 'tent_gruen'], ['lila', 'tent_lil
   ['drfred', 'npc_drfred'], ['gertrude', 'npc_gertrude'], ['hancock', 'npc_hancock'], ['wache', 'npc_wache']].map(([id, f]) => [id, loadImg(`img/${f}.png`)]));
 // Fußpunkt (Anteil der Breite), Höhe bei Maßstab sc0 und Blickrichtung im gerenderten Bild
 const TENT_AT = {
-  green: [0.53, 205, 1.05, -1], lila: [0.491, 240, 1.2, -1], nett: [0.491, 240, 1.2, -1],
+  green: [0.5, 205, 1.05, 1], lila: [0.476, 240, 1.2, 1], nett: [0.476, 240, 1.2, 1],   // Tentakel v2 (tent_titel.py): Mund nach rechts
   bernard: [0.512, 151, 0.6, 1], hoagie: [0.463, 122, 0.6, 1], laverne: [0.54, 137, 0.6, 1],
   drfred: [0.585, 143, 0.66, 1], gertrude: [0.48, 120, 0.62, 1], hancock: [0.59, 121, 0.62, 1], wache: [0.405, 228, 0.9, -1],
 };
@@ -2542,7 +2542,7 @@ function drawTitle() {
   if (!titleTent3d('bernard', 292, 590, 1)) titleActor('bernard', 292, 590, 0.6, 1, 1);
   if (!titleTent3d('hoagie', 352, 592, 3)) titleActor('hoagie', 352, 592, 0.6, 1, 3);
   if (!titleTent3d('laverne', 410, 588, 5)) titleActor('laverne', 410, 588, 0.6, 1, 5);
-  if (!titleTent3d('lila', 504, 604, 0)) titleActor('lila', 512, 604, 1.2, -1, 0);
+  if (!titleTent3d('lila', 504, 604, 0, null, -1)) titleActor('lila', 512, 604, 1.2, -1, 0);
   // Gras und Glühwürmchen
   for (let i = 0; i < (cx.isPix ? 14 : 40); i++) {
     const gx = (i * 167 + 30) % W, gy = 566 + ((i * 71) % 34), sw = Math.sin(t * 0.002 + i) * 2;

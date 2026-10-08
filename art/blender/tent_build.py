@@ -1,6 +1,6 @@
 # Tentakel als Spielfiguren rendern (in Blender ausführen, vorher REPO und NAME setzen):
 #   REPO = r'C:/.../Tentakel-Toast'; NAME = 'green'; exec(open(REPO + '/art/blender/tent_build.py').read())
-# Grün, Lila (auch nett/rosa) und die Wache kommen aus den Titel- und Abspann-Modellen (Szenen Tentakel3D, Wache3D).
+# Grün, Lila (auch nett/rosa) kommen aus dem Modell der Szene Tentakel3D_v2 (tent_v2.py), die Wache aus Wache3D.
 # Jede Variante bekommt eine eigene Szene; gerendert werden Mund zu/offen, bei Lila dazu drei Armhaltungen.
 # Wippen, Federn und Hüpfen macht das Spiel per Verformung des Bildes (wie bei den gezeichneten Tentakeln).
 # Schreibt art/render/<name>/*.png und meta.json (danach figur_post.py und figur_js.py).
@@ -15,9 +15,9 @@ from figur_lib import hexlin
 SCALE = 0.567   # Titel-Modell (Kuppe bei 3,44 m) auf die Größe der Spielfiguren
 YAW = 2.43      # Mund zur Kamera, Blick nach rechts wie bei den Helden
 VARS = {
-    'green': dict(src='Tentakel3D', p='Tent', cols=('#4fbf3a', '#2c7a1f', '#b4ef98'), arms=False),
-    'lila': dict(src='Tentakel3D', p='Tent', cols=('#8e44c9', '#5b2589', '#d9b2f2'), arms=True),
-    'nett': dict(src='Tentakel3D', p='Tent', cols=('#ef7fc4', '#b5407f', '#ffd6ee'), arms=True),
+    'green': dict(src='Tentakel3D_v2', p='Tent', cols=('#4fbf3a', '#2c7a1f', '#b4ef98'), arms=False),
+    'lila': dict(src='Tentakel3D_v2', p='Tent', cols=('#8e44c9', '#5b2589', '#d9b2f2'), arms=True),
+    'nett': dict(src='Tentakel3D_v2', p='Tent', cols=('#ef7fc4', '#b5407f', '#ffd6ee'), arms=True),
     'guard': dict(src='Wache3D', p='W_', cols=None, arms=False),
 }
 ARM_ROOT = {'L': Vector((-0.35, 0, 1.6)), 'R': Vector((0.35, 0, 1.75))}   # Ansatz der Lila-Arme am Körper (vorn/hinten)
@@ -31,6 +31,9 @@ def recolor(src_name, name, hexcol):
     m.node_tree.nodes['ToonMul'].inputs[6].default_value = col
     next(n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Base Color'].default_value = col
     m.diffuse_color = col
+    hi = m.node_tree.nodes.get('ToonHi')
+    if hi:   # matt wie Gummi statt glänzend wie Plastik
+        hi.color_ramp.elements[1].color = (0.16, 0.16, 0.16, 1)
     return m
 
 
@@ -102,8 +105,9 @@ def build(name):
             continue
         if not v['arms'] and 'Arm' in o.name and v['p'] == 'Tent':
             continue
+        base = o.name[len(v['p']):].split('.')[0]   # Tentakel3D_v2 teilt die Namen mit dem alten Modell (.001)
         c = o.copy()
-        c.name = f'T_{name}_' + o.name[len(v['p']):]
+        c.name = f'T_{name}_' + base
         c.hide_render = c.hide_viewport = False
         SC.collection.objects.link(c)
         for sl in c.material_slots:   # Farbe nur an diesem Objekt ändern, die Daten teilen sich alle Varianten
@@ -116,7 +120,7 @@ def build(name):
         c.parent = par
         c.matrix_parent_inverse = Matrix.Identity(4)
         c.matrix_basis = (Matrix.Translation(-ARM_ROOT[arm]) if arm else Matrix.Identity(4)) @ world(o)
-        parts[o.name[len(v['p']):]] = c
+        parts[base] = c
     print('tent', name, SC.name, sorted(parts))
     return SC, root, parts, piv
 
