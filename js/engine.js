@@ -2407,6 +2407,47 @@ function drawHaus3d(t) {
   HAUS_AT.lamps.forEach((p, i) => { const [lx, ly] = at(p), f = 0.85 + 0.15 * Math.sin(t * 0.017 + i * 2.3) * Math.sin(t * 0.007 + i); glow(lx, ly, 38, '#ffc86e', 0.5 * f); });
   return true;
 }
+// Gewitter hinter dem Herrenhaus: Wolkentürme, die von innen aufleuchten, alle paar Sekunden ein verästelter Blitz
+// (hinter dem Haus, das im Blitzlicht kurz hell wird) und – etwas später – der Donner.
+const STORM_P = 6200;
+function stormBolt(t) {
+  const n = Math.floor(t / STORM_P), h = i => { const x = Math.sin((n * 7 + i) * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  const tb = t - n * STORM_P - h(0) * 2600;
+  if (tb < 0 || tb > 520) return { n, tb, a: 0, h };
+  const a = tb < 80 ? 1 : tb < 150 ? 0.2 : tb < 250 ? 0.95 : tb < 300 ? 0.3 : Math.max(0, (520 - tb) / 220) * 0.8;
+  return { n, tb, a, h };
+}
+function drawStormBack(t) {
+  const b = stormBolt(t), fl = b.a;
+  // Wolkentürme über dem Haus, Unterseite im Blitz hell
+  for (let i = 0; i < 11; i++) {
+    const x = -20 + i * 56 + Math.sin(t * 0.00018 + i * 1.7) * 18, y = 40 + Math.sin(i * 2.3) * 30 + (i % 3) * 22, r = 58 + (i % 4) * 18;
+    E(cx, x, y - r * 0.18, r * 1.2, r * 0.55, '#3a2058', 0);   // Mondlicht auf den Wolkenkuppen
+    E(cx, x, y, r * 1.25, r * 0.6, i % 2 ? '#1a0a2c' : '#22103a', 0);
+    if (fl > 0 && !cx.isPix) E(cx, x + 6, y + r * 0.28, r * 1.0, r * 0.24, `rgba(214,190,255,${(0.4 * fl).toFixed(3)})`, 0);
+  }
+  if (fl <= 0) return;
+  if (!cx.isPix) glow(60 + b.h(1) * 170, 120, 280, '#c8b4ff', 0.5 * fl);
+  // Blitz: Zickzack von der Wolke bis hinter das Haus, zwei Äste
+  const zig = (x, y, len, steps, seed) => { const pts = [x, y]; for (let i = 1; i <= steps; i++) { x += (b.h(seed + i) - 0.5) * 46; y += len / steps; pts.push(x, y); } return pts; };
+  const x0 = 50 + b.h(1) * 170, main = zig(x0, 30, 330, 9, 10);   // links vom Logo herunter, endet hinter dem Haus
+  const br1 = zig(main[6], main[7], 110, 4, 30), br2 = zig(main[10], main[11], 90, 3, 50);
+  cx.save(); cx.globalAlpha = fl; cx.lineCap = cx.lineJoin = 'round';
+  for (const [pts, w] of [[main, 1], [br1, 0.55], [br2, 0.45]]) {
+    if (!cx.isPix) L(cx, pts, 12 * w, 'rgba(180,150,255,0.35)');
+    L(cx, pts, 4.5 * w, '#e8dcff'); L(cx, pts, 1.8 * w, '#ffffff');
+  }
+  cx.restore();
+}
+function drawStormFront(t) {
+  const b = stormBolt(t);
+  if (b.tb > 300 && G.titleThunder !== b.n && G.screen === 'title') { G.titleThunder = b.n; Sound.sfx('thunder'); }   // der Donner kommt hinterher
+  if (b.a <= 0 || cx.isPix) return;
+  cx.save(); cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 0.16 * b.a;   // das Haus im Blitzlicht
+  cx.fillStyle = '#b8a8ff'; cx.fillRect(0, 0, 560, 610); cx.restore();
+}
+{ const hausOhneGewitter = drawHaus3d; drawHaus3d = function (t) { if (cx.isPix || !imgOk(HAUS_IMG)) return hausOhneGewitter(t); drawStormBack(t); const r = hausOhneGewitter(t); drawStormFront(t); return r; }; }
+{ const villaOhneGewitter = drawMansion; drawMansion = function (c, t) { if (c === cx && G.screen === 'title') drawStormBack(t); villaOhneGewitter(c, t); if (c === cx && G.screen === 'title') drawStormFront(t); }; }
 // Grüner und Lila Tentakel in 3D (Blender, Toon-Look mit Kontur); wippen und federn leicht.
 // Im Pixel-Modus und mit Partyhütchen bleiben die gezeichneten Figuren.
 // Auch die drei Helden gibt es fürs Titelbild in 3D (gleicher Maßstab wie in Blender gerendert),

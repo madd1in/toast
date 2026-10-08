@@ -106,6 +106,12 @@ for nm, tgt in (('think', (mouth_at.x, -0.03, mouth_at.z - 0.06 - hz)), ('eat', 
     FRAMES.append((nm, Pz(xR=rx, aR=ry, eR=-ey)))
 if cfg.get('frames'):
     FRAMES = [f for f in FRAMES if f[0] in cfg['frames']]
+if globals().get('FECHT'):   # Beleidigungsfechten (fecht_hoagie.py): Ausfallschritt mit Poolnudel, Super-Spritzer mit beiden Händen
+    FRAMES += [
+        ('nudel0', Pz(aR=-1.45, eR=0.15, xR=-ab * 0.3, aL=-0.35, eL=1.5, xL=ab + 0.4, tR=-0.25, kR=0.35, tL=0.2, kL=0.1, lean=0.05)),
+        ('nudel1', Pz(aR=-1.6, eR=0.0, xR=0.0, aL=0.4, eL=0.6, xL=ab + 0.3, tR=-0.55, kR=0.7, tL=0.35, kL=0.1, lean=0.15)),
+        ('spritz', Pz(aR=-1.5, eR=0.05, xR=0.05, aL=-1.3, eL=0.55, xL=-0.15, lean=-0.05)),
+    ]
 
 
 def apply(p):
@@ -135,11 +141,14 @@ def px(co):
 
 
 ONLY = globals().get('ONLY')
+HOOK = globals().get('FRAME_HOOK')   # optional: Requisiten je Bild ein-/ausblenden
 meta = {'res': [W, H], 'ppm': H / cam.data.ortho_scale, 'frames': []}
 try:
     for nm, p in FRAMES:
         if ONLY and nm not in ONLY:
             continue
+        if HOOK:
+            HOOK(nm)
         apply(p)
         bpy.context.view_layer.update()
         meta['frames'].append({'name': nm, 'foot': px(OB[f'{P}Rig'].matrix_world.translation), 'mouth': px(OB['R' + cfg['mouth']].matrix_world.translation),

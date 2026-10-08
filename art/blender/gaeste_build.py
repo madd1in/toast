@@ -366,9 +366,58 @@ def build_simon(SC, B, R):
     return dict(mouth='Sm_Mund', eyes=('Sm_AugeR', 'Sm_AugeL'), hand='Sm_HandR', abd=0.12)
 
 
+# ------------------------------------------------------------------ Dreiköpfiger Affe (Running Gag der Piraten-Adventures)
+def build_affe(SC, B, R):
+    """Stämmiger Affe mit breitem Schulterjoch und drei Köpfen, die in drei Richtungen schauen: links mit rotem Kopftuch,
+    in der Mitte mit kleinem Dreispitz, rechts mit Goldring im Ohr. Lange Arme, krumme Beine, Ringelschwanz."""
+    FUR, FACE, BELLY, INNER = toon('G_AffeFell', '#7a4a2a', hi=0.08), toon('G_AffeGesicht', '#e8c08a', hi=0.1), toon('G_AffeBauch', '#d8a870', hi=0.08), toon('G_AffeOhr', '#d89a78', hi=0.08)   # matt wie Fell
+    RED, HAT = toon('G_AffeTuch', '#c8323a'), toon('G_AffeHut', '#2a2030', hi=0.2)
+    legs(B, 'Af_', R, 0.52, 0.13, 0.075, FUR, FACE, (0.14, 0.08, 0.05))
+    B.sphere('Af_Rumpf', (0, 0, 0.84), (0.25, 0.37, 0.4), FUR, R)   # runder Affenrumpf
+    B.sphere('Af_Brust', (0.02, 0, 1.04), (0.22, 0.4, 0.17), FUR, R)
+    B.sphere('Af_Bauch', (0.12, 0, 0.8), (0.15, 0.24, 0.27), BELLY, R)
+    B.sphere('Af_Joch', (0, 0, 1.15), (0.2, 0.46, 0.11), FUR, R, rot=(0, 0, 0.32))
+    # die Köpfe stehen schräg im Raum, damit man von der Kamera aus alle drei sieht: links im Profil, Mitte halb, rechts von vorn
+    for k, x, y, zh, tilt in (('L', 0.1, 0.3, 1.17, (0.15, 0, 0.1)), ('M', 0.0, 0.0, 1.24, (0, -0.08, -0.35)), ('R', -0.1, -0.3, 1.17, (-0.15, 0, -0.75))):
+        H = pivot(B, 'Af_Head' if k == 'M' else f'Af_Head{k}', R, (x, y, zh))
+        H.rotation_euler = tilt
+        z = 0.17
+        B.cone(f'Af_Hals{k}', -0.02, 0.08, 0.07, 0.065, FUR, H, bevel=0)
+        B.sphere(f'Af_Kopf{k}', (0.0, 0, z), (0.135, 0.13, 0.14), FUR, H)
+        B.sphere(f'Af_Maske{k}', (0.07, 0, z + 0.01), (0.08, 0.1, 0.1), FACE, H)
+        B.sphere(f'Af_Schnauze{k}', (0.13, 0, z - 0.045), (0.065, 0.08, 0.055), FACE, H)
+        for s, yy in (('L', 1), ('R', -1)):
+            B.sphere(f'Af_Auge{s}{k}', (0.135, yy * 0.04, z + 0.04), (0.022, 0.026, 0.032), EYE, H)
+            B.sphere(f'Af_Pupille{s}{k}', (0.153, yy * 0.038, z + 0.036), (0.009, 0.011, 0.016), BLACK, H)
+            B.sphere(f'Af_Nasenloch{s}{k}', (0.19, yy * 0.015, z - 0.02), (0.008, 0.008, 0.006), BLACK, H)
+            B.sphere(f'Af_Ohr{s}{k}', (-0.01, yy * 0.14, z + 0.01), (0.03, 0.05, 0.06), FUR, H)
+            B.sphere(f'Af_OhrInnen{s}{k}', (0.005, yy * 0.15, z + 0.01), (0.012, 0.035, 0.045), INNER, H)
+        B.sphere(f'Af_Mund{k}', (0.17, 0, z - 0.08), (0.03, 0.045, 0.01), MOUTH, H)
+        B.sphere(f'Af_Braue{k}', (0.12, 0, z + 0.085), (0.03, 0.08, 0.012), FUR, H, rot=(0, 0.25, 0))
+        if k == 'L':
+            B.sphere('Af_Kopftuch', (-0.01, 0, z + 0.07), (0.14, 0.138, 0.085), RED, H)
+            tube(SC, 'Af_TuchZipfel', [(-0.12, 0, z + 0.06), (-0.2, 0.02, z - 0.02), (-0.22, 0.05, z - 0.1)], 0.02, RED, H, tip=0.4)
+        if k == 'M':
+            B.cone('Af_Hutkrempe', z + 0.1, z + 0.115, 0.17, 0.17, HAT, H, scale=(0.9, 1, 1), bevel=0.005)
+            B.cone('Af_Hut', z + 0.11, z + 0.22, 0.12, 0.07, HAT, H, bevel=0.01)
+            B.sphere('Af_Totenkopf', (0.1, 0, z + 0.16), (0.012, 0.025, 0.022), WHITE, H)
+        if k == 'R':
+            B.torus('Af_Ohrring', (0.0, -0.17, z - 0.05), 0.022, 0.005, GOLD, H, rot=(math.pi / 2, 0, 0), seg=16, sseg=6)
+    for k, y in (('L', 1), ('R', -1)):
+        arm(B, 'Af_', k, R, (0, y * 0.36, 1.1), 0.3, 0.28, 0.065, FUR, FACE, hand_s=(0.06, 0.05, 0.07))
+    tube(SC, 'Af_Schwanz', [(-0.2, 0, 0.6), (-0.42, 0, 0.5), (-0.56, 0, 0.74), (-0.46, 0, 0.95), (-0.36, 0, 0.86)], 0.032, FUR, R, tip=0.45)
+    return dict(mouth='Af_MundM', eyes=('Af_AugeRM', 'Af_AugeLM'), hand='Af_HandR', abd=0.18)
+
+
 BUILD = {'sam': build_sam, 'max': build_max, 'dave': build_dave, 'guybrush': build_guybrush, 'jack': build_jack, 'salad': build_salad,
-         'bender': build_bender, 'prof': build_prof, 'zoid': build_zoid, 'glados': build_glados, 'simon': build_simon}
-PREFIX = {'sam': 'Sa_', 'max': 'Mx_', 'dave': 'Dv_', 'guybrush': 'Gb_', 'jack': 'Jk_', 'salad': 'Sf_', 'bender': 'Bd_', 'prof': 'Pf_', 'zoid': 'Zb_', 'glados': 'Ki_', 'simon': 'Sm_'}
+         'bender': build_bender, 'prof': build_prof, 'zoid': build_zoid, 'glados': build_glados, 'simon': build_simon, 'affe': build_affe}
+PREFIX = {'sam': 'Sa_', 'max': 'Mx_', 'dave': 'Dv_', 'guybrush': 'Gb_', 'jack': 'Jk_', 'salad': 'Sf_', 'bender': 'Bd_', 'prof': 'Pf_', 'zoid': 'Zb_', 'glados': 'Ki_', 'simon': 'Sm_',
+          'affe': 'Af_'}
+# Fecht-Turnier: Poolnudel (Farbe) und Super-Spritzer für drei zusätzliche Bilder; der Säbel bleibt dabei weg
+FECHTER = {'guybrush': '#7fe03a', 'jack': '#ff8a2a', 'salad': '#c87a3a', 'affe': '#ffd23a'}
+FECHT_FRAMES = [('nudel0', dict(aR=-1.45, eR=0.15, xR=0.1, aL=-0.3, eL=1.6, xL=0.6, nudel=1)),
+                ('nudel1', dict(aR=-1.6, eR=0.0, xR=0.25, aL=0.4, eL=0.6, xL=0.5, nudel=1)),
+                ('spritz', dict(aR=-1.5, eR=0.05, xR=0.15, aL=-1.3, eL=0.55, xL=-0.25, spritz=1))]
 # Posen: Schulter (seitlich, vor/zurück) und Ellbogen je Arm; Kopf-Neigung für die KI
 FRAMES = [('idle', {}), ('talk0', dict(aR=-0.75, eR=0.7, xR=-0.05)), ('talk1', dict(aR=-0.25, eR=0.6)),
           ('gest', dict(aR=-0.6, eR=0.9, xR=-0.5, aL=-0.4, eL=0.8, xL=0.4))]
@@ -394,6 +443,15 @@ def render(name):
     OB = bpy.data.objects
     head = OB.get(P + 'Head')
     head0 = tuple(head.rotation_euler) if head else None
+    props = {'nudel': [], 'spritz': [], 'sword': [OB[n] for n in (P + 'Klinge', P + 'Korb', P + 'Kompass') if OB.get(n)]}
+    if name in FECHTER:   # Poolnudel und Super-Spritzer in der rechten Hand, Bild breiter (sonst ragt die Nudel heraus)
+        import nudeln
+        importlib.reload(nudeln)
+        el, hand = OB[P + 'ElR'], OB[P + 'HandR']
+        props['nudel'] = [nudeln.nudel(SC, P + 'Nudel', el, tuple(hand.location), color=FECHTER[name])]
+        props['spritz'] = nudeln.tree(nudeln.spritzer(SC, P + 'Spritzer', el, tuple(hand.location)))
+        SC.render.resolution_x = 960
+        SC.camera.data.sensor_fit = 'VERTICAL'   # Höhe bleibt 3,5 m, also 240 px pro Meter wie immer
 
     def pose(p):
         if not info.get('noarms'):
@@ -404,6 +462,12 @@ def render(name):
             h = p.get('head')
             head.rotation_euler = h if h else head0
         R.location = (0, 0, p.get('lift', 0))
+        for o in props['nudel']:
+            o.hide_render = not p.get('nudel')
+        for o in props['spritz']:
+            o.hide_render = not p.get('spritz')
+        for o in props['sword']:
+            o.hide_render = bool(p.get('nudel') or p.get('spritz'))
 
     out = REPO + f'/art/render/{name}/'
     os.makedirs(out, exist_ok=True)
@@ -418,7 +482,7 @@ def render(name):
         return [round(q.x * W, 1), round((1 - q.y) * H, 1)]
 
     meta = {'res': [W, H], 'ppm': H / cam.data.ortho_scale, 'frames': []}
-    frames = FRAMES + EXTRA.get(name, [])
+    frames = FRAMES + EXTRA.get(name, []) + (FECHT_FRAMES if name in FECHTER else [])
     if info.get('noarms'):
         frames = [f for f in frames if f[0] in ('idle',)] + EXTRA.get(name, [])
     try:

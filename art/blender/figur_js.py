@@ -3,7 +3,7 @@
 # Aufruf aus dem Repo-Ordner:  python art/blender/figur_js.py
 import io, json, re
 
-GUESTS = ['sam', 'max', 'dave', 'guybrush', 'jack', 'salad', 'bender', 'prof', 'zoid', 'glados', 'simon']
+GUESTS = ['sam', 'max', 'dave', 'guybrush', 'jack', 'salad', 'bender', 'prof', 'zoid', 'glados', 'simon', 'affe']
 FIGS = ['bernard', 'hoagie', 'laverne', 'drfred', 'gertrude', 'hancock', 'green', 'lila', 'nett', 'guard'] + GUESTS
 TENT = {'green', 'lila', 'nett', 'guard'}   # Tentakel: ohne Augen, das Spiel verformt das Bild (tent3d in figuren3d.js)
 # Blinzeln: Lid-Ellipse (Halbachsen, Farbe; None = Hautfarbe aus dem Rendering) über den Augen-Ankern; Mund-Ellipse beim Reden
@@ -26,6 +26,7 @@ LOOK = {
     'zoid': dict(lid=[3.0, 3.6, None], mouth=[4.8, 3.6]),
     'glados': dict(lid=None, mouth=None),   # Auge leuchtet beim Sprechen (guest3d)
     'simon': dict(lid=[3.2, 3.8, None], mouth=[4.2, 3.4]),
+    'affe': dict(lid=[2.2, 2.6, None], mouth=[3.2, 2.4]),   # Mund und Lider am mittleren Kopf
 }
 rows = []
 for n in FIGS:

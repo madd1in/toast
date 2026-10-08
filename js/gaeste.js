@@ -182,7 +182,7 @@ const HAFEN_EBENEN = {"wolken": [121.5, 0.0, 813.0, 124.0], "vorn": [0.0, 34.5, 
 // </hafen-daten>
 
 // ---------- die Gäste ----------
-const GUESTS = ['dave', 'sam', 'max', 'salad', 'guybrush', 'jack', 'bender', 'prof', 'zoid', 'glados', 'simon'];
+const GUESTS = ['dave', 'sam', 'max', 'salad', 'guybrush', 'jack', 'affe', 'bender', 'prof', 'zoid', 'glados', 'simon'];
 const GUEST_DEF = {
   dave: { name: 'Dave', from: 'Maniac Mansion', color: '#ff8a8a', h: 200, bw: 50, room: 'lobby', x: 800, y: 418, dir: -1, voice: [1.05, 1.0, 230, 'square', 'm', 1.0, 1.05],
     look: 'Ein Typ im roten Pulli, der sich umsieht, als wüsste er genau, wo hier der Keller ist.', role: 'Held aus Maniac Mansion · 80er', bio: 'Ist schon einmal in diese Villa eingebrochen, um seine Freundin zu retten. Kennt jede Geheimtür und hat Respekt vor Mikrowellen.' },
@@ -204,6 +204,8 @@ const GUEST_DEF = {
     look: 'Ein krabbenartiger Doktor mit Mundtentakeln im Laborkittel. Er winkt mit den Scheren. Sehr freundlich. Sehr nass.', role: 'Arzt (für Menschen, angeblich) · Futurama', bio: 'Hält sich für einen Experten für Menschen. Hat noch nie einen Patienten geheilt, aber schon viele erschreckt.' },
   glados: { name: 'GLaDOS', from: 'Portal', sig: '— GLaDOS —', color: '#ffe066', h: 300, bw: 70, room: 'testkammer', x: 392, y: 236, dir: -1, voice: [1.0, 0.9, 330, 'sine', 'f', 0.95, 0.88],
     scaleMul: 1.25, shadowW: 0.01, look: 'Eine riesige weiße Maschine hängt kopfüber von der Decke und mustert mich mit einem gelben Auge. Sie lächelt. Glaube ich.', role: 'Sicherheits-KI Seiner Lilaheit · Portal', bio: 'Testet alles und jeden. Verspricht Kuchen. Hält Sarkasmus für eine Form von Fürsorge.' },
+  affe: { name: 'Dreiköpfiger Affe', card: 'Dreik. Affe', sig: 'Affe³', from: 'Piraten-Legenden', color: '#d8a060', h: 170, bw: 64, room: 'hafen', x: 470, y: 424, dir: 1, voice: [1.35, 1.15, 380, 'square', 'm', 1.2, 1.15],
+    look: 'Ein Affe mit drei Köpfen: einer mit Kopftuch, einer mit Dreispitz, einer mit Ohrring. Sie reden gleichzeitig. Meistens übereinander.', role: 'Legende der Karibik · Piraten-Running-Gag', bio: 'Taucht immer auf, wenn jemand „Hinter dir!“ ruft. Drei Köpfe, ein Magen, null Einigkeit. Ficht mit einer Bananen-Poolnudel.' },
   simon: { name: 'Simon', from: 'Simon the Sorcerer', color: '#c08aff', h: 240, bw: 56, room: 'thron', x: 232, y: 420, dir: 1, voice: [1.1, 1.05, 250, 'square', 'm', 1.04, 1.06],
     look: 'Ein Junge in lila Robe mit riesigem Zauberhut. Er rollt mit den Augen. Bei allem.', role: 'Zauberlehrling · Simon the Sorcerer', bio: 'Kam durch ein Portal in eine Märchenwelt und findet alle Märchen albern. Der Hut macht angeblich 80 Prozent der Magie.' },
 };
@@ -214,6 +216,7 @@ for (const id of GUESTS) {
   START_POS[id] = { room: d.room, x: d.x, y: d.y, dir: d.dir };
   BIOS[id] = { role: d.role, bio: d.bio };
 }
+START_POS.affe.visible = false;   // schwingt sich erst nach Jacks Niederlage auf den Steg
 ACH.push({ id: 'fechten', name: 'Beleidigungsfechter', desc: 'Den Möchtegern-Piraten mit Worten besiegt.' },
   { id: 'gaeste', name: 'Dimensions-Flicker', desc: 'Alle Crossover-Gäste haben sich ins Gästebuch eingetragen.' });
 
@@ -224,7 +227,8 @@ const GAST_IDLE = {
   sam: (a, t) => gesture(a, t) > 0.45 && 'gest',
   max: (a, t) => { const k = idleAct(a, t, 5200, 900); return k >= 0 && (Math.floor(k * 6) % 2 ? 'jump' : 'gest'); },   // hibbelt herum
   salad: (a, t) => { const k = idleAct(a, t, 9000, 3200); return k >= 0 && 'touch'; },   // streichelt die Luft
-  guybrush: (a, t) => a.duel ? (G.t - (a.lunge || -1e9) < 650 ? 'lunge' : 'engarde') : gesture(a, t) > 0.45 && 'engarde',
+  guybrush: (a, t) => gesture(a, t) > 0.45 && 'engarde',
+  affe: (a, t) => gesture(a, t) > 0.45 && 'gest',
   jack: (a, t) => { const k = idleAct(a, t, 8000, 2600); return k >= 0 && 'compass'; },   // schaut auf den Kompass
   bender: (a, t) => { const k = idleAct(a, t, 10000, 3000); return k >= 0 && 'lean'; },
   prof: (a, t) => gesture(a, t) > 0.45 && 'news',   // Zeigefinger hoch: gute Neuigkeiten!
@@ -233,7 +237,7 @@ const GAST_IDLE = {
   simon: (a, t) => gesture(a, t) > 0.45 && 'gest',
 };
 for (const id of GUESTS) {
-  ACT[id].frameOverride = (a, t) => (id === 'glados' || id === 'guybrush' && a.duel || !a.talking && !a.walking) && GAST_IDLE[id](a, t);
+  ACT[id].frameOverride = (a, t) => a.duel && FIG3D[id] && FIG3D[id].f.nudel0 ? duelFrame(a) : (id === 'glados' || !a.talking && !a.walking) && GAST_IDLE[id](a, t);
   CHAR[id] = (c, a, t) => {
     if (fig3d(c, a, t)) { gastExtras(c, a, t, id); return; }
     const d = FIG3D[id];
@@ -273,7 +277,7 @@ async function gbSign(...ids) {
     await wait(700);
     await fadeTo(1, 400, 'black'); G.caption = 'Unterdessen im Labor ...'; Sound.sfx('ding'); await wait(1600); G.caption = null;
     const keep = G.viewRoom; G.viewRoom = 'labor'; await fadeTo(0, 400, 'black');
-    await say('drfred', 'Das Gästebuch ist voll! Elf Unterschriften aus elf Welten – damit kann ich den Riss endlich berechnen!');
+    await say('drfred', 'Das Gästebuch ist voll! Zwölf Unterschriften aus elf Welten – plus ein Affe mit drei Köpfen. Damit kann ich den Riss endlich berechnen!');
     await say('drfred', 'Ich flicke ihn nicht zu. Ich baue ihn zu einem Tor um! Dann können unsere Gäste kommen und gehen, wie sie wollen.');
     await say('drfred', 'Und wer weiß – vielleicht kommt eines Tages Besuch aus noch mehr Welten. Wissenschaft!');
     await fadeTo(1, 400, 'black'); G.viewRoom = keep; await fadeTo(0, 400, 'black');
@@ -440,9 +444,11 @@ ACT.salad.talk = async () => {
   for (;;) {
     const c = await choose([{ id: 'wer', text: 'Wer bist du, Mann?' }, { id: 'tun', text: 'Was machst du da?' },
       !fl().saladOk && !fl().eimer && fl().eimerGesperrt && { id: 'eimer', text: 'Darf ich mir Herrn Eimer mal ausleihen?' },
+      fl().saladDuell && { id: 'duell', text: fl().saladSieg ? 'Noch eine Runde Fechten, Salad?' : 'Der Affe sagt, du fichtst mit Rost. Finale?' },
       !gbOk(s_) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Ich geh dann mal … ganz langsam.' }]);
     if (c === 'bye') { await say(h, 'Ich geh dann mal … ganz langsam.'); await say(s_, 'Pass auf dich auf. Und auf deine Finger. Finger sind kostbar.'); return; }
     if (c === 'eimer') await SALAD_EIMER(h);
+    if (c === 'duell') await SALAD_FINALE(h);
     if (c === 'wer') { await say(h, 'Wer bist du, Mann?'); await say(s_, 'Ich bin Salad Fingers. Ich fühle gern Dinge. Am liebsten rostige Dinge. Rost ist wie eine Umarmung, die nach Metall riecht.'); }
     if (c === 'tun') {
       await say(h, 'Was machst du da?'); await say(s_, 'Ich höre dem Brunnen zu. Er hat einen sehr schönen Eimer. Ich wünschte, ich dürfte ihn halten.');
@@ -455,7 +461,10 @@ ACT.salad.talk = async () => {
   }
 };
 
-// Beleidigungsfechten: drei Beleidigungen, jede braucht die passende Antwort
+// ---------- Das große Beleidigungsfecht-Turnier 1776 ----------
+// Vier Gegner nacheinander: Guybrush, Käpt’n Jack, der dreiköpfige Affe und Salad Fingers – alle mit Poolnudel.
+// Jede Beleidigung braucht die passende Antwort (sie dreht die Beleidigung um). Lebensbalken wie bei Street Fighter II:
+// vier Punkte pro Seite, drei Treffer in Folge zünden die Spezial-Kombo: den Super-Spritzer (doppelter Schaden).
 const INSULTS = [
   ['Du fichtst wie ein Tentakel ohne Rückgrat!', 'Passend – du redest wie einer ohne Hirn.'],
   ['Mein Säbel ist schärfer als dein Verstand!', 'Dann benutz ihn doch mal zum Denken.'],
@@ -464,37 +473,124 @@ const INSULTS = [
   ['Selbst das Huhn im Garten ficht eleganter als du!', 'Klar, du hast ja auch von ihm gelernt.'],
   ['Ich habe schon Gegner zum Frühstück verspeist!', 'Darum siehst du auch so verdorben aus.'],
 ];
-const DECOYS = ['Ach ja? Ach JA?!', 'Hinter dir! Ein dreiköpfiger Affe!', 'Das sag ich meiner Mama.', 'Ich bin Gummi, du bist Kleber!', 'Äh … Rock ’n’ Roll?', 'Na und? Ich hab ’ne Mütze.'];
+const DECOYS = ['Ach ja? Ach JA?!', 'Hinter dir! Ein dreiköpfiger Affe!', 'Das sag ich meiner Mama.', 'Ich bin Gummi, du bist Kleber!', 'Äh … Rock ’n’ Roll?', 'Na und? Ich hab ’ne Mütze.', 'Deine Nudel ist … äh … nudelig!'];
+const FECHTER = {
+  guybrush: { label: 'GUYBRUSH', runde: 1, spezial: 'GROG-SPRITZER!', insults: INSULTS,
+    hit: ['Touché!', 'Argh. Das saß.', 'Woher kennst du die?!'], miss: ['Ha! Das war schwach.', 'Netter Versuch, Landratte.', 'Damit beleidigst du höchstens meine Nudel.'],
+    ko: 'Uaaah … Ich bin besiegt! Mit Worten!', win: 'Und das war’s! Ich bin der Größte!' },
+  jack: { label: 'KÄPT’N JACK', runde: 2, spezial: 'RUM-SPRITZER!', insults: [
+    ['Du hast so viel Mut wie ein Fass ohne Rum!', 'Und du so viel Rum wie ein Fass ohne Boden.'],
+    ['Mein Kompass zeigt auf alles – nur nie auf dich!', 'Kein Wunder, er zeigt ja auch nie auf dein Schiff.'],
+    ['Ich bin der berühmteste Pirat aller Zeiten!', 'Berühmt fürs Schiff-Verlieren, ja.'],
+    ['Du wirst den Tag verfluchen, an dem du mich getroffen hast!', 'Zu spät – das tue ich schon seit drei Minuten.'],
+    ['Einen wie dich lasse ich kielholen!', 'Dafür bräuchtest du erst mal einen Kiel.'],
+    ['Du riechst nach Landratte und nach Angst!', 'Und du nach Rum und nach Ausreden.'],
+  ], hit: ['Autsch. Das war … fast elegant.', 'Hm. Darauf trinke ich später.', 'Na schön, das war gut. Sag’s keinem.'], miss: ['Savvy? Nein? Dachte ich mir.', 'Das war so schwach, dass mein Hut lacht.', 'Ein Pirat lacht über so was. Ha. Ha.'],
+    ko: 'Besiegt … von einem Mann mit Kappe. Das schreibe ich nicht ins Logbuch.', win: 'Und so endet die Legende vom Mann mit der Kappe. Kurz.' },
+  affe: { label: 'DREIKÖPFIGER AFFE', runde: 3, spezial: 'BANANEN-SPRITZER!', insults: [
+    ['„Wir sind …“ – „… dreimal …“ – „… so klug wie du!“', 'Dreimal null ist immer noch null.'],
+    ['„Drei Köpfe …“ – „… denken besser …“ – „… als einer!“', 'Bei euch denkt ja auch keiner von dreien.'],
+    ['„Sechs Augen …“ – „… sind auf dich …“ – „… gerichtet!“', 'Und trotzdem habt ihr nichts gesehen.'],
+    ['„Unser Gebrüll …“ – „… hört man …“ – „… bis zur nächsten Insel!“', 'Kein Wunder, ihr brüllt ja auch dreimal dasselbe.'],
+    ['„Wir fressen dich …“ – „… mit drei …“ – „… Mäulern!“', 'Dann streitet ihr euch wenigstens um was Gutes.'],
+    ['„Hinter dir …“ – „… ein einköpfiger …“ – „… Mensch!“', 'Den Trick kenne ich – mit mehr Köpfen.'],
+  ], hit: ['„Au!“ – „Au!“ – „Wieso hat’s mich auch getroffen?“', '„Der war gut.“ – „Nein.“ – „Doch.“', '„Wir hassen ihn.“ – „Ein bisschen.“ – „Ich mag ihn.“'], miss: ['„Ha!“ – „Ha!“ – „Haha!“', '„Schwach.“ – „Sehr schwach.“ – „Dreifach schwach.“', '„Der hat …“ – „… keine …“ – „… Ahnung!“'],
+    ko: '„Wir …“ – „… sind …“ – „… besiegt.“ *plumps*', win: '„Gewonnen!“ – „Gewonnen!“ – „Wer hat eigentlich gekämpft?“' },
+  salad: { label: 'SALAD FINGERS', runde: 4, spezial: 'ROSTWASSER-SPRITZER!', insults: [
+    ['Deine Finger sind so kurz … und so traurig …', 'Und deine so lang, dass sie zweimal traurig sind.'],
+    ['Ich habe mit Löffeln gekämpft, die mehr Rost hatten als du Mut.', 'Dann hattest du endlich mal Gegner in deiner Größe.'],
+    ['Du fühlst dich an wie ein nasser Teppich …', 'Und du siehst aus wie einer.'],
+    ['Ich nenne dich ab jetzt „Herr Staub“ …', 'Sehr gern, Herr Rost.'],
+    ['Meine Freunde haben keine Gesichter … und trotzdem lachen sie über dich.', 'Ohne Gesicht lacht man aber sehr leise.'],
+    ['Deine Nudel ist so schlapp wie eine Gurke im Regen …', 'Deine Finger auch – und die sollen sogar fechten.'],
+  ], hit: ['Oh … das hat mich … gekitzelt …', 'Autsch … wie ein rostiger Nagel. Schön.', 'Du bist sehr … unfreundlich. Ich mag das.'], miss: ['Hihi … deine Worte sind ganz weich …', 'Das hat Herr Rostnagel schöner gesagt.', 'Psst … der Zaun lacht über dich …'],
+    ko: 'Oh … ich bin … ganz … nass … und besiegt …', win: 'Jetzt darf ich deine Finger streicheln. Das war die Abmachung. Glaube ich.' },
+};
 function shuffled(a) { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; }
-// Street-Fighter-Duell: gefochten wird, bis einer K.O. ist – drei Treffer gegen Guybrush, drei Fehler verträgt man selbst
-async function insultDuel(p) {
-  const g = ACT.guybrush; g.duel = 1; let hpP = 3, hpG = 3;
-  G.duelHud = { p, hp: { p: 1, g: 1 }, show: { p: 1, g: 1 }, trail: { p: 1, g: 1 }, hitT: { p: -1e9, g: -1e9 }, t0: G.t, last: G.t, timer: 99, msg: 'RUNDE 1', msgT: G.t };
+const DUEL_HP = 4;
+// Haltung während des Duells: Poolnudel en garde, Ausfallschritt beim Treffer, Super-Spritzer bei der Spezial-Kombo
+function duelFrame(a) { return a.spritzT && G.t - a.spritzT < 1500 ? 'spritz' : G.t - (a.lunge || -1e9) < 650 ? 'nudel1' : 'nudel0'; }
+async function insultDuel(p, opp = 'guybrush') {
+  const D = FECHTER[opp], g = ACT[opp], h = ACT[p];
+  // Aufstellung: gut zwei Schritte Abstand, Blick zueinander
+  const side = h.x > g.x ? 1 : -1, ax = Math.max(60, Math.min(900, g.x + side * 176));
+  await walkTo(p, ax, g.y); h.dir = -side; g.dir = side;
+  const fo = h.frameOverride; h.frameOverride = a => a.duel && FIG3D[a.kind] && FIG3D[a.kind].f.nudel0 ? duelFrame(a) : fo && fo(a, G.t);
+  g.duel = h.duel = 1;
+  let hpP = DUEL_HP, hpG = DUEL_HP, strP = 0, strG = 0;
+  G.duelHud = { p, opp, hp: { p: 1, g: 1 }, show: { p: 1, g: 1 }, trail: { p: 1, g: 1 }, hitT: { p: -1e9, g: -1e9 }, str: { p: 0, g: 0 }, t0: G.t, last: G.t, timer: 99, msg: `RUNDE ${D.runde}`, msgT: G.t, jet: null };
   Sound.sfx('ding');
   try {
     await wait(1000); duelMsg('FECHTET!'); await wait(800);
-    let pool = shuffled(INSULTS);
+    let pool = shuffled(D.insults);
     while (hpP > 0 && hpG > 0) {
-      if (!pool.length) pool = shuffled(INSULTS);
+      if (!pool.length) pool = shuffled(D.insults);
       const [ins, ret] = pool.pop();
-      await say('guybrush', ins);
+      await say(opp, ins);
       const opts = shuffled([ret, ...shuffled(DECOYS).slice(0, 2)]).map((t, i) => ({ id: t === ret ? 'ok' : 'x' + i, text: t }));
       const c = await choose(opts);
       await say(p, opts.find(o => o.id === c).text);
       if (c === 'ok') {
-        hpG--; G.duelHud.hp.g = hpG / 3; G.duelHud.hitT.g = G.t; g.lunge = G.t; Sound.sfx('saber'); shake(260, 3);
-        await say('guybrush', hpG ? pick(['Touché!', 'Argh. Das saß.', 'Woher kennst du die?!']) : 'Uaaah … Ich bin besiegt! Mit Worten!');
+        strP++; strG = 0;
+        if (strP >= 3) { strP = 0; await spritzer(p, opp, 'SUPER-SPRITZER!'); hpG -= 2; }
+        else { hpG--; h.lunge = G.t; Sound.sfx('saberswing'); shake(260, 3); }
+        G.duelHud.hitT.g = G.t;
+        await say(opp, hpG > 0 ? pick(D.hit) : D.ko);
       } else {
-        hpP--; G.duelHud.hp.p = hpP / 3; G.duelHud.hitT.p = G.t; Sound.sfx('bad'); shake(320, 5);
-        await say('guybrush', hpP ? pick(['Ha! Das war schwach.', 'Netter Versuch, Landratte.', 'Damit beleidigst du höchstens meinen Säbel.']) : 'Und das war’s! Ich bin der Größte!');
+        strG++; strP = 0;
+        if (strG >= 3) { strG = 0; await spritzer(opp, p, D.spezial); hpP -= 2; }
+        else { hpP--; g.lunge = G.t; Sound.sfx('bad'); shake(320, 5); }
+        G.duelHud.hitT.p = G.t;
+        await say(opp, hpP > 0 ? pick(D.miss) : D.win);
       }
+      hpP = Math.max(0, hpP); hpG = Math.max(0, hpG);
+      Object.assign(G.duelHud.hp, { p: hpP / DUEL_HP, g: hpG / DUEL_HP }); Object.assign(G.duelHud.str, { p: strP, g: strG });
     }
-    duelMsg(hpG === 0 ? (hpP === 3 ? 'PERFEKT!' : 'K.O.!') : 'K.O. …'); Sound.sfx(hpG === 0 ? 'achieve' : 'bad');
+    duelMsg(hpG === 0 ? (hpP === DUEL_HP ? 'PERFEKT!' : 'K.O.!') : 'K.O. …'); Sound.sfx(hpG === 0 ? 'achieve' : 'bad');
     await wait(1500);
-  } finally { g.duel = 0; G.duelHud = null; }
-  return hpG === 0 ? 3 : 3 - hpG;
+  } finally { g.duel = h.duel = 0; G.duelHud = null; h.frameOverride = fo; }
+  return hpG === 0;
+}
+// Spezial-Kombo: der Angreifer zückt den Super-Spritzer, ein Wasserstrahl trifft den Gegner am Kopf
+async function spritzer(from, to, name) {
+  const a = ACT[from];
+  a.spritzT = G.t; duelMsg(name); Sound.sfx('whoosh');
+  if (G.duelHud) G.duelHud.jet = { from, to, t0: G.t + 350 };
+  await wait(700); Sound.sfx('splash'); shake(520, 6); ACT[to].nassT = G.t;
+  await wait(800);
 }
 function duelMsg(text) { if (G.duelHud) { G.duelHud.msg = text; G.duelHud.msgT = G.t; } }
+// Wasserstrahl und Tropfen (in Raum-Koordinaten, nach den Figuren gezeichnet)
+function drawDuelFx() {
+  const d = G.duelHud, room = G.state && ROOMS[viewRoomId()];
+  if (!room) return;
+  for (const id of ['hoagie', 'guybrush', 'jack', 'affe', 'salad']) {   // nass: Tropfen fallen vom Kopf
+    const v = ACT[id]; if (!v || v.room !== room.id || !v.nassT || G.t - v.nassT > 2600) continue;
+    const sc = roomScale(room, v.y) * (v.scaleMul || 1), k = (G.t - v.nassT) / 2600;
+    for (let i = 0; i < 7; i++) {
+      const u = ((G.t - v.nassT) * 0.0016 + i * 0.37) % 1, x = v.x + (hash01(i * 7) - 0.5) * 50 * sc, y = v.y - v.h * sc * (0.95 - u * 0.5);
+      cx.save(); cx.globalAlpha = (1 - k) * (1 - u) * 0.9; E(cx, x, y, 2.2 * sc + 0.6, 3.2 * sc + 0.8, '#9ad8ff', 1, 0, '#3a7ab8'); cx.restore();
+    }
+  }
+  const j = d && d.jet; if (!j || G.t < j.t0 || G.t - j.t0 > 1100) return;
+  const a = ACT[j.from], b = ACT[j.to], f = a._fig, sa = roomScale(room, a.y) * (a.scaleMul || 1), sb = roomScale(room, b.y) * (b.scaleMul || 1), dir = a.dir < 0 ? -1 : 1;
+  const hx = f ? f[12] : 30, hy = f ? f[13] : -120;
+  const x0 = a.x + (hx + 44) * sa * dir, y0 = a.y + (hy - 10) * sa, x1 = b.x - dir * 10 * sb, y1 = b.y - b.h * sb * 0.86;
+  const k = Math.min(1, (G.t - j.t0) / 320), fade = Math.min(1, (1100 - (G.t - j.t0)) / 250), n = 26;
+  cx.save(); cx.globalAlpha = fade; cx.lineCap = 'round';
+  const pt = u => [x0 + (x1 - x0) * u, y0 + (y1 - y0) * u - Math.sin(Math.PI * u) * 26];
+  for (const [w, col] of [[17, 'rgba(40,110,190,0.5)'], [11, '#8ad4ff'], [4, 'rgba(255,255,255,0.85)']]) {
+    cx.strokeStyle = col; cx.lineWidth = w * Math.min(sa, 1.1); cx.beginPath();
+    for (let i = 0; i <= n * k; i++) { const u = i / n, [x, y] = pt(u), wob = Math.sin(G.t * 0.05 + i * 1.3) * 1.6; i ? cx.lineTo(x, y + wob) : cx.moveTo(x, y); }
+    cx.stroke();
+  }
+  if (k >= 1) for (let i = 0; i < 12; i++) {   // Spritzer am Kopf
+    const ang = -Math.PI * (0.1 + 0.8 * hash01(i * 3.1)), r = 10 + ((G.t - j.t0 - 320) * 0.06 + hash01(i) * 20) % 34;
+    E(cx, x1 + Math.cos(ang) * r * -dir, y1 + Math.sin(ang) * r, 2.6, 2.6, '#bfe8ff', 1, 0, '#3a7ab8');
+  }
+  cx.restore();
+}
+{ const saberOhneDuell = drawSaber; drawSaber = function () { saberOhneDuell(); drawDuelFx(); }; }
 // Lebensbalken wie bei Street Fighter II: laufen von der Mitte aus leer, rote Spur zieht verzögert nach
 function drawDuelHud() {
   const d = G.duelHud; if (!d || G.screen !== 'game') return;
@@ -513,18 +609,20 @@ function drawDuelHud() {
     if (tw > 0) R(cx, dir > 0 ? xo : xo - tw, y, tw, bh, '#e8262e', 0, 1);
     if (sw > 0) R(cx, dir > 0 ? xo : xo - sw, y, sw, bh, d.show[k] < 0.4 && Math.floor(G.t / 160) % 2 ? '#fff08a' : '#ffd23a', 0, 1);
     if (sw > 0) R(cx, dir > 0 ? xo : xo - sw, y + 2, sw, 5, 'rgba(255,255,255,0.45)', 0, 1);
+    for (let i = 1; i < DUEL_HP; i++) L(cx, [x0 + dir * bw * i / DUEL_HP, y, x0 + dir * bw * i / DUEL_HP, y + bh], 1.5, 'rgba(27,16,32,0.55)');
+    // Kombo-Anzeige: zwei Treffer in Folge – der nächste zündet den Spritzer
+    const st = d.str[k];
+    if (st >= 1) txt(cx, st >= 2 ? (Math.floor(G.t / 200) % 2 ? 'SPEZIAL BEREIT!' : 'KOMBO ×2') : 'KOMBO ×1', dir > 0 ? x0 : x0, y + bh + 20, '400 15px "Titan One", sans-serif', st >= 2 ? '#7fe8ff' : '#ffffff', dir > 0 ? 'left' : 'right', 4, '#1b1020');
   };
   bar('p', cxm - bw - 44, 1); bar('g', cxm + bw + 44, -1);
-  // K.O.-Abzeichen und Rundenuhr in der Mitte
   P(cx, [cxm - 26, y - 6, cxm + 26, y - 6, cxm + 20, y + bh + 6, cxm - 20, y + bh + 6], '#d8262e', 2.5);
   txt(cx, 'KO', cxm, y + 17, '400 20px "Titan One", sans-serif', '#ffd23a', 'center', 4, '#1b1020');
   txt(cx, String(d.timer).padStart(2, '0'), cxm, y + 58, '400 32px "Titan One", sans-serif', '#ffffff', 'center', 6, '#1b1020');
-  txt(cx, ACT[d.p].name.toUpperCase(), cxm - bw - 44, y + 46, '400 18px "Titan One", sans-serif', '#ffd23a', 'left', 5, '#1b1020');
-  txt(cx, 'GUYBRUSH', cxm + bw + 44, y + 46, '400 18px "Titan One", sans-serif', '#ffd23a', 'right', 5, '#1b1020');
-  // Ansage groß in der Mitte
+  txt(cx, ACT[d.p].name.toUpperCase(), cxm - bw - 44, y + 62, '400 18px "Titan One", sans-serif', '#ffd23a', 'left', 5, '#1b1020');
+  txt(cx, FECHTER[d.opp].label, cxm + bw + 44, y + 62, '400 18px "Titan One", sans-serif', '#ffd23a', 'right', 5, '#1b1020');
   const mt = G.t - d.msgT;
   if (d.msg && mt < 1400) {
-    const k = Math.min(1, mt / 180), a = mt > 1100 ? 1 - (mt - 1100) / 300 : 1, sz = Math.round(70 * (1.6 - 0.6 * k));
+    const k = Math.min(1, mt / 180), a = mt > 1100 ? 1 - (mt - 1100) / 300 : 1, sz = Math.round(Math.min(70, 1100 / Math.max(6, d.msg.length)) * (1.6 - 0.6 * k));
     cx.save(); cx.globalAlpha = Math.max(0, a);
     txt(cx, d.msg, cxm, 230, `400 ${sz}px "Titan One", sans-serif`, '#ffd23a', 'center', 10, '#9a1018');
     cx.restore();
@@ -534,6 +632,20 @@ G.duelHud = null;
 {
   const hudOhneDuell = drawHUD; drawHUD = function () { hudOhneDuell(); drawDuelHud(); };
   const uiOhneDuell = drawUI; drawUI = function () { uiOhneDuell(); drawDuelHud(); };
+}
+// „Ein neuer Herausforderer!“ – Ansage quer über den Bildschirm
+function drawChallenger() {
+  const t0 = G.challengerT; if (!t0 || G.t - t0 > 2600) return;
+  const k = (G.t - t0) / 2600, a = Math.min(1, k * 8, (1 - k) * 6);
+  cx.save(); cx.globalAlpha = a;
+  R(cx, 0, 150, W, 96, 'rgba(20,6,30,0.82)', 0, 0);
+  const x = W / 2 + (1 - Math.min(1, k * 5)) * 400;
+  txt(cx, 'EIN NEUER HERAUSFORDERER!', x, 212, '400 44px "Titan One", sans-serif', Math.floor(G.t / 120) % 2 ? '#ffd23a' : '#ff5a3a', 'center', 8, '#1b1020');
+  cx.restore();
+}
+{
+  const hud2 = drawHUD; drawHUD = function () { hud2(); drawChallenger(); };
+  const ui2 = drawUI; drawUI = function () { ui2(); drawChallenger(); };
 }
 ACT.guybrush.talk = async () => {
   const g = 'guybrush', h = curId();
@@ -551,13 +663,13 @@ ACT.guybrush.talk = async () => {
     if (c === 'duell') {
       await say(h, gbOk(g) ? 'Noch eine Runde?' : 'Ich fordere dich heraus!');
       await say(g, 'En garde! Drei Beleidigungen. Drei Antworten. Kein Erbarmen.');
-      const pts = await insultDuel(h);
-      if (pts === 3) {
-        await say(g, 'Drei von drei … Du kämpfst wie ein Roadie! Das ist ein Kompliment.');
+      const sieg = await insultDuel(h, g);
+      if (sieg) {
+        await say(g, 'Mit einer Poolnudel besiegt … Du kämpfst wie ein Roadie! Das ist ein Kompliment.');
         unlock('fechten'); fl().fechtSieg = 1;
         if (!gbOk(g)) { await say(g, 'Ich trage mich in dein Buch ein. Mit Schnörkel, wie ein echter Pirat.'); await gbSign(g); }
-        if (!fl().schaufel) await say(g, 'Und sag Käpt’n Jack, dass du mich besiegt hast. Dann hält er dich für einen echten Piraten. Mich hält er für einen Pudel.');
-      } else await say(g, `${pts} von 3. Übung macht den Piraten. Merk dir: Die Antwort muss die Beleidigung umdrehen!`);
+        if (!fl().jackSieg) await say(g, 'Das war Runde eins des großen Turniers. Runde zwei ist Käpt’n Jack. Sag ihm, dass du mich besiegt hast – dann fordert er dich heraus.');
+      } else await say(g, 'Übung macht den Piraten. Merk dir: Die Antwort muss die Beleidigung umdrehen! Und drei Treffer hintereinander zünden den Super-Spritzer.');
     }
   }
 };
@@ -838,13 +950,59 @@ async function JACK_SCHAUFEL(h) {
     fl().jackDuell = 1;
     return;
   }
-  await say(h, 'Ich hab Guybrush besiegt. Drei Beleidigungen, drei Konter.');
-  await say(j, 'Den Blonden? Mit Worten? Dann bist du ein Pirat. Ein haariger, aber ein Pirat.');
+  if (!fl().jackSieg) {
+    await say(h, 'Ich hab Guybrush besiegt. Mit einer Poolnudel!');
+    await say(j, 'Den Blonden? Der fechtet wie ein Pudel mit Schnupfen. Ein echter Pirat besiegt einen KÄPT’N.');
+    await say(j, 'Runde zwei, Kumpel. *zieht eine orange Poolnudel aus dem Mantel* Ja, ich hab auch eine. Frag nicht, wo die herkommt.');
+    if (!await insultDuel(h, j)) { await say(j, 'Komm wieder, wenn deine Zunge so scharf ist wie mein Hut schief.'); return; }
+    fl().jackSieg = 1;
+    await say(j, 'Besiegt. Von einer Kappe. Gut, dann bist du ein Pirat. Ein haariger, aber ein Pirat.');
+  }
   await say(j, 'Hier, die Schaufel. Der Schatz ist eh nicht da drunter. Er ist nie da, wo man gräbt. Das ist das Geheimnis aller Schätze.');
   Sound.sfx('pick'); fl().schaufel = true; addItem('schaufel', h);
   await say(h, 'Danke, Käpt’n! Jetzt kann ich endlich den Apfelbaum pflanzen.');
   if (!gbOk(j)) { await say(j, 'Und weil du Stil hast: *kritzelt ein Herz mit Totenkopf ins Buch* Unterschrieben.'); await gbSign(j); }
+  if (!fl().affeDa) await AFFE_AUFTRITT(h);
 }
+// Runde drei: der dreiköpfige Affe schwingt sich auf den Steg (danach optional; Runde vier ist Salad Fingers im Garten)
+async function AFFE_AUFTRITT(h) {
+  const af = ACT.affe;
+  fl().affeDa = 1; G.challengerT = G.t; Sound.sfx('fanfare');
+  Object.assign(af, { room: 'hafen', x: 980, y: 424, dir: -1, visible: true });
+  await wait(900);
+  await walkTo('affe', 450, 424, true); af.dir = -1;
+  await say('affe', '„Hat hier jemand …“ – „… dreiköpfiger Affe …“ – „… gesagt?“');
+  await say(h, 'Whoa. Den gibt’s wirklich?!');
+  await say('affe', '„Wir fordern dich heraus!“ – „Alle drei!“ – „Nacheinander. Oder gleichzeitig. Je nachdem.“');
+  const c = await choose([{ id: 'jetzt', text: 'Na los, Affe. Nudel raus!' }, { id: 'spaeter', text: 'Später, Mann. Ich muss erst einen Baum pflanzen.' }]);
+  if (c === 'jetzt') return AFFE_DUELL(h);
+  await say(h, 'Später, Mann. Ich muss erst einen Baum pflanzen.');
+  await say('affe', '„Feigling!“ – „Nein, Gärtner.“ – „Ist das nicht dasselbe?“');
+}
+async function AFFE_DUELL(h) {
+  await say(h, 'Na los, Affe. Nudel raus!');
+  await say('affe', '„Runde drei!“ – „Wir zählen mit!“ – „Bis drei. Mehr können wir nicht.“');
+  if (!await insultDuel(h, 'affe')) { await say('affe', '„Gewonnen!“ – „Wir!“ – „Wer ist wir?“'); return; }
+  fl().affeSieg = 1;
+  await say('affe', '„Respekt.“ – „Viel Respekt.“ – „Ein bisschen Respekt.“');
+  if (!gbOk('affe')) { await say('affe', '„Wir unterschreiben!“ – „Ich zuerst!“ – „Wir haben nur einen Stift!“'); await gbSign('affe'); }
+  await say('affe', '„Aber der wahre Meister …“ – „… wohnt im Garten.“ – „Der Grüne mit den Fingern. Er ficht mit Rost.“');
+  fl().saladDuell = 1;
+}
+ACH.push({ id: 'fechtmeister', name: 'Turniersieger 1776', desc: 'Guybrush, Käpt’n Jack, den dreiköpfigen Affen und Salad Fingers im Beleidigungsfechten besiegt.' });
+BARKS.affe = ['„Hinter dir!“ – „Wo?“ – „Bei dir!“', '„Ich hab Hunger.“ – „Ich auch.“ – „Wir haben einen Magen.“', '„Banane?“ – „Banane!“ – „BANANE!“'];
+ACT.affe.talk = async () => {
+  const h = curId();
+  await say('affe', pick(['„Ja?“ – „Was?“ – „Wer hat geklingelt?“', '„Wir hören zu.“ – „Ich nicht.“ – „Ich halb.“']));
+  for (;;) {
+    const c = await choose([{ id: 'wer', text: 'Wer … oder was … seid ihr?' }, !fl().affeSieg && { id: 'duell', text: 'Na los, Affe. Nudel raus!' },
+      fl().affeSieg && { id: 'revanche', text: 'Noch eine Runde?' }, { id: 'bye', text: 'Tschüss. Euch allen.' }]);
+    if (c === 'bye') { await say(h, 'Tschüss. Euch allen.'); await say('affe', '„Tschüss!“ – „Tschüss!“ – „Wohin gehen wir?“'); return; }
+    if (c === 'wer') { await say(h, 'Wer … oder was … seid ihr?'); await say('affe', '„Wir sind …“ – „… eine Legende!“ – „Jeder ruft „Hinter dir!“, und dann sind wir da.“'); await say(h, 'Und wie heißt ihr?'); await say('affe', '„Links.“ – „Mitte.“ – „Kevin.“'); }
+    if (c === 'duell') return AFFE_DUELL(h);
+    if (c === 'revanche') { await say(h, 'Noch eine Runde?'); await insultDuel(h, 'affe'); }
+  }
+};
 
 // ---------- Zukunft: Bender klaut den Toast, Zoidberg holt ihn zurück ----------
 const sendItemOhneBender = sendItem;
@@ -913,7 +1071,7 @@ const hintTextOhneGaeste = hintText;
 hintText = function () {
   const f = fl(), base = hintTextOhneGaeste();
   if (base === 'Hoagie: Im Garten lehnt eine Schaufel am Zaun.')
-    return f.fechtSieg ? 'Hoagie: Sag Käpt’n Jack am Hafen, dass du Guybrush besiegt hast – dann rückt er die Schaufel raus.'
+    return f.fechtSieg ? 'Hoagie: Runde zwei! Sprich Käpt’n Jack am Hafen an – er rückt die Schaufel erst raus, wenn du ihn selbst im Beleidigungsfechten besiegst. Drei Treffer in Folge zünden den Super-Spritzer.'
       : f.jackDuell ? 'Hoagie: Jack gibt die Schaufel nur einem echten Piraten. Besieg Guybrush im Beleidigungsfechten – die Antwort muss die Beleidigung umdrehen.'
         : f.knowsSchaufel ? 'Hoagie: Ein schwankender Mann mit Hut hat die Schaufel zum Hafen mitgenommen. Sprich mit Käpt’n Jack.'
           : 'Hoagie: Die Schaufel lehnt nicht mehr am Zaun. Frag Salad Fingers im Garten, was er gesehen hat – oder schau gleich am Hafen nach.';
@@ -1154,6 +1312,19 @@ BARKS.glados.push('Ich habe einmal in einem Keller angefangen. Als Kamera. Wir r
     await say('salad', 'Nicht … bitte nicht. Das ist Herr Eimer. Er schläft gerade. Er träumt von Regen.');
     await say(curId(), 'Äh … okay, Mann. Ich lass ihn schlafen.');
   };
+}
+async function SALAD_FINALE(h) {
+  const s_ = 'salad', again = fl().saladSieg;
+  await say(h, again ? 'Noch eine Runde Fechten, Salad?' : 'Der Affe sagt, du fichtst mit Rost. Finale?');
+  if (!again) {
+    await say(s_, 'Fechten … mit Worten … Ich habe so lange geübt. Mit Herrn Rostnagel. Er sagt nie etwas zurück.');
+    await say(s_, '*hebt eine rostbraune Poolnudel* Das ist Frau Nudel. Sie ist sehr weich. Wie ein Abschied.');
+  }
+  if (!await insultDuel(h, s_)) { await say(s_, 'Oh … du hast verloren. Darf ich dich trösten? Mit meinen Fingern?'); await say(h, 'Äh … nein danke, Mann.'); return; }
+  if (again) return say(s_, 'Schon wieder … so nass … so schön …');
+  fl().saladSieg = 1; unlock('fechtmeister'); G.challengerT = 0; Sound.sfx('fanfare');
+  await say(s_, 'Du hast gewonnen … Du bist jetzt … der Meister. Der Meister aller Nudeln.');
+  await say(h, 'Turniersieger 1776! Guybrush, Jack, drei Affenköpfe und ein Salat. Das glaubt mir keiner, Mann.');
 }
 async function SALAD_EIMER(h) {
   const s_ = 'salad';
