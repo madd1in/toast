@@ -350,8 +350,19 @@ ACT.dave.talk = async () => {
   await say(d, fl().metDave ? 'Na? Immer noch keine Mikrowelle angefasst?' : 'Whoa. Die Villa sieht ja noch genauso aus wie damals. Nur ohne Fleisch fressende Pflanze. Na ja, fast.');
   fl().metDave = 1;
   for (;;) {
-    const c = await choose([{ id: 'wer', text: 'Wer bist du denn?' }, { id: 'hier', text: 'Wie bist du hierhergekommen?' }, { id: 'tipp', text: 'Hast du einen Tipp für mich?' }, gbOpt(d), { id: 'bye', text: 'Bis später.' }]);
+    const f = fl();
+    const c = await choose([{ id: 'wer', text: 'Wer bist du denn?' }, { id: 'hier', text: 'Wie bist du hierhergekommen?' },
+      !f.falltuer && (f.keinStrom || f.falltuerGesehen) && { id: 'keller', text: 'Der Kaffeeautomat hat keinen Strom. Weißt du, wie man in den Keller kommt?' },
+      f.falltuer && !f.daveKerker && { id: 'kerker', text: 'Du warst schon mal im Kerker da unten?' },
+      { id: 'tipp', text: 'Hast du einen Tipp für mich?' }, gbOpt(d), { id: 'bye', text: 'Bis später.' }]);
     if (c === 'bye') { await say(b, 'Bis später.'); await say(d, 'Und nicht klingeln! Wer hier klingelt, landet im Keller.'); return; }
+    if (c === 'keller') await DAVE_FALLTUER(b);
+    if (c === 'kerker') {
+      f.daveKerker = 1;
+      await say(b, 'Du warst schon mal im Kerker da unten?');
+      await say(d, 'Drei Tage. Fred hat mich erwischt, als ich durchs Fenster kam. Ich hab die Zeit genutzt und an der Wand die Steine gezählt.');
+      await say(d, 'Es sind 412. Und einer davon ist locker. Dahinter ist nichts. Das war die größte Enttäuschung meines Lebens.');
+    }
     if (c === 'wer') {
       await say(b, 'Wer bist du denn?');
       await say(d, 'Dave. Ich bin vor Jahren hier eingestiegen, um meine Freundin aus dem Labor zu holen. Mit Meteor, Tentakeln und allem.');
@@ -365,6 +376,7 @@ ACT.dave.talk = async () => {
     if (c === 'tipp') {
       await say(b, 'Hast du einen Tipp für mich?');
       await say(d, 'Zwei. Erstens: Steck nie einen Hamster in die Mikrowelle. Zweitens: siehe erstens.');
+      if (f.keinStrom && !f.kellerStrom) await say(d, 'Und drittens: In dieser Villa geht es immer in den Keller. Immer. Frag mich, wie man runterkommt.');
     }
     if (c === 'gb') {
       await say(b, 'Trägst du dich in Dr. Freds Gästebuch ein?');
@@ -426,8 +438,11 @@ ACT.salad.talk = async () => {
   await say(s_, fl().metSalad ? 'Du bist wieder da. Der Zaun hat dich vermisst.' : 'Hallo. Möchtest du meinen Freund kennenlernen? Er heißt Rostnagel. Er ist sehr still.');
   fl().metSalad = 1;
   for (;;) {
-    const c = await choose([{ id: 'wer', text: 'Wer bist du, Mann?' }, { id: 'tun', text: 'Was machst du da?' }, !gbOk(s_) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Ich geh dann mal … ganz langsam.' }]);
+    const c = await choose([{ id: 'wer', text: 'Wer bist du, Mann?' }, { id: 'tun', text: 'Was machst du da?' },
+      !fl().saladOk && !fl().eimer && fl().eimerGesperrt && { id: 'eimer', text: 'Darf ich mir Herrn Eimer mal ausleihen?' },
+      !gbOk(s_) && { id: 'gb', text: 'Unterschreibst du in einem Gästebuch?' }, { id: 'bye', text: 'Ich geh dann mal … ganz langsam.' }]);
     if (c === 'bye') { await say(h, 'Ich geh dann mal … ganz langsam.'); await say(s_, 'Pass auf dich auf. Und auf deine Finger. Finger sind kostbar.'); return; }
+    if (c === 'eimer') await SALAD_EIMER(h);
     if (c === 'wer') { await say(h, 'Wer bist du, Mann?'); await say(s_, 'Ich bin Salad Fingers. Ich fühle gern Dinge. Am liebsten rostige Dinge. Rost ist wie eine Umarmung, die nach Metall riecht.'); }
     if (c === 'tun') {
       await say(h, 'Was machst du da?'); await say(s_, 'Ich höre dem Brunnen zu. Er hat einen sehr schönen Eimer. Ich wünschte, ich dürfte ihn halten.');
@@ -451,19 +466,74 @@ const INSULTS = [
 ];
 const DECOYS = ['Ach ja? Ach JA?!', 'Hinter dir! Ein dreiköpfiger Affe!', 'Das sag ich meiner Mama.', 'Ich bin Gummi, du bist Kleber!', 'Äh … Rock ’n’ Roll?', 'Na und? Ich hab ’ne Mütze.'];
 function shuffled(a) { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; }
+// Street-Fighter-Duell: gefochten wird, bis einer K.O. ist – drei Treffer gegen Guybrush, drei Fehler verträgt man selbst
 async function insultDuel(p) {
-  const g = ACT.guybrush; g.duel = 1; let pts = 0;
+  const g = ACT.guybrush; g.duel = 1; let hpP = 3, hpG = 3;
+  G.duelHud = { p, hp: { p: 1, g: 1 }, show: { p: 1, g: 1 }, trail: { p: 1, g: 1 }, hitT: { p: -1e9, g: -1e9 }, t0: G.t, last: G.t, timer: 99, msg: 'RUNDE 1', msgT: G.t };
+  Sound.sfx('ding');
   try {
-    for (const [ins, ret] of shuffled(INSULTS).slice(0, 3)) {
+    await wait(1000); duelMsg('FECHTET!'); await wait(800);
+    let pool = shuffled(INSULTS);
+    while (hpP > 0 && hpG > 0) {
+      if (!pool.length) pool = shuffled(INSULTS);
+      const [ins, ret] = pool.pop();
       await say('guybrush', ins);
       const opts = shuffled([ret, ...shuffled(DECOYS).slice(0, 2)]).map((t, i) => ({ id: t === ret ? 'ok' : 'x' + i, text: t }));
       const c = await choose(opts);
       await say(p, opts.find(o => o.id === c).text);
-      if (c === 'ok') { pts++; g.lunge = G.t; Sound.sfx('saber'); await say('guybrush', pick(['Touché!', 'Argh. Das saß.', 'Woher kennst du die?!'])); }
-      else await say('guybrush', pick(['Ha! Das war schwach.', 'Netter Versuch, Landratte.', 'Damit beleidigst du höchstens meinen Säbel.']));
+      if (c === 'ok') {
+        hpG--; G.duelHud.hp.g = hpG / 3; G.duelHud.hitT.g = G.t; g.lunge = G.t; Sound.sfx('saber'); shake(260, 3);
+        await say('guybrush', hpG ? pick(['Touché!', 'Argh. Das saß.', 'Woher kennst du die?!']) : 'Uaaah … Ich bin besiegt! Mit Worten!');
+      } else {
+        hpP--; G.duelHud.hp.p = hpP / 3; G.duelHud.hitT.p = G.t; Sound.sfx('bad'); shake(320, 5);
+        await say('guybrush', hpP ? pick(['Ha! Das war schwach.', 'Netter Versuch, Landratte.', 'Damit beleidigst du höchstens meinen Säbel.']) : 'Und das war’s! Ich bin der Größte!');
+      }
     }
-  } finally { g.duel = 0; }
-  return pts;
+    duelMsg(hpG === 0 ? (hpP === 3 ? 'PERFEKT!' : 'K.O.!') : 'K.O. …'); Sound.sfx(hpG === 0 ? 'achieve' : 'bad');
+    await wait(1500);
+  } finally { g.duel = 0; G.duelHud = null; }
+  return hpG === 0 ? 3 : 3 - hpG;
+}
+function duelMsg(text) { if (G.duelHud) { G.duelHud.msg = text; G.duelHud.msgT = G.t; } }
+// Lebensbalken wie bei Street Fighter II: laufen von der Mitte aus leer, rote Spur zieht verzögert nach
+function drawDuelHud() {
+  const d = G.duelHud; if (!d || G.screen !== 'game') return;
+  const dt = Math.min(100, G.t - d.last); d.last = G.t;
+  if (G.t - d.t0 > 1800 && Math.floor((G.t - d.t0) / 1000) > 99 - d.timer) d.timer = Math.max(1, d.timer - 1);
+  const y = 62, bw = 360, bh = 20, cxm = W / 2;
+  for (const k of ['p', 'g']) {
+    d.show[k] += (d.hp[k] - d.show[k]) * Math.min(1, dt / 70);
+    if (G.t - d.hitT[k] > 600) d.trail[k] += (d.show[k] - d.trail[k]) * Math.min(1, dt / 260);
+  }
+  const bar = (k, x0, dir) => {   // dir 1: links (füllt von außen links), -1: rechts
+    const shake = G.t - d.hitT[k] < 260 ? (Math.random() - 0.5) * 4 : 0, xo = x0 + shake;
+    R(cx, dir > 0 ? xo - 4 : xo - bw - 4, y - 4, bw + 8, bh + 8, '#1b1020', 2, 3, '#ffd23a');
+    R(cx, dir > 0 ? xo : xo - bw, y, bw, bh, '#3a0a14', 0, 1);
+    const tw = bw * d.trail[k], sw = bw * d.show[k];
+    if (tw > 0) R(cx, dir > 0 ? xo : xo - tw, y, tw, bh, '#e8262e', 0, 1);
+    if (sw > 0) R(cx, dir > 0 ? xo : xo - sw, y, sw, bh, d.show[k] < 0.4 && Math.floor(G.t / 160) % 2 ? '#fff08a' : '#ffd23a', 0, 1);
+    if (sw > 0) R(cx, dir > 0 ? xo : xo - sw, y + 2, sw, 5, 'rgba(255,255,255,0.45)', 0, 1);
+  };
+  bar('p', cxm - bw - 44, 1); bar('g', cxm + bw + 44, -1);
+  // K.O.-Abzeichen und Rundenuhr in der Mitte
+  P(cx, [cxm - 26, y - 6, cxm + 26, y - 6, cxm + 20, y + bh + 6, cxm - 20, y + bh + 6], '#d8262e', 2.5);
+  txt(cx, 'KO', cxm, y + 17, '400 20px "Titan One", sans-serif', '#ffd23a', 'center', 4, '#1b1020');
+  txt(cx, String(d.timer).padStart(2, '0'), cxm, y + 58, '400 32px "Titan One", sans-serif', '#ffffff', 'center', 6, '#1b1020');
+  txt(cx, ACT[d.p].name.toUpperCase(), cxm - bw - 44, y + 46, '400 18px "Titan One", sans-serif', '#ffd23a', 'left', 5, '#1b1020');
+  txt(cx, 'GUYBRUSH', cxm + bw + 44, y + 46, '400 18px "Titan One", sans-serif', '#ffd23a', 'right', 5, '#1b1020');
+  // Ansage groß in der Mitte
+  const mt = G.t - d.msgT;
+  if (d.msg && mt < 1400) {
+    const k = Math.min(1, mt / 180), a = mt > 1100 ? 1 - (mt - 1100) / 300 : 1, sz = Math.round(70 * (1.6 - 0.6 * k));
+    cx.save(); cx.globalAlpha = Math.max(0, a);
+    txt(cx, d.msg, cxm, 230, `400 ${sz}px "Titan One", sans-serif`, '#ffd23a', 'center', 10, '#9a1018');
+    cx.restore();
+  }
+}
+G.duelHud = null;
+{
+  const hudOhneDuell = drawHUD; drawHUD = function () { hudOhneDuell(); drawDuelHud(); };
+  const uiOhneDuell = drawUI; drawUI = function () { uiOhneDuell(); drawDuelHud(); };
 }
 ACT.guybrush.talk = async () => {
   const g = 'guybrush', h = curId();
@@ -644,10 +714,16 @@ ACT.simon.talk = async () => {
   await say(m, fl().metSimon ? 'Ach, die Leichenbeschauerin ist wieder da. Super.' : 'Super. Ich wollte nach Hause und lande in einem lila Thronsaal mit einem sprechenden Gurkenwurm.');
   fl().metSimon = 1;
   for (;;) {
-    const c = await choose([{ id: 'wer', text: 'Wer bist du?' }, { id: 'zauber', text: 'Kannst du zaubern?' }, { id: 'heim', text: 'Wie kommst du nach Hause?' }, !gbOk(m) && fl().simonHeim && { id: 'gb', text: 'Trägst du dich in Dr. Freds Gästebuch ein?' }, { id: 'bye', text: 'Viel Glück, Zauberer.' }]);
+    const kalt = fl().toastKalt && !fl().toastWarm;
+    const c = await choose([{ id: 'wer', text: 'Wer bist du?' }, { id: 'zauber', text: 'Kannst du zaubern?' }, kalt && { id: 'toast', text: 'Kannst du meinen Toast aufwärmen?' },
+      { id: 'heim', text: 'Wie kommst du nach Hause?' }, !gbOk(m) && fl().simonHeim && { id: 'gb', text: 'Trägst du dich in Dr. Freds Gästebuch ein?' }, { id: 'bye', text: 'Viel Glück, Zauberer.' }]);
     if (c === 'bye') { await say(l, 'Viel Glück, Zauberer.'); await say(m, 'Glück. Klar. Das hatte ich zuletzt, als mich ein Hund in ein Märchenbuch gezogen hat.'); return; }
     if (c === 'wer') { await say(l, 'Wer bist du?'); await say(m, 'Simon. Zauberer. Na ja, Zauberlehrling mit eigenem Hut. Der Hut macht 80 Prozent der Magie. Den Rest mache ich mit Sarkasmus.'); }
-    if (c === 'zauber') { await say(l, 'Kannst du zaubern?'); await say(m, 'Pass auf: *murmel murmel* … Siehst du? Nichts passiert. Das ist ein Unsichtbarkeitszauber. Auf die Wirkung.'); await say(l, 'Beeindruckend.'); await say(m, 'Ich weiß.'); }
+    if (c === 'zauber') {
+      await say(l, 'Kannst du zaubern?'); await say(m, 'Pass auf: *murmel murmel* … Siehst du? Nichts passiert. Das ist ein Unsichtbarkeitszauber. Auf die Wirkung.'); await say(l, 'Beeindruckend.'); await say(m, 'Ich weiß.');
+      await say(m, 'Na gut, einen Zauber kann ich wirklich: Aufwärmen. Hab ich für nasse Socken erfunden. Klappt bei allem, was kalt und traurig ist.');
+    }
+    if (c === 'toast') { if (has('toast', l)) await SIMON_WAERMT(l); else { await say(l, 'Kannst du meinen Toast aufwärmen?'); await say(m, 'Klar. Dafür bräuchte ich allerdings den Toast. Zauberei ist nicht Gedankenlesen.'); } }
     if (c === 'heim') {
       fl().simonHeim = 1;
       await say(l, 'Wie kommst du nach Hause?'); await say(m, 'Ich bräuchte ein Portal. Oder einen Zauberstab. Oder eine sehr große Leiter.');
@@ -849,5 +925,306 @@ hintText = function () {
   if (base === 'Laverne: Ab in den Thronsaal und gib Lila den Toast!' && !f.kiFrei)
     return f.kiTuer ? 'Laverne: GLaDOS lässt nur getestete Subjekte durch. Nimm im Palast-Vorraum den Aufzug zur Testkammer und besteh ihren Test.'
       : 'Laverne: Geh zur Thronsaaltür im Palast-Vorraum.';
+  return base;
+};
+
+// ============================================================
+//  Noch mehr Gäste, ohne die es nicht geht
+//  Gegenwart: Der KAFFEE-O-MAT hat keinen Strom, Fred hat den Keller zugemauert – nur Dave kennt die alte Falltür
+//  unter dem Lobby-Teppich. Unten: neue Sicherung aus dem Einmachglas, Haupthebel umlegen. Eine Überwachungskamera
+//  sieht dabei zu: der Prototyp einer gewissen Test-KI.
+//  1776: Salad Fingers hängt an „Herrn Eimer“ und leiht ihn nur für einen guten Zweck aus.
+//  Zukunft: Lila isst keinen kalten Toast – Simon hat genau einen Zauber, der immer klappt.
+// ============================================================
+
+// ---------- Gegenwart: der Keller ----------
+ITEMS.sicherung = { name: 'Sicherung', look: () => 'Eine Schraubsicherung aus Porzellan, 16 Ampere. Der rote Punkt oben heißt: noch heil. Bei mir heißt rot meistens das Gegenteil.' };
+ITEM_SFX.sicherung = 'click2';
+ICON.sicherung = c => {
+  R(c, -11, -14, 22, 30, '#f2ece0', 2.5, 6); L(c, [-11, 1, 11, 1], 2, '#3a2a40');
+  R(c, -9, -20, 18, 7, '#d8b04a', 2.5, 3); E(c, 0, -21, 4.5, 2, '#d8323a', 1.5);
+  R(c, -4.5, 16, 9, 6, '#d8b04a', 2, 2); txt(c, '16A', 0, 12, '800 8px "Baloo 2", sans-serif', '#3a2a40');
+};
+ICON_3D.sicherung = loadImg('img/items/sicherung.png');
+{ const drawn = ICON.sicherung; ICON.sicherung = c => { const im = ICON_3D.sicherung; if (hd(c) && imgOk(im)) c.drawImage(im, -30, -30, 60, 60); else drawn(c); }; }
+
+// Der Prototyp spricht (unsichtbar, aus dem Lautsprecher der Kamera)
+ACT.urglados = mkA('urglados', 'G.L.a.D.O.S. 0.1', 'urglados', '#ffd23a', 120, 40, { voice: Object.assign({}, ACT.glados.voice, { rate: (ACT.glados.voice.rate || 1) * 0.78, blip: 520 }), visible: false });
+START_POS.urglados = { room: 'keller', x: 214, y: 372, dir: 1, visible: false };
+Object.assign(ACT.urglados, START_POS.urglados);
+
+function kellerKamera(c, t) {
+  // gelbes Auge: atmet, folgt dem Spieler; ohne Strom nur ein müdes Glimmen
+  const on = fl().kellerStrom, p = me(), dx = Math.max(-1, Math.min(1, (p.x - 201) / 300)) * 2, dy = 1.2;
+  const a = (on ? 0.62 : 0.28) + Math.sin(t * (on ? 0.004 : 0.0015)) * 0.08;
+  if (!c.isPix) glowAt(c, 201, 94, on ? 22 : 14, '#ffc83a', a);
+  E(c, 201 + dx, 94 + dy, 2.3, 2.3, on ? '#fffbe0' : '#e8b84a', 0);
+  if (Math.floor(t / 700) % 2) E(c, 236, 78, 2, 2, '#ff3a3a', 0);   // REC
+}
+function drawKellerFx(c, t) {
+  if (!c.isPix) {
+    const vg = c.createRadialGradient(470, 250, 180, 470, 250, 620);   // dunkle Ecken: Kellerstimmung
+    vg.addColorStop(0, 'rgba(12,6,22,0)'); vg.addColorStop(1, `rgba(12,6,22,${fl().kellerStrom ? 0.38 : 0.55})`);
+    c.fillStyle = vg; c.fillRect(0, 0, W, SH);
+    const on = fl().kellerStrom, fk = Math.sin(t * 0.013) * Math.sin(t * 0.0071);
+    glowAt(c, 547, 124, on ? 90 : 60, '#ffe2a0', (on ? 0.42 : 0.26) + (on ? 0 : Math.max(0, fk) * 0.18));   // Glühbirne
+    glowAt(c, 122, 312, 120, '#7dff8a', 0.22 + Math.sin(t * 0.002) * 0.05);   // Kühlbecken
+    glowAt(c, 838, 314, 30, '#ff8a2a', 0.4 + Math.sin(t * 0.017) * Math.sin(t * 0.009) * 0.2);   // Feuerklappe
+    for (let i = 0; i < 4; i++) {   // Blubberblasen steigen aus dem Becken
+      const u = t * 0.00035 + i * 0.27, k = u % 1, x = 60 + hash01(i * 3 + Math.floor(u)) * 130;
+      c.save(); c.globalAlpha = (1 - k) * 0.7; E(c, x, 318 - k * 26, 2.2 + k * 1.5, 2.2 + k * 1.5, null, 1.2, 0, '#b8ffb8'); c.restore();
+    }
+  }
+  kellerKamera(c, t);
+}
+raum3d('keller', 'img/raum_keller.jpg', {
+  era: 'present', name: 'Keller', floor: 'tile', amb: ['drip', 'hum'], fill: '#2a2232',
+  walk: [[20, 352], [800, 350], [822, 356], [826, 432], [5, 432]],
+  dyn: drawKellerFx,
+  objs: [
+    { id: 'keller_leiter', name: 'Leiter nach oben', rect: [384, 30, 42, 300], walk: [404, 362], exit: ['lobby', 630, 404, 1] },
+    { id: 'kamera', name: 'Überwachungskamera', rect: [182, 60, 72, 56], walk: [214, 372] },
+    { id: 'sicherungskasten', name: 'Sicherungskasten', rect: [570, 168, 58, 90], walk: [600, 362] },
+    { id: 'hauptschalter', name: 'Haupthebel', rect: [628, 184, 26, 38], walk: [640, 362] },
+    { id: 'einmachregal', name: 'Regal mit Einmachgläsern', rect: [654, 202, 78, 124], walk: [692, 362] },
+    { id: 'heizkessel', name: 'Heizkessel', rect: [756, 120, 150, 222], walk: [796, 366] },
+    { id: 'kuehlbecken', name: 'Kühlbecken', rect: [20, 292, 204, 56], walk: [150, 368] },
+    { id: 'warnschild', name: 'Warnschild', rect: [95, 154, 118, 47], walk: [150, 362] },
+    { id: 'kettensaege', name: 'Kettensäge', rect: [471, 160, 87, 58], walk: [514, 362] },
+    { id: 'kerker', name: 'Kerkertür', rect: [250, 183, 87, 139], walk: [294, 362] },
+    { id: 'gluehbirne', name: 'Glühbirne', rect: [532, 98, 30, 42], walk: [548, 380] },
+    { id: 'mauseloch', name: 'Mauseloch', rect: [522, 302, 36, 20], walk: [540, 362] },
+  ],
+});
+ROOM_FX.keller = { verb: [1.6, 0.22], light: [1, '#ffd8a0', '#140c24'], bloom: 0.3, amb: ['drip', 'hum'], motes: 'dust' };
+MAP_ORDER.present.push('keller');
+
+// Lobby: Teppich und Falltür (offen gezeichnet, sobald Dave sie aufgesprungen hat)
+function drawFalltuer(c, t) {
+  const cx0 = 552, y0 = 388, y1 = 410;
+  // Deckel steht hochgeklappt hinter dem Loch
+  P(c, [cx0 - 46, y0, cx0 + 46, y0, cx0 + 44, y0 - 50, cx0 - 44, y0 - 50], '#7a5230', 2.5, OUT);
+  for (let i = 1; i < 4; i++) L(c, [cx0 - 46 + i * 23, y0 - 1, cx0 - 45 + i * 22, y0 - 49], 1.5, '#4a3018');
+  E(c, cx0, y0 - 26, 6, 6, null, 2, 0, '#2a2a30');
+  // Loch mit Leiter und warmem Licht von unten
+  P(c, [cx0 - 46, y0, cx0 + 46, y0, cx0 + 52, y1, cx0 - 52, y1], '#120a14', 2.5, OUT);
+  if (!c.isPix) glowAt(c, cx0, y1 - 4, 30, '#ffc070', 0.5 + Math.sin(t * 0.003) * 0.08);
+  L(c, [cx0 - 12, y0 + 2, cx0 - 13, y1], 2.5, '#9a6a3a'); L(c, [cx0 + 12, y0 + 2, cx0 + 13, y1], 2.5, '#9a6a3a');
+  L(c, [cx0 - 12, y0 + 9, cx0 + 12, y0 + 9], 2, '#9a6a3a'); L(c, [cx0 - 13, y0 + 17, cx0 + 13, y0 + 17], 2, '#9a6a3a');
+}
+ROOMS.lobby.objs.push(
+  { id: 'lobby_teppich', name: 'Teppich', rect: [506, 386, 92, 26], walk: [552, 378], visible: () => !fl().falltuer },
+  { id: 'falltuer', name: 'Falltür zum Keller', rect: [500, 334, 104, 78], walk: [552, 382], exit: ['keller', 404, 366, 1], visible: () => fl().falltuer, draw: drawFalltuer },
+);
+// Zettel am Kaffeeautomaten, solange er keinen Strom hat
+ROOMS.lobby.objs.push({ id: 'zettel_automat', name: 'Zettel', rect: [694, 182, 60, 34], walk: [730, 366], visible: () => !fl().kellerStrom,
+  draw: c => {
+    c.save(); c.translate(724, 198); c.rotate(-0.1);
+    R(c, -30, -15, 60, 30, '#fff6d8', 2, 2); R(c, -9, -19, 18, 7, 'rgba(230,220,180,0.85)', 0, 1);
+    txt(c, 'KEIN STROM!', 0, -1, '800 10px "Baloo 2", sans-serif', '#c8262e', 'center'); txt(c, '– Fred', 12, 10, '700 8px "Baloo 2", sans-serif', '#3a2a40', 'center');
+    c.restore();
+  } });
+const ZETTEL_TEXT = '„KEIN STROM. Die Hauptsicherung im Keller ist wieder rausgeflogen. Den Keller habe ich zugemauert, wegen gewisser Einbrecher. Gruß, Fred.“';
+RULES['look o:zettel_automat'] = async () => { fl().keinStrom = 1; await s(ZETTEL_TEXT); await s('Zugemauert? Und wie komme ich jetzt an die Sicherung?'); };
+multi(['pick', 'pull', 'use'], 'o:zettel_automat', line('Der Zettel bleibt, bis der Automat wieder läuft. Sonst steht hier nachher jemand und wundert sich.'));
+RULES['look o:lobby_teppich'] = line('Ein runder Teppich. In der Mitte wölbt er sich, als läge etwas Eckiges darunter. Etwas Falltürartiges.');
+multi(['pull', 'pick', 'open', 'push', 'use'], 'o:lobby_teppich', async () => {
+  fl().falltuerGesehen = 1; Sound.sfx('rustle');
+  await s('Ich schlage den Teppich zurück … eine Falltür! Fred hat einfach ein Loch in den Teppich geschnitten und ihn wieder draufgelegt.');
+  await s('Sie klemmt. Total. Ich bin Wissenschaftler, keine Brechstange. Jemand, der schon mal in diese Villa eingebrochen ist, wüsste bestimmt, wie sie aufgeht.');
+});
+async function DAVE_FALLTUER(b) {
+  const d = 'dave', da = ACT.dave, home = [da.x, da.y, da.dir];
+  await say(b, 'Der Kaffeeautomat hat keinen Strom. Weißt du, wie man in den Keller kommt? Fred hat ihn zugemauert.');
+  await say(d, 'Zugemauert? Wegen mir, wetten? Egal. Es gibt noch die alte Falltür. Unter dem Teppich. Komm mit.');
+  await walkTo('dave', 618, 398); da.dir = -1;
+  await say(d, 'Die klemmt seit 1987. Man muss genau hier draufspringen. Auf die dritte Diele von links. Mit Schwung.');
+  Sound.sfx('thunk'); shake(420, 5); await wait(300); Sound.sfx('door'); fl().falltuer = 1;
+  await say(d, 'Bitte sehr. Die Leiter ist noch da. Ich bleib oben – da unten saß ich mal drei Tage im Kerker.');
+  await say(b, 'Danke, Dave! Ich hole uns Strom. Und Kaffee.');
+  await walkTo('dave', home[0], home[1]); da.dir = home[2];
+}
+
+// Kaffeeautomat ohne Strom
+{
+  const muenzeOrig = RULES['use i:muenze o:automat'], useOrig = RULES['use o:automat'], lookOrig = RULES['look o:automat'];
+  RULES['use i:muenze o:automat'] = async () => {
+    if (fl().kellerStrom) return muenzeOrig();
+    fl().keinStrom = 1; Sound.sfx('coin'); await wait(500); Sound.sfx('clank');
+    await s('*Klonk* … *klimper* Die Münze fällt unten wieder raus. Das Display bleibt schwarz.');
+    await s('Hier klebt ein Zettel: ' + ZETTEL_TEXT);
+    await s('Zugemauert? Und wie komme ich jetzt an die Sicherung?');
+  };
+  RULES['use o:automat'] = () => fl().kellerStrom || fl().kaffee ? useOrig() : s('Er ist dunkel. Kein Brummen, kein Blubbern. Kein Strom.');
+  RULES['look o:automat'] = () => fl().kellerStrom ? lookOrig() : s('Der KAFFEE-O-MAT 5000. Dunkel und stumm. Ein Zettel klebt dran: „KEIN STROM!“');
+}
+
+// Keller: Hotspots
+RULES['look o:keller_leiter'] = line('Die Leiter zurück in die Lobby. Oben scheint warmes Licht durch die Falltür. Lobby-Licht. Zivilisation.');
+RULES['look o:kamera'] = async () => {
+  await s('Eine Überwachungskamera mit einem gelben Auge. Auf dem Klebeband steht: „G.L.a.D.O.S. 0.1 – PROTOTYP – BITTE NICHT FÜTTERN“.');
+  await s(fl().kellerStrom ? 'Seit der Strom läuft, folgt sie mir mit dem Blick. Und sie summt. Bedrohlich.' : 'Sie folgt mir mit dem Blick. Sehr langsam. Sie hat wohl kaum Strom.');
+};
+multi(['pick', 'pull', 'push', 'use', 'open'], 'o:kamera', line('Ich komme da nicht ran. Und ehrlich gesagt will ich nicht, dass sie sich an mich erinnert.'));
+RULES['talk o:kamera'] = async () => {
+  const u = 'urglados', b = curId(), f = fl();
+  Sound.sfx('botbeep');
+  if (!f.kellerStrom) {
+    await say(u, f.metUrGlados ? 'Sie … schon … wieder. Energie: zwei … Prozent.' : 'H … a … l … l … o. Prototyp. Null. Punkt. Eins. Energie: drei … Prozent.');
+    if (!f.metUrGlados) {
+      f.metUrGlados = 1;
+      await say(b, 'G.L.a.D.O.S.? Was heißt das?');
+      await say(u, 'Genetische … Lebensform … und … Dings. Den Rest … erfinde ich … wenn ich groß bin.');
+    }
+    await say(u, 'Hauptsicherung: verkohlt. Ersatz: im Regal. Glas mit … Etikett. Ich sehe … alles. Auch … Ihre Socken. Sie passen … nicht … zusammen.');
+    f.sicherungKaputt = 1;
+    return;
+  }
+  await say(u, 'Oh. Hallo. Mit Strom klingt alles gleich viel freundlicher. Zum Beispiel diese Drohung: Ich werde mich an Sie erinnern.');
+  await say(b, 'Das klingt nicht freundlich.');
+  await say(u, 'Doch. Freundlich. Und sehr, sehr geduldig. In ein paar hundert Jahren leite ich eine Testkammer. Dann sehen wir uns wieder. Bringen Sie Kuchen mit. Oder auch nicht.');
+};
+RULES['look o:sicherungskasten'] = () => {
+  const f = fl();
+  return s(`Der Sicherungskasten. Schild: HAUPTSICHERUNG. Der Haupthebel steht auf ${f.kellerStrom ? 'AN' : 'AUS'}.${f.sicherungDrin ? ' Drin steckt meine neue Sicherung.' : f.sicherungKaputt ? ' Drin steckt eine verkohlte Sicherung.' : ''}`);
+};
+multi(['open', 'use', 'pick'], 'o:sicherungskasten', async () => {
+  if (fl().sicherungDrin) return s('Die neue Sicherung sitzt. Jetzt nicht mehr dran rumfummeln.');
+  fl().sicherungKaputt = 1; Sound.sfx('open');
+  await s('Ich öffne die Klappe. Drinnen steckt eine Sicherung, schwarz verkohlt. Die hat ihr Leben für den Gut-O-Mat gegeben.');
+  await s('Ich brauche eine neue. Sechzehn Ampere, sagt der Aufdruck daneben.');
+});
+async function SICHERUNG_REIN() {
+  takeItem('sicherung'); fl().sicherungDrin = 1; fl().sicherungKaputt = 1; Sound.sfx('click2');
+  await s('Alte raus, neue rein. Der rote Punkt oben leuchtet. Das heißt: Sie lebt. Jetzt der Haupthebel.');
+}
+RULES['use i:sicherung o:sicherungskasten'] = SICHERUNG_REIN;
+RULES['use i:sicherung o:hauptschalter'] = SICHERUNG_REIN;
+RULES['look o:hauptschalter'] = line(() => fl().kellerStrom ? 'Der Haupthebel steht auf AN. Oben brummt der Kaffeeautomat. Hier unten brumme ich mit.' : 'Ein großer Hebel mit rotem Knauf. Er steht auf AUS. Hebel auf AUS sind wie Einladungen.');
+multi(['pull', 'push', 'use'], 'o:hauptschalter', async () => {
+  const f = fl();
+  if (f.kellerStrom) return s('Ich lasse ihn lieber auf AN. Ohne Strom kein Kaffee, ohne Kaffee keine Weltrettung.');
+  act(curId(), 'pull', 700); Sound.sfx('click2'); await wait(300);
+  if (!f.sicherungDrin) {
+    f.sicherungKaputt = 1; Sound.sfx('zap'); shake(300, 3);
+    puff(641, 200, '#fff6a0', 6, { vy: -40, vx: 60, r: 2.2, max: 500, spread: 14 });
+    await s('*BZZZT* Funken! Der Hebel springt zurück. Die Sicherung ist verkohlt. Ich brauche eine neue.');
+    return;
+  }
+  Sound.sfx('zap'); shake(500, 4); await wait(400); Sound.sfx('hum');
+  f.kellerStrom = 1; unlock('keller');
+  await s('KLACK! Irgendwo oben brummt der Kaffeeautomat los. Und die Glühbirne hier unten leuchtet doppelt so hell.');
+  await say('urglados', 'S … T … R … O … M! Oh. Das ist … wunderbar. Ich fühle mich so … testbereit.');
+  await s('Ich glaube, ich habe gerade etwas aufgeweckt, das man besser hätte schlafen lassen.');
+});
+RULES['look o:einmachregal'] = line(() => fl().sicherungGefunden ? 'Saure Gurken, Rote Bete und etwas Lilanes, das zurückwinkt. Das Sicherungsglas ist jetzt eins leichter.' : 'Saure Gurken, Rote Bete, etwas Lilanes, das zurückwinkt. Und ein Glas mit Etikett: „SICHERUNGEN – NICHT EINKOCHEN!“');
+multi(['pick', 'open', 'use'], 'o:einmachregal', async () => {
+  if (fl().sicherungGefunden) return s('Eine Sicherung reicht. Der Rest bleibt für Notfälle eingekocht.');
+  fl().sicherungGefunden = 1; Sound.sfx('shelf'); addItem('sicherung');
+  await s('Ich schraube das Glas „SICHERUNGEN – NICHT EINKOCHEN!“ auf. Ersatzsicherungen! Fred hebt wirklich alles in Gläsern auf.');
+});
+RULES['look o:heizkessel'] = line('Der Heizkessel. Er brummt, blubbert und riecht nach 1987. Die Druckanzeige steht auf „Na ja“.');
+multi(['use', 'open', 'push', 'pull'], 'o:heizkessel', line('Ich drehe an keinem Ventil, dessen Anzeige auf „Na ja“ steht.'));
+RULES['look o:kuehlbecken'] = line('Ein Becken mit grün leuchtendem Wasser. Es blubbert. Ich habe genug Videospiele gespielt, um zu wissen, wie das endet.');
+multi(['use', 'pick', 'open', 'push'], 'o:kuehlbecken', line('NICHT SCHWIMMEN, sagt das Schild. Ich bin Wissenschaftler. Ich lese Schilder.'));
+RULES['look o:warnschild'] = line('„KÜHLBECKEN – NICHT SCHWIMMEN!“ Darunter, ganz klein: „Ja, Dave, das gilt auch für dich.“');
+RULES['look o:kettensaege'] = line('Eine Kettensäge an einer Lochwand. Ein Zettel daran: „Kein Benzin. Gab es nie. Wird es nie geben.“');
+multi(['pick', 'use', 'pull'], 'o:kettensaege', line('Ohne Benzin ist das nur ein sehr lauter Briefbeschwerer. Ohne Lärm.'));
+RULES['look o:kerker'] = line('Eine Kerkerzelle. In die Wand geritzt: „DAVE WAR HIER – 3 TAGE“. Und darunter: „BERNARD AUCH – 20 MINUTEN“. Ach ja. Da war was.');
+multi(['open', 'use', 'pull', 'push'], 'o:kerker', line('Abgeschlossen. Zum Glück. Ich wollte da nie wieder rein.'));
+RULES['look o:gluehbirne'] = line(() => fl().kellerStrom ? 'Eine nackte Glühbirne. Jetzt mit vollem Strom. Sie strahlt vor Stolz.' : 'Eine nackte Glühbirne. 40 Watt. Sie flackert und gibt sich Mühe.');
+multi(['use', 'pick', 'pull'], 'o:gluehbirne', line('Heiß! Ich bin kein Gut-Toast.'));
+RULES['look o:mauseloch'] = line(() => fl().kellerStrom ? 'Ein Mauseloch. Drinnen läuft jetzt ein winziger Fernseher.' : 'Ein Mauseloch. Drinnen brennt Licht. Die Maus hat Strom. Wir nicht. Das ist demütigend.');
+multi(['use', 'pick', 'open'], 'o:mauseloch', line('Da passt nicht mal mein Finger rein. Und das ist auch gut so.'));
+ROOMS.keller.onEnter = async () => {
+  if (fl().kellerBesucht) return;
+  fl().kellerBesucht = 1;
+  await s('Ein Keller mit Kerker, leuchtendem Becken und Kettensäge. Fred, warum wundert mich das nicht?');
+};
+ACH.push({ id: 'keller', name: 'Kellerkind', desc: 'Im Keller der Villa wieder Strom angestellt.' });
+BARKS.dave.push('Die Falltür klemmt immer noch. Ich hab’s mit Würde gemacht.', 'Wenn die Kamera im Keller „Hallo“ sagt: Nicht antworten.');
+BARKS.glados.push('Ich habe einmal in einem Keller angefangen. Als Kamera. Wir reden nicht darüber.');
+
+// ---------- 1776: Salad Fingers und Herr Eimer ----------
+{
+  const pickOrig = RULES['pick o:eimer'];
+  RULES['pick o:eimer'] = async () => {
+    if (fl().saladOk || ACT.salad.room !== 'garten1776') return pickOrig();
+    fl().eimerGesperrt = 1;
+    await say('salad', 'Nicht … bitte nicht. Das ist Herr Eimer. Er schläft gerade. Er träumt von Regen.');
+    await say(curId(), 'Äh … okay, Mann. Ich lass ihn schlafen.');
+  };
+}
+async function SALAD_EIMER(h) {
+  const s_ = 'salad';
+  await say(h, 'Darf ich mir Herrn Eimer mal ausleihen?');
+  await say(s_, 'Ausleihen … Wofür denn? Herr Eimer ist sehr empfindlich. Er war noch nie weit weg vom Brunnen.');
+  const a = await choose([{ id: 'baum', text: 'Ich will einen kleinen Apfelbaum gießen.' }, { id: 'durst', text: 'Ich hab Durst, Mann.' }, { id: 'oma', text: 'Der gehört doch Oma Gertrude.' }]);
+  if (a === 'baum') {
+    await say(h, 'Ich will einen kleinen Apfelbaum gießen.');
+    await say(s_, 'Ein Baum … aus Holz. Herr Eimer ist auch aus Holz. Dann wäre es ja … ein Familienbesuch.');
+    await say(s_, '*flüstert zum Eimer* Geh nur, Herr Eimer. Grüß deine Verwandten. Und komm mit nassen Geschichten zurück.');
+    fl().saladOk = 1;
+    await say(h, 'Danke, Mann. Ich pass gut auf ihn auf.');
+    return;
+  }
+  if (a === 'durst') { await say(h, 'Ich hab Durst, Mann.'); await say(s_, 'Durst … Ich trinke nur Regen aus rostigen Dachrinnen. Herr Eimer ist kein Becher. Er ist ein Freund.'); return; }
+  await say(h, 'Der gehört doch Oma Gertrude.');
+  await say(s_, 'Gertrude benutzt ihn nur. Sie streichelt ihn nie. Das ist … sehr traurig.');
+}
+
+// ---------- Zukunft: Lila will warmen Toast ----------
+{
+  for (const k of ['give i:toast a:lila', 'use i:toast a:lila']) {
+    const orig = RULES[k]; if (!orig) continue;
+    RULES[k] = (...a) => fl().toastWarm ? orig(...a) : LILA_KALT();
+  }
+  const lookOrig = ITEMS.toast.look;
+  ITEMS.toast.look = () => fl().toastWarm ? 'Der Gut-Toast. Warm, knusprig, und er riecht ein bisschen nach Zauberhut.' : (typeof lookOrig === 'function' ? lookOrig() : lookOrig);
+}
+async function LILA_KALT() {
+  const l = curId();
+  await say(l, 'Hier, Lila. Ein Gut-Toast. Frisch aus dem … na ja, aus dem Klo.');
+  await say('lila', '*schnupper* … Der ist ja KALT! Durchs Klo, durch die Zeit, durch einen Roboterbauch – und dann kalt?!');
+  await say('lila', 'Ein Herrscher isst keinen kalten Toast! Ich bin doch kein Pausenbrot-Tentakel!');
+  fl().toastKalt = 1;
+  if (ACT.simon.room === ACT.lila.room) await say('simon', 'Psst. Kalter Toast? Ich hätte da einen Zauber. Den einzigen, der immer klappt.');
+}
+async function SIMON_WAERMT(l) {
+  const m = 'simon';
+  if (fl().toastWarm) return say(m, 'Der ist schon warm. Noch wärmer, und er wird zu Kohle. Dann isst ihn nur noch ein Drache.');
+  await say(l, 'Kannst du meinen Toast aufwärmen?');
+  await say(m, 'Aufwärmen. Mein Spezialgebiet. Halt ihn still und guck nicht direkt in den Hut.');
+  await say(m, '*murmel* Toastus … knusprigus … WARMUS!');
+  Sound.sfx('sparkle'); shake(260, 2);
+  const a = ACT[l]; puff(a.x + a.dir * 30, a.y - 120, '#ffe08a', 8, { vy: -40, vx: 30, r: 3, max: 900, spread: 30 });
+  fl().toastWarm = 1;
+  await say(l, 'Er dampft! Und riecht ein bisschen nach Hut.');
+  await say(m, 'Das ist der Hut. Der Hut macht 80 Prozent der Magie. Jetzt gib ihn dem Gurkenwurm, bevor er wieder kalt wird.');
+  if (!gbOk(m)) { await say(m, 'Und weil ich heute nützlich war: Ich unterschreibe euer Buch. Das passiert selten. Rahmt es ein.'); await gbSign(m); }
+}
+multi(['give', 'use'], 'i:toast a:simon', () => SIMON_WAERMT(curId()));
+
+// ---------- Fortschritt und Tipps ----------
+MILESTONES.splice(MILESTONES.indexOf('kaffee'), 0, 'kellerStrom');
+MILESTONES.push('toastWarm');
+Object.assign(CHAPTERS, { kellerStrom: 'Licht im Keller', toastWarm: 'Ein warmer Toast' });
+NOTES.splice(NOTES.findIndex(n => n[0] === 'kaffee'), 0, ['kellerStrom', 'Dave hat Bernard die Falltür in den Keller gezeigt – mit neuer Sicherung hat der KAFFEE-O-MAT wieder Strom.']);
+NOTES.push(['toastWarm', 'Lila wollte keinen kalten Toast – Simon hat ihn mit seinem Wärmezauber aufgewärmt.']);
+const hintTextOhneKeller = hintText;
+hintText = function () {
+  const f = fl(), base = hintTextOhneKeller();
+  if (base === 'Bernard: Kauf mit der Münze einen Kaffee am KAFFEE-O-MAT in der Lobby.' && !f.kellerStrom) {
+    if (!f.keinStrom) return base;
+    if (!f.falltuer) return 'Bernard: Der KAFFEE-O-MAT hat keinen Strom, und Fred hat den Keller zugemauert. Dave in der Lobby kennt jede Geheimtür dieser Villa – frag ihn.';
+    if (!f.sicherungDrin) return has('sicherung', 'bernard') ? 'Bernard: Setz die neue Sicherung im Keller in den Sicherungskasten ein.'
+      : f.sicherungKaputt ? 'Bernard: Die alte Sicherung ist verkohlt. Im Keller-Regal stehen Einmachgläser – Fred hebt alles in Gläsern auf.'
+        : 'Bernard: Steig durch die Falltür unter dem Teppich in den Keller und leg den Haupthebel am Sicherungskasten um.';
+    return 'Bernard: Die neue Sicherung ist drin – jetzt den Haupthebel im Keller umlegen.';
+  }
+  if (base === 'Hoagie: Nimm den Eimer vom Brunnen und benutze ihn mit dem Brunnen.' && !f.saladOk && !f.eimer && f.eimerGesperrt)
+    return 'Hoagie: Salad Fingers hängt an „Herrn Eimer“. Frag ihn, ob du ihn ausleihen darfst – und sag ehrlich, wofür.';
+  if (base === 'Laverne: Ab in den Thronsaal und gib Lila den Toast!' && f.toastKalt && !f.toastWarm)
+    return 'Laverne: Lila mag keinen kalten Toast. Simon der Zauberer im Thronsaal hat einen Wärmezauber – gib ihm den Toast.';
   return base;
 };

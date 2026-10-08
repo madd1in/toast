@@ -30,8 +30,8 @@ def comic(im):
 
 
 if __name__ == '__main__':
-    for name in ('hafen', 'landeplatz'):
+    for name in ('hafen', 'landeplatz', 'keller'):
         Image.open(f'art/render/raum_{name}.png').convert('RGB').save(f'img/raum_{name}.jpg', quality=86, optimize=True, progressive=True)
     comic(Image.open('art/render/raum_testkammer_ue')).save('img/raum_testkammer.jpg', quality=86, optimize=True, progressive=True)
     import os
-    print({n: os.path.getsize(f'img/raum_{n}.jpg') // 1024 for n in ('hafen', 'landeplatz', 'testkammer')}, 'KB')
+    print({n: os.path.getsize(f'img/raum_{n}.jpg') // 1024 for n in ('hafen', 'landeplatz', 'testkammer', 'keller')}, 'KB')

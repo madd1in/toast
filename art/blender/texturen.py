@@ -212,6 +212,32 @@ def schlangenhaut(name, w=512, h=512, seed=31):
     save(np.asarray(im.filter(ImageFilter.GaussianBlur(1.0)), np.float32), name)
 
 
+def bruchstein(name, w=1024, h=1024, seed=41, cols=('#7a746c', '#857d72', '#6c665e', '#8e867a'), mortar='#2e2a34', rows=8, floor=False):
+    """Kellermauer aus unregelmäßigen Bruchsteinen (oder Kopfsteinpflaster): versetzte Reihen, gerundete Steine,
+    Fugen dunkel, Moosflecken unten; kachelbar."""
+    r = random.Random(seed)
+    img = Image.new('RGB', (w, h), mortar)
+    d = ImageDraw.Draw(img)
+    rh = h / rows
+    for j in range(rows):
+        x = -r.uniform(0, w / 6)
+        while x < w:
+            sw = r.uniform(w / 9, w / 5) if not floor else r.uniform(w / 11, w / 8)
+            y0, y1 = j * rh + r.uniform(3, 9), (j + 1) * rh - r.uniform(3, 9)
+            k = r.uniform(0.85, 1.12)
+            c = tuple(int(min(255, v * k)) for v in hexrgb(r.choice(cols)))
+            for ox in (-w, 0, w):   # kachelbar in x
+                d.rounded_rectangle([x + ox + 4, y0, x + ox + sw - 4, y1], radius=int(rh * 0.3), fill=c)
+                d.line([x + ox + 10, y0 + 5, x + ox + sw - 12, y0 + 5], fill=tuple(min(255, int(v * 1.18)) for v in c), width=3)   # Lichtkante
+            x += sw
+    arr = np.asarray(img, np.float32) * (0.82 + 0.3 * noise(w, h, 9, 4, seed))[..., None]
+    if not floor:   # feuchte, moosige Stellen unten
+        yy = np.linspace(0, 1, h)[:, None, None]
+        moss = np.clip((yy - 0.7) / 0.3, 0, 1) * noise(w, h, 6, 3, seed + 1)[..., None]
+        arr = arr * (1 - 0.5 * moss) + hexrgb('#3e5a2e') * 0.5 * moss
+    save(arr, name)
+
+
 speckle('gras.png',['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21)
 speckle('fels.png', ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22)
 speckle('sand.png', ['#d8c088', '#e8d29a', '#f4e4b4'], scale=10, seed=23)
@@ -224,4 +250,6 @@ plaster('putz.png')
 roof_tiles('dachziegel.png')
 jolly_roger('flagge.png')
 schlangenhaut('schlange.png')
+bruchstein('mauer.png')
+bruchstein('pflaster.png', cols=('#6a645c', '#76706a', '#5c5850', '#807a70'), rows=10, seed=43, floor=True)
 print(sorted(os.listdir(OUT)))

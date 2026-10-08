@@ -325,6 +325,158 @@ def build_landeplatz(SC):
     return {'Raumschiff': S, 'Fracht': bpy.data.objects['Fracht0'], 'Saeule': bpy.data.objects['Saeule'], 'Tafel': bpy.data.objects['Tafel']}
 
 
+# ------------------------------------------------------------------ Keller (unter der Lobby, Gegenwart)
+def build_keller(SC):
+    """Gewölbekeller im Toon-Look: Bruchsteinmauern, Kopfsteinpflaster, Leiter zur Falltür, Sicherungskasten mit
+    Haupthebel, Heizkessel mit Rohren, grün leuchtendes Kühlbecken, Kettensäge am Haken, Regal mit Einmachgläsern,
+    Kerkertür, nackte Glühbirne – eine Verbeugung vor den Kellern der alten Gruselvilla-Adventures."""
+    B = Builder(SC)
+    WALL, FLOOR = tex_toon('K_Mauer', 'mauer.png', 0.36, hi=0.0), tex_toon('K_Pflaster', 'pflaster.png', 0.55, hi=0.0)   # matt: kein Glanzfleck
+    WOOD, WOODD = tex_toon('K_Holz', 'holz_deck.png', 0.4, hi=0.0), toon('K_HolzDunkel', '#4a3020', hi=0.0)
+    METAL, IRON, RED, YEL = toon('K_Metall', '#8a8e98', hi=0.5), toon('K_Eisen', '#3a3a42', hi=0.3), toon('K_Rot', '#c8323a'), toon('K_Gelb', '#f0c83a')
+    COPPER, BLACK, WHITE = toon('K_Kupfer', '#b8693a', hi=0.25), toon('N_Schwarz', '#16121e', hi=0.15), toon('K_Weiss', '#ece6da')
+    GLOW, GREEN = toon('K_Lampe', '#ffe39a', hi=0.95), toon('K_Reaktor', '#7dff8a', hi=0.95)
+    for m in (GLOW, GREEN):   # leuchten selbst
+        e = m.node_tree.nodes.get('ToonEmi')
+        if e:
+            e.inputs['Strength'].default_value = 2.2
+    # Boden, Rückwand, schräge Seitenwände (wie eine Bühne), Decke mit Balken
+    box(B, 'K_Boden', (0, 11.2, -0.06), (24, 9.6, 0.12), FLOOR, bevel=0)
+    box(B, 'K_Rueckwand', (0, 14.6, 2.7), (20, 0.5, 5.6), WALL, bevel=0)
+    for k, sx in (('L', -1), ('R', 1)):
+        a = math.atan2(6.9, 3.0)
+        cxw, cyw = sx * 6.3, 10.95
+        box(B, f'K_Seitenwand{k}', (cxw + sx * 0.22, cyw - 0.1, 2.7), (0.5, 7.8, 5.6), WALL, rot=(0, 0, -sx * (math.pi / 2 - a)), bevel=0)
+    box(B, 'K_Decke', (0, 11.2, 5.0), (20, 9.6, 0.3), WOODD, bevel=0)
+    for i, y in enumerate((9.2, 11.4, 13.6)):
+        box(B, f'K_Balken{i}', (0, y, 4.75), (16, 0.35, 0.3), WOOD, bevel=0.02)
+    # Leiter hinauf zur Falltür, warmes Licht aus der Luke
+    lx, ly = -1.55, 13.75
+    for sx in (-1, 1):
+        B.rod(f'K_Holm{sx}', (lx + sx * 0.26, ly, 0.0), (lx + sx * 0.26, ly + 0.25, 4.9), 0.045, WOOD, None, seg=10)
+    for i in range(14):
+        z = 0.3 + i * 0.33
+        B.rod(f'K_Sprosse{i}', (lx - 0.26, ly + z / 4.9 * 0.25, z), (lx + 0.26, ly + z / 4.9 * 0.25, z), 0.03, WOOD, None, seg=8)
+    box(B, 'K_Luke', (lx, ly + 0.2, 4.84), (0.9, 0.9, 0.02), GLOW, bevel=0)
+    # Sicherungskasten mit Haupthebel und Schild
+    fx = 2.1
+    box(B, 'K_Sicherung', (fx, 14.25, 1.75), (0.95, 0.2, 1.15), METAL, bevel=0.03)
+    box(B, 'K_SicherungTuer', (fx - 0.12, 14.13, 1.75), (0.6, 0.04, 0.9), IRON, bevel=0.01)
+    B.rod('K_Hebel', (fx + 0.33, 14.1, 1.55), (fx + 0.62, 13.95, 2.05), 0.035, IRON, None, seg=8)
+    B.sphere('K_HebelKnauf', (fx + 0.63, 13.94, 2.08), (0.07, 0.07, 0.07), RED, None)
+    box(B, 'K_Schild', (fx - 0.05, 14.13, 2.5), (1.1, 0.04, 0.22), YEL, bevel=0.01)
+    cd = bpy.data.curves.get('K_SchildText') or bpy.data.curves.new('K_SchildText', 'FONT')
+    cd.body, cd.size, cd.align_x, cd.align_y, cd.extrude = 'HAUPTSICHERUNG', 0.12, 'CENTER', 'CENTER', 0.005
+    cd.materials.clear(); cd.materials.append(BLACK)
+    st = bpy.data.objects.new('K_SchildText', cd); SC.collection.objects.link(st)
+    st.location, st.rotation_euler = (fx - 0.05, 14.1, 2.49), (math.pi / 2, 0, 0)
+    for i in range(3):
+        B.rod(f'K_Kabel{i}', (fx - 0.3 + i * 0.3, 14.3, 2.33), (fx - 0.3 + i * 0.3, 14.3, 4.85), 0.025, BLACK, None, seg=6)
+    # Heizkessel mit Nieten, Feuerklappe, Manometer und Rohren
+    kx, ky = 5.5, 13.2
+    B.cone('K_Kessel', 0.0, 2.3, 0.85, 0.85, COPPER, None, xy=(kx, ky), seg=32, bevel=0.03)
+    B.sphere('K_KesselDach', (kx, ky, 2.3), (0.85, 0.85, 0.35), COPPER, None)
+    for i, z in enumerate((0.25, 1.15, 2.05)):
+        B.torus(f'K_KesselRing{i}', (kx, ky, z), 0.86, 0.035, IRON, None, seg=40, sseg=6)
+    box(B, 'K_Feuerklappe', (kx, ky - 0.84, 0.55), (0.5, 0.06, 0.4), IRON, bevel=0.01)
+    box(B, 'K_Glut', (kx, ky - 0.87, 0.5), (0.36, 0.02, 0.12), toon('K_Glut', '#ff8a2a', hi=0.95), bevel=0)
+    B.cone('K_Manometer', 0.0, 0.06, 0.18, 0.18, WHITE, None, xy=(0, 0), rot=(math.pi / 2, 0, 0), bevel=0.01)
+    bpy.data.objects['K_Manometer'].location = (kx + 0.35, ky - 0.86, 1.65)
+    B.rod('K_Zeiger', (kx + 0.35, ky - 0.93, 1.65), (kx + 0.45, ky - 0.93, 1.74), 0.012, RED, None, seg=6)
+    for i, (a, b) in enumerate((((kx, ky, 2.5), (kx, ky, 4.85)), ((kx - 0.4, ky, 2.4), (kx - 0.4, ky + 1.1, 4.0)), ((kx, ky, 4.5), (-1.0, ky + 1.1, 4.5)))):
+        B.rod(f'K_Rohr{i}', a, b, 0.09, COPPER, None, seg=12)
+    # Kühlbecken mit grün leuchtendem Wasser und Warnschild
+    px0, px1, py0, py1 = -6.9, -4.3, 12.2, 14.2
+    for i, (cxp, cyp, sxp, syp) in enumerate((((px0 + px1) / 2, py0, px1 - px0, 0.25), ((px0 + px1) / 2, py1, px1 - px0, 0.25), (px0, (py0 + py1) / 2, 0.25, py1 - py0), (px1, (py0 + py1) / 2, 0.25, py1 - py0))):
+        box(B, f'K_Beckenrand{i}', (cxp, cyp, 0.2), (sxp, syp, 0.4), toon('K_Beton', '#8a8a80', hi=0.05), bevel=0.02)
+    box(B, 'K_Reaktorwasser', ((px0 + px1) / 2, (py0 + py1) / 2, 0.33), (px1 - px0 - 0.2, py1 - py0 - 0.2, 0.02), GREEN, bevel=0)
+    for i, (bx, by, br) in enumerate(((-6.1, 12.6, 0.07), (-5.3, 13.1, 0.05), (-4.9, 12.5, 0.06), (-5.8, 13.6, 0.04))):   # Blubberblasen
+        B.sphere(f'K_Blase{i}', (bx, by, 0.36), (br, br, br * 0.8), GREEN, None)
+    box(B, 'K_Warnschild', (-5.6, 14.32, 2.5), (2.0, 0.04, 0.8), YEL, bevel=0.01)
+    for i, (txt_, z, sz) in enumerate((('KÜHLBECKEN', 2.68, 0.2), ('NICHT SCHWIMMEN!', 2.36, 0.14))):
+        cdw = bpy.data.curves.get(f'K_WarnText{i}') or bpy.data.curves.new(f'K_WarnText{i}', 'FONT')
+        cdw.body, cdw.size, cdw.align_x, cdw.align_y, cdw.extrude = txt_, sz, 'CENTER', 'CENTER', 0.005
+        cdw.materials.clear(); cdw.materials.append(BLACK)
+        ow = bpy.data.objects.new(f'K_WarnText{i}', cdw); SC.collection.objects.link(ow)
+        ow.location, ow.rotation_euler = (-5.6, 14.29, z), (math.pi / 2, 0, 0)
+    # Kettensäge am Haken einer Lochwand (mit Zettel)
+    sx_, sz_ = 0.3, 2.25
+    box(B, 'K_Lochwand', (sx_ + 0.3, 14.33, sz_ + 0.05), (1.5, 0.04, 1.0), toon('K_Hartfaser', '#a8865a', hi=0.0), bevel=0.01)
+    for i in range(5):
+        for j in range(3):
+            B.sphere(f'K_Loch{i}{j}', (sx_ - 0.3 + i * 0.3, 14.305, sz_ - 0.27 + j * 0.32), (0.02, 0.01, 0.02), BLACK, None)
+    B.rod('K_Haken', (sx_, 14.32, sz_ + 0.35), (sx_, 14.2, sz_ + 0.18), 0.02, IRON, None, seg=6)
+    box(B, 'K_Saege', (sx_, 14.2, sz_), (0.42, 0.16, 0.26), toon('K_Orange', '#e8762a'), bevel=0.03)
+    box(B, 'K_SaegeSchwert', (sx_ + 0.48, 14.2, sz_ - 0.02), (0.6, 0.03, 0.1), METAL, bevel=0.01)
+    B.torus('K_SaegeGriff', (sx_ - 0.05, 14.2, sz_ + 0.17), 0.1, 0.02, BLACK, None, rot=(math.pi / 2, 0, 0), seg=16, sseg=6)
+    box(B, 'K_Zettel', (sx_ - 0.05, 14.1, sz_ - 0.25), (0.22, 0.01, 0.14), WHITE, rot=(0, 0.15, 0), bevel=0)
+    # Regal mit Einmachgläsern und Kerkertür an der Rückwand
+    R = B.empty('K_RegalRoot'); R.location = (3.55, 14.15, 0)
+    for i, z in enumerate((0.4, 1.05, 1.7)):
+        box(B, f'K_Brett{i}', (0, 0, z), (1.3, 0.4, 0.05), WOOD, R, bevel=0.01)
+        for j in range(4):
+            col = ['#7ab84a', '#c84a5a', '#9a5ac8', '#e0b84a'][(i + j) % 4]
+            B.cone(f'K_Glas{i}{j}', z + 0.03, z + 0.33, 0.1, 0.1, toon(f'K_Glas{(i + j) % 4}', col, hi=0.7), R, xy=(-0.45 + j * 0.3, 0.02), seg=16, bevel=0.01)
+            B.cone(f'K_Deckel{i}{j}', z + 0.33, z + 0.38, 0.105, 0.105, COPPER, R, xy=(-0.45 + j * 0.3, 0.02), seg=16, bevel=0)
+    for sx in (-1, 1):
+        box(B, f'K_Regalseite{sx}', (sx * 0.65, 0, 1.0), (0.05, 0.4, 2.0), WOOD, R, bevel=0.01)
+    K = B.empty('K_KerkerRoot'); K.location = (-3.2, 14.36, 0)
+    box(B, 'K_KerkerBogen', (0, 0, 1.1), (1.2, 0.12, 2.2), toon('K_Dunkel', '#1a1620', hi=0.0), K, bevel=0)
+    box(B, 'K_KerkerSturz', (0, -0.08, 2.3), (1.45, 0.16, 0.22), toon('K_Beton', '#8a8a80', hi=0.05), K, bevel=0.02)
+    for i in range(6):
+        B.rod(f'K_Gitter{i}', (-0.5 + i * 0.2, -0.1, 0.02), (-0.5 + i * 0.2, -0.1, 2.18), 0.025, IRON, K, seg=6)
+    for z in (0.6, 1.6):
+        B.rod(f'K_Querstab{z}', (-0.56, -0.1, z), (0.56, -0.1, z), 0.03, IRON, K, seg=6)
+    box(B, 'K_Schloss', (0.42, -0.16, 1.1), (0.14, 0.06, 0.18), toon('K_Messing', '#c8a03a', hi=0.3), K, bevel=0.01)
+    # Überwachungskamera „G.L.a.D.O.S. 0.1“ am Deckenbalken: der Prototyp der Test-KI aus der Zukunft – weiße Schale,
+    # schwarzer Kern, ein gelbes Auge (das Spiel lässt es leuchten und dem Spieler folgen), Klebeband-Etikett
+    SHELL, CORE = toon('K_Schale', '#eceae4', hi=0.3), toon('K_Kern', '#26242e', hi=0.2)
+    EYE = toon('K_Lampe_Auge', '#ffc83a', hi=0.95)
+    e = EYE.node_tree.nodes.get('ToonEmi')
+    if e:
+        e.inputs['Strength'].default_value = 2.6
+    gx, gy, gz = -4.4, 13.55, 4.6
+    box(B, 'K_KamHalter', (gx, gy, gz - 0.03), (0.34, 0.34, 0.06), IRON, bevel=0.01)
+    B.rod('K_KamArm0', (gx, gy, gz - 0.04), (gx, gy - 0.04, gz - 0.42), 0.045, CORE, None, seg=10)
+    B.sphere('K_KamGelenk', (gx, gy - 0.04, gz - 0.45), (0.075, 0.075, 0.075), SHELL, None)
+    B.rod('K_KamArm1', (gx, gy - 0.04, gz - 0.45), (gx + 0.14, gy - 0.22, gz - 0.66), 0.04, CORE, None, seg=10)
+    B.rod('K_KamKabel', (gx - 0.12, gy + 0.05, gz - 0.05), (gx + 0.05, gy - 0.12, gz - 0.62), 0.016, BLACK, None, seg=6)
+    H = B.empty('K_KameraRoot'); H.location = (gx + 0.2, gy - 0.32, gz - 0.74); H.rotation_euler = (0.3, 0, -0.5)   # schaut nach −y, leicht nach unten in den Raum
+    B.sphere('K_KamKopf', (0, 0.06, 0), (0.2, 0.32, 0.19), SHELL, H)
+    box(B, 'K_KamPlatte', (0, 0.1, 0.16), (0.24, 0.34, 0.05), SHELL, H, rot=(0.12, 0, 0), bevel=0.02)
+    B.torus('K_KamRing', (0, -0.22, 0), 0.135, 0.028, CORE, H, rot=(math.pi / 2, 0, 0), seg=32, sseg=8)
+    B.sphere('K_KamLinse', (0, -0.24, 0), (0.11, 0.05, 0.11), CORE, H)
+    B.sphere('K_KamAuge', (0, -0.285, 0), (0.062, 0.022, 0.062), EYE, H)
+    box(B, 'K_KamEtikett', (0.2, 0.02, -0.01), (0.012, 0.22, 0.08), toon('K_Klebeband', '#d8d0b8', hi=0.0), H, bevel=0)
+    # Glühbirne am Kabel, Mauseloch, Kisten
+    B.rod('K_Birnenkabel', (0.9, 11.2, 4.85), (0.9, 11.2, 3.45), 0.012, BLACK, None, seg=6)
+    B.cone('K_Fassung', 3.3, 3.45, 0.06, 0.05, IRON, None, xy=(0.9, 11.2), seg=12, bevel=0)
+    B.sphere('K_Birne', (0.9, 11.2, 3.2), (0.11, 0.11, 0.14), GLOW, None)
+    B.cone('K_Mauseloch', 0.0, 0.03, 0.17, 0.17, BLACK, None, xy=(0, 0), rot=(math.pi / 2, 0, 0), bevel=0, cut=(-0.01, math.pi + 0.01))
+    bpy.data.objects['K_Mauseloch'].location = (1.05, 14.34, 0.0)
+    for i, (x, y, s) in enumerate(((4.3, 8.9, 0.7), (4.7, 9.5, 0.6), (4.45, 9.1, 0.5))):
+        box(B, f'K_Kiste{i}', (x, y, s / 2 + (0.7 if i == 2 else 0)), (s, s, s), WOOD, rot=(0, 0, 0.3 * i), bevel=0.02)
+    # Licht: Glühbirne (warm), Kühlbecken (grün), Luke (warm von oben), schwaches Grundlicht
+    def lamp(name, loc, energy, col, size=0.1, kind='POINT', rot=None):
+        ld = bpy.data.lights.new(name, kind)
+        ld.energy, ld.color = energy, col
+        if kind == 'POINT':
+            ld.shadow_soft_size = size
+        o = bpy.data.objects.new(name, ld); SC.collection.objects.link(o); o.location = loc
+        if rot:
+            o.rotation_euler = rot
+        return o
+    lamp('K_LichtBirne', (0.9, 11.0, 3.0), 520, (1.0, 0.8, 0.55), 0.25)
+    lamp('K_LichtBecken', (-5.6, 13.0, 0.9), 380, (0.45, 1.0, 0.5), 0.6)
+    lamp('K_LichtLuke', (lx, ly, 4.6), 160, (1.0, 0.86, 0.6), 0.3)
+    sun(SC, (0.8, 0.0, 0.3), 0.4, (0.62, 0.66, 0.9))
+    return {'Sicherung': bpy.data.objects['K_Sicherung'], 'Hebel': bpy.data.objects['K_HebelKnauf'], 'Kessel': bpy.data.objects['K_Kessel'],
+            'Becken': bpy.data.objects['K_Reaktorwasser'], 'Saege': bpy.data.objects['K_Saege'], 'Leiter': bpy.data.objects['K_Holm1'],
+            'Regal': bpy.data.objects['K_RegalRoot'], 'Kerker': bpy.data.objects['K_KerkerRoot'], 'Birne': bpy.data.objects['K_Birne'],
+            'Schild': bpy.data.objects['K_Warnschild'], 'Mauseloch': bpy.data.objects['K_Mauseloch'], 'Kamera': bpy.data.objects['K_KameraRoot'],
+            'KameraAuge': bpy.data.objects['K_KamAuge'], 'Lochwand': bpy.data.objects['K_Lochwand']}
+
+
 def tree(o):
     out = [o]
     for c in o.children:
@@ -430,7 +582,7 @@ def render_hafen_layers(SC, cam):
     json.dump({'pivot': [round(q.x * 960, 1), round((1 - q.y) * 440, 1)]}, open(out + 'meta.json', 'w'))
 
 
-ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828'))}
+ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12'))}
 
 
 def render(name):
