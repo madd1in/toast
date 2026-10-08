@@ -707,7 +707,7 @@ function updateBarks() {
     G.chat = { lines: ch, ids: [...new Set(ch.map(l => l[0]))], i: 0, next: G.t };
     return;
   }
-  const npcs = NPCS.filter(id => ACT[id].room === viewRoomId() && ACT[id].visible && BARKS[id]);
+  const npcs = [...NPCS, ...(typeof GUESTS !== 'undefined' ? GUESTS : [])].filter(id => ACT[id].room === viewRoomId() && ACT[id].visible && BARKS[id]);
   if (npcs.length) { const id = pick(npcs); startBark(id, pick(G.settings.party && PARTY_BARKS[id] && Math.random() < 0.6 ? PARTY_BARKS[id] : BARKS[id])); }
 }
 function drawBark(scr) {
@@ -1422,9 +1422,9 @@ function menuItems() {
   const back = { id: G.screen === 'game' ? 'main' : 'close', label: 'Zurück' };
   if (G.menu === 'confirm') return [{ id: 'yes', label: 'Ja, neu starten' }, { id: 'back', label: 'Nein, weiterspielen' }];
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
-  if (G.menu === 'album' || G.menu === 'bios') return [back];
+  if (G.menu === 'album' || G.menu === 'bios' || G.menu === 'gaeste') return [back];
   if (G.menu === 'eggs') return [{ id: 'extras', label: 'Zurück' }];
-  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'bios', label: 'Figuren-Steckbriefe' }, { id: 'eggs', label: `Fundstücke (${eggsFound()}/${Object.keys(EGGS).length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
+  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'bios', label: 'Figuren-Steckbriefe' }, ...(typeof GUESTS !== 'undefined' && gbKnown() ? [{ id: 'gaeste', label: `Gästebuch (${gbCount()}/${GUESTS.length})` }] : []), { id: 'eggs', label: `Fundstücke (${eggsFound()}/${Object.keys(EGGS).length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
   if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
@@ -1485,9 +1485,9 @@ function menuClick(x, y) {
   else if (b.id.startsWith('mp_')) fastTravel(b.id.slice(3));
   else if (b.id === 'map') { G.mapFrom = 'main'; openMap(true); }
   else if (b.id === 'mapback') G.menu = G.mapFrom === 'main' ? 'main' : null;
-  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album', 'bios', 'eggs'].includes(b.id)) {
+  else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album', 'bios', 'eggs', 'gaeste'].includes(b.id)) {
     G.albumView = null;
-    if (b.id === 'notes' || b.id === 'bios') Sound.sfx('page');
+    if (b.id === 'notes' || b.id === 'bios' || b.id === 'gaeste') Sound.sfx('page');
     G.menu = b.id;
   }
   else if (b.id === 'new') G.menu = 'confirm';
@@ -2178,10 +2178,10 @@ function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
   const jb = G.menu === 'jukebox';
-  const extra = G.menu === 'eggs' ? Object.keys(EGGS).length * 30 + 34 : G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? ACH.length * 24 + 10 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
-  const bw = jb ? 820 : G.menu === 'eggs' ? 620 : G.menu === 'bios' ? 780 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes' ? 560 : 420, mst = items.length > 11 ? 40 : items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
+  const extra = G.menu === 'eggs' ? Object.keys(EGGS).length * 30 + 34 : G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'gaeste' ? 3 * 128 + 48 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? Math.ceil(ACH.length / 2) * 36 + 14 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const bw = jb ? 820 : G.menu === 'eggs' ? 620 : G.menu === 'bios' ? 780 : G.menu === 'gaeste' ? 824 : G.menu === 'ach' ? 860 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'notes' ? 560 : 420, mst = items.length > 11 ? 40 : items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
-  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe', eggs: 'Fundstücke' }[G.menu] || 'Pause';
+  const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe', eggs: 'Fundstücke', gaeste: 'Gästebuch' }[G.menu] || 'Pause';
   txt(cx, title, W / 2, by + 48, '400 30px "Titan One", sans-serif', '#ffd23a', 'center', 5, OUT);
   let y = by + 74;
   if (G.menu === 'main' && G.state) { txt(cx, `Fortschritt: ${progress()} von ${MILESTONES.length} Rätseln`, W / 2, y - 2, '600 13px "Baloo 2", sans-serif', '#a99ad0'); y += 10; }
@@ -2191,6 +2191,7 @@ function drawMenu() {
     y += HELP.length * 23 + 10;
   }
   if (G.menu === 'bios') { drawBios(bx, y); y += 3 * 140 + 8; }
+  if (G.menu === 'gaeste') { drawGuestbook(bx, y); y += 3 * 128 + 48; }
   if (G.menu === 'eggs') { drawEggList(bx, y, bw); y += Object.keys(EGGS).length * 30 + 34; }
   if (jb) drawJukebox(bx, by, bw);
   let photoBtns = [];
@@ -2220,13 +2221,15 @@ function drawMenu() {
     y += 42;
   }
   if (G.menu === 'ach') {
+    const cw = (bw - 40) / 2;
     ACH.forEach((a, i) => {
-      const got = !!G.ach[a.id], yy = y + 10 + i * 24;
-      cx.globalAlpha = got ? 1 : 0.4; trophy(cx, bx + 34, yy, 0.8); cx.globalAlpha = 1;
-      txt(cx, !got && a.secret ? 'Geheimer Erfolg' : a.name, bx + 56, yy + 2, '800 15px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
-      txt(cx, got ? a.desc : '???', bx + 230, yy + 2, '600 13px "Baloo 2", sans-serif', got ? '#e6dcff' : '#6a5a88', 'left');
+      const got = !!G.ach[a.id], x = bx + 20 + (i % 2) * cw, yy = y + 14 + Math.floor(i / 2) * 36;
+      cx.globalAlpha = got ? 1 : 0.4; trophy(cx, x + 16, yy, 0.8); cx.globalAlpha = 1;
+      txt(cx, !got && a.secret ? 'Geheimer Erfolg' : a.name, x + 36, yy + 1, '800 15px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
+      cx.font = '600 12px "Baloo 2", sans-serif';
+      txt(cx, got ? (wrap(a.desc, cw - 46)[0] || '') : '???', x + 36, yy + 16, '600 12px "Baloo 2", sans-serif', got ? '#e6dcff' : '#6a5a88', 'left');
     });
-    y += ACH.length * 24 + 10;
+    y += Math.ceil(ACH.length / 2) * 36 + 14;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
   G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * Math.min(43, (bh - 90) / items.length), w: 340, h: Math.min(35, (bh - 90) / items.length - 5) } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: Math.min(38, mst - 4) }));
@@ -2999,8 +3002,9 @@ function drawMap() {
     txt(cx, er.label, ex + 56, top + 37, '400 21px "Titan One", sans-serif', own ? er.col : mix(er.col, '#6a5a88', 0.5), 'left', 4, OUT);
     const res = PLAYERS.find(p => HOME_ERA[p] === era);
     if (res) { drawPortrait(cx, res, ex + ew - 28, top + 30, 18, er.bg, t, false); E(cx, ex + ew - 28, top + 30, 18, 18, null, 2.5, 0, res === curId() ? '#ffe066' : mix(er.col, '#241739', 0.35)); }
-    mapRooms(era).forEach((id, ri) => {
-      const room = ROOMS[id], cw = 196, th = Math.round(cw * SH / W), x = ex + (ew - cw) / 2, y = top + 62 + ri * 120, seen = !!vis[id];
+    const list = mapRooms(era), rh = Math.min(120, (bh - 222) / list.length);   // mehr Orte pro Epoche: kleinere Postkarten
+    list.forEach((id, ri) => {
+      const room = ROOMS[id], cw = Math.min(196, Math.round((rh - 30) * W / SH)), th = Math.round(cw * SH / W), x = ex + (ew - cw) / 2, y = top + 62 + ri * rh, seen = !!vis[id];
       const isHere = id === here, can = seen && own && !isHere && !G.busy, r = { id: 'mp_' + id, x, y, w: cw, h: th + 24 }, hot = can && inRect(G.mouse.x, G.mouse.y, r);
       if (isHere && !cx.isPix) glow(x + cw / 2, y + th / 2, 140, '#ffd23a', 0.22 + Math.sin(t * 0.005) * 0.08);
       if (hot && !cx.isPix) glow(x + cw / 2, y + th / 2, 130, er.col, 0.25);

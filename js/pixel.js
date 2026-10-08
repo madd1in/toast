@@ -337,6 +337,34 @@ class PixCtx {
   createLinearGradient(x0, y0, x1, y1) { return new PixGrad('linear', [x0, y0, x1, y1]); }
   createRadialGradient(x0, y0, r0, x1, y1, r1) { return new PixGrad('radial', [x0, y0, r0, x1, y1, r1]); }
   drawImage() { /* im Pixel-Modus nicht benötigt */ }
+  // Gerendertes Bild als Pixel-Art (3D-Gäste und 3D-Räume im Klassik-Modus): nächster Bildpunkt, Alpha als harte Kante,
+  // Farben auf grobe VGA-Stufen, bei Figuren eine dunkle Sel-out-Kontur außen herum
+  drawSprite(img, sx, sy, sw, sh, dx, dy, dw, dh) {
+    const src = pixSource(img); if (!src) return;
+    const m = this.m, det = m[0] * m[3] - m[1] * m[2]; if (!det) return;
+    const cs = [[dx, dy], [dx + dw, dy], [dx, dy + dh], [dx + dw, dy + dh]].map(([x, y]) => this.tx(x, y));
+    const x0 = Math.max(0, Math.floor(Math.min(...cs.map(p => p[0])))), x1 = Math.min(this.w - 1, Math.ceil(Math.max(...cs.map(p => p[0]))));
+    const y0 = Math.max(0, Math.floor(Math.min(...cs.map(p => p[1])))), y1 = Math.min(this.h - 1, Math.ceil(Math.max(...cs.map(p => p[1]))));
+    if (x1 < x0 || y1 < y0) return;
+    const inv = [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
+    const bw = x1 - x0 + 3, bh = y1 - y0 + 3, cols = new Uint32Array(bw * bh), ga = this.globalAlpha, d = src.d, st = v => Math.min(255, Math.round(v / 17) * 17);
+    const full = dw * dh >= W * SH * 0.9;   // ganzer Raum-Hintergrund: ohne Kontur
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const ux = inv[0] * (x + 0.5) + inv[2] * (y + 0.5) + inv[4], uy = inv[1] * (x + 0.5) + inv[3] * (y + 0.5) + inv[5];
+      const u = (ux - dx) / dw, v = (uy - dy) / dh;
+      if (u < 0 || u >= 1 || v < 0 || v >= 1) continue;
+      const k = ((Math.floor(sy + v * sh) * src.w) + Math.floor(sx + u * sw)) * 4;
+      if (d[k + 3] * ga < 128) continue;
+      const c = ((255 << 24) | (st(d[k + 2]) << 16) | (st(d[k + 1]) << 8) | st(d[k])) >>> 0;
+      if (this.plot(x, y, { u32: c, a: 1 })) cols[(y - y0 + 1) * bw + (x - x0 + 1)] = c;
+    }
+    if (full) return;
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      if (cols[y * bw + x]) continue;
+      const n = (x > 0 && cols[y * bw + x - 1]) || (x < bw - 1 && cols[y * bw + x + 1]) || (y > 0 && cols[(y - 1) * bw + x]) || (y < bh - 1 && cols[(y + 1) * bw + x]);
+      if (n) this.plot(x + x0 - 1, y + y0 - 1, { u32: selout(n), a: 1 });
+    }
+  }
 
   // ---------- Raum-Hintergründe: einmal als Pixel-Art gerendert, dann kopiert ----------
   blitRoom(room) {
@@ -360,6 +388,15 @@ class PixCtx {
   }
 }
 
+// Bildpunkte eines geladenen Bildes einmal auslesen (für drawSprite)
+function pixSource(img) {
+  if (img._pixSrc) return img._pixSrc;
+  if (!img.complete || !img.naturalWidth) return null;
+  const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  try { img._pixSrc = { w: c.width, h: c.height, d: g.getImageData(0, 0, c.width, c.height).data }; } catch (e) { return null; }
+  return img._pixSrc;
+}
 // Doppelpuffer für das Spielbild: Ebene 0 (Hintergrund & Objekte), Ebene 1 (Figuren, Oberfläche)
 const PIX = new PixCtx(PW, PH, 2);
 const pixLow = [0, 1].map(() => { const c = document.createElement('canvas'); c.width = PW; c.height = PH; return c; });

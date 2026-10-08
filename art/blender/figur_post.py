@@ -20,10 +20,11 @@ CFG = {
     'lila': dict(top=1.951, h=177, skip=[]),
     'nett': dict(top=1.951, h=177, skip=[]),
     'guard': dict(top=1.951, h=170, skip=[]),
-}[NAME]
+}.get(NAME)   # Crossover-Gäste (gaeste_build.py): Scheitel aus meta.json, 104 Spiel-Einheiten pro Meter wie bei Bernard
 CONTRAST, SATUR = 1.18, 1.25   # Raumlicht und Papierstruktur im Spiel legen sich darüber und machen die Figur sonst blass
 SRC = f'art/render/{NAME}/'
 meta = json.load(open(SRC + 'meta.json'))
+CFG = CFG or dict(top=meta['top'], h=round(meta['top'] * 104), skip=[])
 UPP = round(CFG['h'] / (CFG['top'] * meta['ppm']), 4)   # Spiel-Einheiten pro Bildpixel
 crops = []
 for f in meta['frames']:

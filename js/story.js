@@ -153,7 +153,7 @@ const ACH = [
   { id: 'kristalle', name: 'Kristallklar', desc: 'Alle sechs Chrono-Kristalle eingesammelt.' },
   { id: 'rockstar', name: 'Tentakel-Rockstar', desc: 'Im Minispiel mindestens 80 % der Töne getroffen.' },
   { id: 'toastmeister', name: 'Toast-Meister', desc: 'Im Gut-O-Mat-Minispiel mindestens 400 Punkte geröstet.' },
-  { id: 'reise', name: 'Weltenbummler', desc: 'Alle sieben Orte in drei Zeiten besucht.' },
+  { id: 'reise', name: 'Weltenbummler', desc: 'Alle Orte in drei Zeiten besucht.' },
   { id: 'party', name: 'Partytier', desc: 'Den geheimen Code gefunden. Hütchen auf!', secret: true },
   { id: 'tierfreund', name: 'Tierfreund', desc: 'Katze, Huhn und Saugroboter gestreichelt.' },
   { id: 'eier', name: 'Easter-Egg-Jäger', desc: 'Alle Verbeugungen vor den Klassikern entdeckt.', secret: true },
@@ -688,6 +688,7 @@ ACT.drfred.talk = async () => {
       { id: 'cell', text: 'Wo kriege ich Strom für das Ding her?' },
       { id: 'bread', text: 'Und was ist mit dem Brot?' },
       { id: 'back', text: 'Wann kommen Hoagie und Laverne zurück?' },
+      typeof GUESTS !== 'undefined' && { id: 'riss', text: fl().rissZu ? 'Wie geht es dem Dimensions-Tor?' : 'Wer sind die ganzen komischen Gäste überall?' },
       { id: 'bye', text: 'Ich lasse Sie dann mal denken.' },
     ]);
     if (c === 'bye') { await say(b, 'Ich lasse Sie dann mal denken.'); await say(f, 'Endlich! ...Wo war ich? Ach ja. Toast.'); return; }
@@ -707,6 +708,17 @@ ACT.drfred.talk = async () => {
       await say(f, 'Nur das Freundlichkeits-Brot meiner Ur-Ur-Ur-Ur-Oma Gertrude wirkt! Das Rezept ist leider verschollen.');
       await say(f, 'Aber Hoagie ist ja gerade bei ihr im Gasthaus, im Jahr 1776. Soll er sich halt eins backen lassen!');
       await say(b, 'Praktisch.'); await say(f, 'Wissenschaft, mein Junge!');
+    }
+    if (c === 'riss' && fl().rissZu) {
+      await say(b, 'Wie geht es dem Dimensions-Tor?');
+      await say(f, 'Prächtig! Gestern kam ein Pinguin mit Gummihandschuh durch. Ich habe ihm Tee angeboten. Er hat abgelehnt.');
+    } else if (c === 'riss') {
+      await say(b, 'Wer sind die ganzen komischen Gäste überall?');
+      await say(f, 'Ah, das! Der Gut-O-Mat zieht so viel Strom, dass das Chrono-Klo leckt. Durch den Riss fallen Leute aus anderen Welten!');
+      await say(f, 'Piraten, Polizisten, ein Roboter, eine sehr unhöfliche Maschine … Sie sind über alle drei Zeiten verteilt.');
+      await say(f, 'Wenn jeder von ihnen in mein Gästebuch unterschreibt, kann ich den Riss berechnen. Hilf ihnen ein bisschen – dann unterschreiben sie bestimmt.');
+      await say(b, 'Und wo ist das Gästebuch?'); await say(f, 'Im Menü unter Extras! Wo denn sonst?');
+      fl().gbHint = 1;
     }
     if (c === 'back') {
       await say(b, 'Wann kommen Hoagie und Laverne zurück?');
@@ -953,4 +965,5 @@ async function showHint() { await cutscene(() => say(null, 'Tipp: ' + hintText()
 // Test- und Debug-Zugang (z. B. für automatische Durchspiel-Tests)
 window.TT = { G, ACT, ROOMS, OBJ, ITEMS, runSentence, switchChar, startNew, goRoom, fl: () => fl(), hintText };
 
-boot();
+// Start erst, wenn alle Skripte geladen sind (gaeste.js ergänzt Figuren und Räume)
+window.addEventListener('DOMContentLoaded', boot);
