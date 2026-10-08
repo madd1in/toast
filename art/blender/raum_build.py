@@ -32,7 +32,7 @@ def solve_cam():
 
 def setup(name, sky):
     SC = bpy.data.scenes.get('Raum_' + name) or bpy.data.scenes.new('Raum_' + name)
-    for o in list(SC.collection.objects):
+    for o in list(SC.collection.objects) + [o for c in SC.collection.children for o in c.objects]:
         bpy.data.objects.remove(o, do_unlink=True)
     hel = bpy.data.scenes['Helden3D']
     r = SC.render
@@ -89,8 +89,72 @@ def setup(name, sky):
     ls.select_silhouette = ls.select_border = ls.select_crease = True
     ls.linestyle.color = (0.04, 0.012, 0.07)
     ls.linestyle.thickness = 2.2
+    nk = bpy.data.collections.get('Ohne_Kontur') or bpy.data.collections.new('Ohne_Kontur')   # Palmwedel u. Ä. ohne Kontur
+    ls.select_by_collection = True
+    ls.collection = nk
+    ls.collection_negation = 'EXCLUSIVE'
     print('cam h', round(h, 2), 'phi', round(phi, 3), 'lens', round(cd.lens, 1), 'Vorderkante bei', round(d1, 2), 'm')
     return SC, cam
+
+
+def tex_toon(name, file, scale=0.35, uv=False, hi=None, rot=0.0):
+    """Toon-Material mit Bildtextur aus art/textures (texturen.py): UV-Koordinaten oder Box-Projektion in Weltkoordinaten."""
+    m = bpy.data.materials.get(name)
+    if m is None:
+        m = bpy.data.materials['HautB'].copy()
+        m.name = name
+    nt = m.node_tree
+    for n in [n for n in nt.nodes if n.name.startswith('Tex_')]:
+        nt.nodes.remove(n)
+    img = nt.nodes.new('ShaderNodeTexImage')
+    img.name = 'Tex_Bild'
+    img.image = bpy.data.images.load(REPO + '/art/textures/' + file, check_existing=True)
+    img.image.reload()   # texturen.py kann die Datei inzwischen neu erzeugt haben
+    if not uv:
+        img.projection, img.projection_blend = 'BOX', 0.25
+    mp = nt.nodes.new('ShaderNodeMapping')
+    mp.name = 'Tex_Map'
+    if uv:
+        tc = nt.nodes.new('ShaderNodeTexCoord')
+        tc.name = 'Tex_Koord'
+        nt.links.new(tc.outputs['UV'], mp.inputs['Vector'])
+    else:
+        geo = nt.nodes.new('ShaderNodeNewGeometry')
+        geo.name = 'Tex_Geo'
+        nt.links.new(geo.outputs['Position'], mp.inputs['Vector'])
+        mp.inputs['Scale'].default_value = (scale, scale, scale)
+        mp.inputs['Rotation'].default_value = (0, 0, rot)
+    nt.links.new(mp.outputs['Vector'], img.inputs['Vector'])
+    nt.links.new(img.outputs['Color'], nt.nodes['ToonMul'].inputs[6])
+    nt.links.new(img.outputs['Color'], next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Base Color'])
+    if hi is not None:
+        nt.nodes['ToonHi'].color_ramp.elements[1].color = (hi, hi, hi, 1)
+    m.diffuse_color = (0.6, 0.45, 0.3, 1)
+    return m
+
+
+def tube_in(SC):
+    """Kurven-Rohr (Seil, Zierleiste) mit Rundprofil, an die Szene gebunden."""
+    def tube(name, pts, r, mat, parent, tip=1.0):
+        cd = bpy.data.curves.get(name) or bpy.data.curves.new(name, 'CURVE')
+        cd.splines.clear()
+        cd.dimensions = '3D'
+        cd.bevel_depth = r
+        cd.bevel_resolution = 4
+        cd.use_fill_caps = True
+        sp = cd.splines.new('BEZIER')
+        sp.bezier_points.add(len(pts) - 1)
+        for i, (p, co) in enumerate(zip(sp.bezier_points, pts)):
+            p.co = co
+            p.handle_left_type = p.handle_right_type = 'AUTO'
+            p.radius = 1 - (1 - tip) * i / max(1, len(pts) - 1)
+        cd.materials.clear()
+        cd.materials.append(mat)
+        o = bpy.data.objects.new(name, cd)
+        SC.collection.objects.link(o)
+        o.parent = parent
+        return o
+    return tube
 
 
 def sun(SC, rot, energy, col):
@@ -121,17 +185,20 @@ def plane(B, name, x0, x1, y0, y1, z, mat):
 # ------------------------------------------------------------------ Hafen 1776
 def build_hafen(SC):
     B = Builder(SC)
-    WOOD, WOODD, WOODL = toon('R_Holz', '#9a6a3a'), toon('R_HolzDunkel', '#6a4426'), toon('R_HolzHell', '#c08a50')
+    WOOD, WOODD, WOODL = tex_toon('R_Stegholz', 'holz_steg.png', 0.32), toon('R_HolzDunkel', '#6a4426'), tex_toon('R_Stegholz2', 'holz_deck.png', 0.32)
     SEA, SEAD, FOAM = toon('R_Meer', '#2f8fb8', hi=0.85), toon('R_MeerTief', '#1f6a94'), toon('R_Gischt', '#e8f6ff')
     STONE, ROPE, SAIL, RED, BLACK = toon('R_Stein', '#9a948a'), toon('R_Seil', '#c8a870'), toon('R_Segel', '#f2ead6'), toon('R_Rot', '#b8323a'), toon('N_Schwarz', '#16121e', hi=0.15)
-    ROOF, WALL, GOLD = toon('R_Dach', '#8a3a2a'), toon('R_Wand', '#d8c8a0'), toon('N_Gold', '#e9b53c', hi=0.6)
+    ROOF, WALL, GOLD = tex_toon('R_Ziegel', 'dachziegel.png', 0.45), tex_toon('R_Putz', 'putz.png', 0.22), toon('N_Gold', '#e9b53c', hi=0.6)
+    BARREL = tex_toon('R_Fassholz', 'holz_fass.png', 1.1)
     # Steg aus Planken (Lauffläche) und Wasser dahinter
-    for i in range(17):   # breite Planken – schmale ergäben im Hintergrund nur Linienrauschen
-        y = 6.0 + i * 0.56
-        box(B, f'Planke{i}', (0, y, -0.06), (24, 0.54, 0.12), WOOD if i % 3 else WOODL, bevel=0.01)
-    for i, x in enumerate([-6.2, -3.1, 0, 3.1, 6.2]):
-        box(B, f'Balken{i}', (x, 10.7, -0.13), (0.18, 9.4, 0.1), WOODD, bevel=0.01)
-    plane(B, 'Meer', -80, 80, 15.4, 140, -0.75, SEA)
+    # Steg als eine durchgehende Fläche: die Planken kommen aus der Textur (einzelne Bretter gäben harte Konturlinien)
+    box(B, 'Steg', (0, 10.7, -0.06), (40, 9.4, 0.12), tex_toon('R_Steg', 'holz_steg.png', 0.23, rot=math.pi / 2), bevel=0.0)
+    meer = plane(B, 'Meer', -260, 260, 15.4, 380, -0.75, SEA)   # reicht bis an die Berge
+    bm = bmesh.new()
+    bm.from_mesh(meer.data)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=47, use_grid_fill=True)   # viele kleine Flächen: Freestyle verdeckt sonst nicht sauber
+    bm.to_mesh(meer.data)
+    bm.free()
     for i in range(36):   # Wellenkämme
         rnd = random.Random(i)
         x, y = rnd.uniform(-40, 40), rnd.uniform(18, 90)
@@ -149,52 +216,56 @@ def build_hafen(SC):
     roof = box(B, 'Dach', (-7.8, 16.2, 4.75), (5.2, 4.0, 0.25), ROOF, rot=(0.0, 0, 0))
     box(B, 'Tor', (-6.6, 14.45, 1.15), (1.7, 0.08, 2.3), WOODD)
     box(B, 'Schild', (-8.1, 14.42, 3.4), (2.6, 0.06, 0.6), WOODL)
+    cd = bpy.data.curves.get('SchildText') or bpy.data.curves.new('SchildText', 'FONT')
+    cd.body, cd.size, cd.align_x, cd.align_y, cd.extrude = 'RUM & TAUE', 0.36, 'CENTER', 'CENTER', 0.01
+    cd.materials.clear(); cd.materials.append(toon('R_Schrift', '#3a2010'))
+    st = bpy.data.objects.new('SchildText', cd); SC.collection.objects.link(st)
+    st.location, st.rotation_euler = (-8.1, 14.38, 3.38), (math.pi / 2, 0, 0)
     # Fässer, Kisten, Seilrolle, Kanone, Laterne
     for i, (x, y) in enumerate([(-2.7, 13.7), (-2.1, 14.3), (-3.4, 14.4), (4.8, 14.6)]):
-        B.cone(f'Fass{i}', 0, 0.95, 0.38, 0.38, WOODL, None, xy=(x, y), bevel=0.04, scale=(1, 1, 1))
+        B.cone(f'Fass{i}', 0, 0.95, 0.38, 0.38, BARREL, None, xy=(x, y), bevel=0.04, scale=(1, 1, 1))
         for j, z in enumerate((0.12, 0.83)):
             B.torus(f'Reif{i}{j}', (x, y, z), 0.385, 0.025, BLACK, None, seg=32, sseg=6)
     for i, (x, y, s) in enumerate([(-1.4, 14.7, 0.8), (5.8, 14.2, 0.7), (5.9, 14.3, 0.5)]):
         box(B, f'Kiste{i}', (x, y, s / 2 + (0.7 if i == 2 else 0)), (s, s, s), WOOD, bevel=0.03)
     B.torus('Seilrolle', (0.7, 13.4, 0.12), 0.38, 0.12, ROPE, None, seg=32, sseg=10)
-    B.cone('Laternenpfahl', 0, 3.2, 0.08, 0.07, WOODD, None, xy=(2.2, 15.0), bevel=0)
-    box(B, 'Laterne', (2.2, 15.0, 3.35), (0.32, 0.32, 0.42), toon('R_Laternenglas', '#ffd77a', hi=0.95), bevel=0.04)
-    # Piratenschiff rechts im Wasser
-    SH = B.empty('Schiff')
-    SH.location = (6.8, 22.5, -0.7)
-    SH.rotation_euler = (0, 0, -0.12)
-    B.sphere('Rumpf', (0, 0, 0.7), (6.2, 1.9, 1.6), toon('R_Rumpf', '#5a3420'), SH)
-    box(B, 'Deck', (0, 0, 1.75), (11.0, 3.2, 0.25), WOODL, SH)
-    box(B, 'Heck', (-3.8, 0, 2.3), (2.4, 2.6, 1.1), toon('R_Rumpf2', '#6a3e26'), SH)
-    box(B, 'Streifen', (0, -1.62, 1.35), (10.5, 0.1, 0.22), GOLD, SH, bevel=0.01)
-    for i in range(6):
-        B.sphere(f'Luke{i}', (-3.0 + i * 1.2, -1.75, 1.0), (0.18, 0.06, 0.16), BLACK, SH)
-    for i, (x, hgt) in enumerate([(-2.6, 5.0), (1.4, 5.8), (4.6, 4.4)]):   # unter dem oberen Bildrand
-        B.cone(f'Mast{i}', 1.8, 1.8 + hgt, 0.16, 0.1, WOODD, SH, xy=(x, 0), bevel=0)
-        for j, (z, w_) in enumerate(((0.5, 0.85), (0.9, 0.62))):
-            zz = 1.8 + hgt * z
-            B.sphere(f'Segel{i}{j}', (x, -0.25, zz - 0.95), (1.9 * w_, 0.16, 1.05 * w_), SAIL, SH)   # breit zur Kamera, leicht gebläht
-            B.rod(f'Rah{i}{j}', (x - 2.0 * w_, -0.2, zz), (x + 2.0 * w_, -0.2, zz), 0.06, WOODD, SH, seg=8)
-    flag = box(B, 'Flagge', (2.05, -0.1, 7.15), (1.2, 0.04, 0.75), BLACK, SH, bevel=0.0)
-    B.sphere('FlaggeToast', (2.05, -0.14, 7.17), (0.26, 0.03, 0.24), toon('R_Toast', '#e2a24a'), SH)   # Toast statt Totenkopf
-    for k in (-1, 1):
-        B.rod(f'FlaggeKnochen{k}', (2.05 - 0.4, -0.15, 7.17 - 0.25 * k), (2.05 + 0.4, -0.15, 7.17 + 0.25 * k), 0.035, toon('R_Knochen', '#f2ead6'), SH, seg=8)
-    B.cone('Bugspriet', 1.5, 1.6, 0.08, 0.05, WOODD, SH, xy=(6.6, 0), rot=(0, 1.2, 0), bevel=0)
-    # Ferne Insel mit Palmen und Wolken
-    B.sphere('Insel', (-22, 95, -0.9), (14, 6, 2.4), toon('R_Insel', '#5a9a4a'), None)
-    B.sphere('Strand', (-22, 93, -0.85), (15, 6.5, 0.9), toon('R_Sand', '#e8d29a'), None)
-    for i in range(3):
-        B.cone(f'Palme{i}', 0.8, 5.5, 0.25, 0.18, WOODD, None, xy=(-26 + i * 4, 92), bevel=0)
-        for j in range(5):
-            a = j * 2 * math.pi / 5
-            B.sphere(f'Blatt{i}{j}', (-26 + i * 4 + math.cos(a) * 1.3, 92 + math.sin(a) * 1.3, 5.6), (1.5, 0.45, 0.12), toon('R_Palme', '#3a8a3a'), None, rot=(0, 0.35, a))
+    B.cone('Laternenpfahl', 0, 3.2, 0.08, 0.07, WOODD, None, xy=(-1.0, 15.0), bevel=0)
+    box(B, 'Laterne', (-1.0, 15.0, 3.35), (0.32, 0.32, 0.42), toon('R_Laternenglas', '#ffd77a', hi=0.95), bevel=0.04)
+    # Piratenschiff: eigene Galeone (schiff.py), schräg im Hafenbecken, damit man die Segel von vorn sieht
+    import schiff
+    importlib.reload(schiff)
+    global SHIP_BUILD
+    import tropen
+    importlib.reload(tropen)
+
+    def ship_build(phase=0.0):   # Galeone samt jubelnder Crew (Arme im Takt der vier Windphasen)
+        root = schiff.build(SC, Builder(SC), toon, lambda n, f, **k: tex_toon(n, f, **k), tube_in(SC), (9.0, 36.0, -0.75), -0.9, phase)
+        tropen.crew(SC, Builder(SC), toon, root, phase, -0.9, schiff.x_at, schiff.half_width, schiff.deck_z)
+        return root
+    SHIP_BUILD = ship_build
+    SH = SHIP_BUILD(0.0)
+    # Palmeninsel (insel.py) zwischen Lagerhaus und Schiff, dahinter dunstige Berge
+    import insel
+    importlib.reload(insel)
+    insel.build(SC, B, toon, tex_toon, tube_in(SC), (-11.0, 95.0, -0.75))
+    for o in SC.objects:
+        if o.name.startswith(('Berg', 'Insel_Strand')):
+            tropen.clip_below(o, -0.95)
+    # Brasilien-Flair: Anakonda am Dach, Wimpelketten, Tropenobst (Vögel nur als eigene Ebene, siehe render_hafen_layers)
+    global SNAKE_BUILD
+    SNAKE_BUILD = lambda phase=0.0: tropen.schlange(SC, Builder(SC), toon, tex_toon, phase)
+    SNAKE_BUILD(0.0)
+    tropen.wimpel(SC, B, toon, tube_in(SC))
+    tropen.obst(SC, B, toon, tube_in(SC))
+    # Wolken
     for i in range(7):
         rnd = random.Random(100 + i)
         x, y, z = rnd.uniform(-60, 60), rnd.uniform(110, 135), rnd.uniform(14, 30)
         for j in range(4):
             B.sphere(f'Wolke{i}{j}', (x + j * 3.2 - 5, y, z + rnd.uniform(-0.6, 1.2)), (rnd.uniform(2.8, 4.2), 2.0, rnd.uniform(1.6, 2.6)), toon('R_Wolke', '#ffffff', hi=0.5), None)
     sun(SC, (0.95, 0.15, 0.65), 4.2, (1.0, 0.94, 0.82))
-    return {'Schiff': SH, 'Lager': bpy.data.objects['Tor'], 'Fass': bpy.data.objects['Fass0'], 'Laterne': bpy.data.objects['Laterne'], 'Seil': bpy.data.objects['Seilrolle']}
+    return {'Schiff': SH, 'Lager': bpy.data.objects['Tor'], 'Fass': bpy.data.objects['Fass0'], 'Laterne': bpy.data.objects['Laterne'], 'Seil': bpy.data.objects['Seilrolle'],
+            'Schlange': bpy.data.objects['Schlange'], 'Obst': bpy.data.objects['Ananas']}
 
 
 # ------------------------------------------------------------------ Landeplatz (Zukunft)
@@ -254,6 +325,111 @@ def build_landeplatz(SC):
     return {'Raumschiff': S, 'Fracht': bpy.data.objects['Fracht0'], 'Saeule': bpy.data.objects['Saeule'], 'Tafel': bpy.data.objects['Tafel']}
 
 
+def tree(o):
+    out = [o]
+    for c in o.children:
+        out += tree(c)
+    return out
+
+
+def render_hafen_layers(SC, cam):
+    """Hafen in Ebenen für die Animation im Spiel: Himmel/Meer/Insel, Wolken, Vordergrund (Steg, Lager, Fässer …),
+    das Schiff in vier Windphasen (schaukelt im Spiel) – dazu das Gesamtbild für Pixel-Modus und Karte."""
+    out = REPO + '/art/render/hafen/'
+    os.makedirs(out, exist_ok=True)
+
+    import tropen
+
+    def cls(o, sets):
+        n = o.name
+        for k, s in sets.items():
+            if n in s:
+                return k
+        if n.startswith(('Vogel_', 'V_')):
+            return 'vogel'
+        if n.startswith('Wolke'):
+            return 'wolken'
+        if n.startswith('Welle'):
+            return 'wellen'
+        if n == 'Meer' or n.startswith(('Insel', 'Strand', 'Palme', 'Blatt', 'Berg')):
+            return 'bg'
+        return 'vorn'
+
+    def roots():
+        return {k: {o.name for o in tree(bpy.data.objects[k.capitalize()])} for k in ('schiff', 'schlange') if bpy.data.objects.get(k.capitalize())}
+
+    def border(objs, pad=0.012):
+        """Renderausschnitt um die Objekte (spart Zeit bei kleinen Ebenen); das Bild bleibt 1920 × 880."""
+        q = [world_to_camera_view(SC, cam, o.matrix_world @ Vector(c)) for o in objs if o.type == 'MESH' for c in o.bound_box]
+        SC.render.border_min_x, SC.render.border_max_x = max(0, min(p.x for p in q) - pad), min(1, max(p.x for p in q) + pad)
+        SC.render.border_min_y, SC.render.border_max_y = max(0, min(p.y for p in q) - pad), min(1, max(p.y for p in q) + pad)
+        SC.render.use_border, SC.render.use_crop_to_border = True, False
+
+    def shoot(name, groups, transparent, holdout=(), frame=None):
+        sets = roots()
+        for o in SC.objects:
+            if o.type in ('MESH', 'CURVE', 'FONT', 'EMPTY'):
+                o.hide_render = cls(o, sets) not in groups and o not in holdout
+                o.is_holdout = o in holdout
+        nk = bpy.data.collections['Ohne_Kontur']
+        for o in holdout:   # verdeckt, wird aber selbst nicht gezeichnet (auch keine Kontur)
+            if o.name not in nk.objects:
+                nk.objects.link(o)
+        if frame:
+            border(frame)
+        SC.render.film_transparent = transparent
+        SC.render.image_settings.color_mode = 'RGBA' if transparent else 'RGB'
+        SC.render.filepath = out + name + '.png'
+        try:
+            bpy.ops.render.render(write_still=True, scene=SC.name)
+        finally:
+            SC.render.use_border = False
+            for o in holdout:
+                o.is_holdout = False
+                if o.name in nk.objects:
+                    nk.objects.unlink(o)
+
+    want = globals().get('ONLY_LAYERS') or ['bg', 'wolken', 'vorn', 'schiff', 'schlange', 'vogel']
+    for name, tr in (('bg', False), ('wolken', True), ('vorn', True)):
+        if name in want:
+            shoot(name, {name}, tr)
+    for k in (globals().get('SHIP_FRAMES') or range(4)) if 'schiff' in want else []:
+        for o in reversed(tree(bpy.data.objects['Schiff'])):
+            bpy.data.objects.remove(o, do_unlink=True)
+        SHIP_BUILD(k / 4)
+        bpy.context.view_layer.update()
+        shoot(f'schiff{k}', {'schiff'}, True, frame=tree(bpy.data.objects['Schiff']))
+    # Anakonda in acht Pendelphasen; Lagerhaus und Dach verdecken die Teile, die auf dem Dach liegen
+    haus = [o for o in SC.objects if o.name.startswith(('Lager', 'Dach'))]
+    for k in (globals().get('SNAKE_FRAMES') or range(8)) if 'schlange' in want else []:
+        for o in reversed(tree(bpy.data.objects['Schlange'])):
+            bpy.data.objects.remove(o, do_unlink=True)
+        SNAKE_BUILD(k / 8)
+        bpy.context.view_layer.update()
+        shoot(f'schlange{k}', {'schlange'}, True, holdout=haus, frame=tree(bpy.data.objects['Schlange']))
+    if 'schlange' in want:
+        for o in reversed(tree(bpy.data.objects['Schlange'])):
+            bpy.data.objects.remove(o, do_unlink=True)
+        SNAKE_BUILD(0.0)
+    # Aras und Tukan: drei Flügelstellungen, alle drei Vögel nebeneinander in einem Bild (hafen_post.py trennt sie)
+    for k in range(len(tropen.FLUEGEL)) if 'vogel' in want else []:
+        B = Builder(SC)
+        birds = [tropen.vogel(B, toon, kind, loc, tropen.FLUEGEL[k]) for kind, loc in tropen.VOEGEL]
+        bpy.context.view_layer.update()
+        try:
+            shoot(f'vogel{k}', {'vogel'}, True, frame=[o for b in birds for o in tree(b)])
+        finally:
+            for b in birds:
+                for o in reversed(tree(b)):
+                    bpy.data.objects.remove(o, do_unlink=True)
+    for o in SC.objects:
+        o.hide_render = False
+    SC.render.film_transparent = False
+    SC.render.image_settings.color_mode = 'RGB'
+    q = world_to_camera_view(SC, cam, bpy.data.objects['Schiff'].matrix_world.translation)
+    json.dump({'pivot': [round(q.x * 960, 1), round((1 - q.y) * 440, 1)]}, open(out + 'meta.json', 'w'))
+
+
 ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828'))}
 
 
@@ -274,7 +450,9 @@ def render(name):
         xs, ys = [p.x * 960 for p in q], [(1 - p.y) * 440 for p in q]
         pts[k] = [round(min(xs)), round(min(ys)), round(max(xs) - min(xs)), round(max(ys) - min(ys))]
     try:
-        if not globals().get('NO_RENDER'):
+        if not globals().get('NO_RENDER') and name == 'hafen' and globals().get('LAYERS', True):
+            render_hafen_layers(SC, cam)
+        if not globals().get('NO_RENDER') and not globals().get('SKIP_COMPOSITE'):
             SC.render.filepath = REPO + f'/art/render/raum_{name}.png'
             bpy.ops.render.render(write_still=True, scene=SC.name)
     finally:

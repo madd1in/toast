@@ -139,6 +139,20 @@ const Sound = (() => {
     if (n === 'U') { nz(t, 0.04, 0.12, bus, { type: 'lowpass', f: 900 }); return osc('sine', 230, t, 0.22, 0.3, bus, { f2: 130, decay: true }); }   // hohes Tom
     if (n === 'M') { nz(t, 0.04, 0.12, bus, { type: 'lowpass', f: 700 }); return osc('sine', 170, t, 0.26, 0.32, bus, { f2: 92, decay: true }); }   // mittleres Tom
     if (n === 'R') { nz(t, 0.02, 0.1, bus, { type: 'bandpass', f: 2600, q: 2 }); return osc('square', 1700, t, 0.02, 0.05, bus, { decay: true }); }
+    // Samba-Batterie: Surdo offen/gedämpft, Tamborim, Ganzá, Agogô hoch/tief, Cuíca rauf/runter, Pfeife (Apito)
+    if (n === 'Su') { nz(t, 0.03, 0.1, bus, { type: 'lowpass', f: 300 }); return osc('sine', 74, t, 0.55, 0.5, bus, { f2: 50, decay: true }); }
+    if (n === 'Sm') { nz(t, 0.02, 0.06, bus, { type: 'lowpass', f: 400 }); return osc('sine', 84, t, 0.14, 0.26, bus, { f2: 62, decay: true }); }
+    if (n === 'Tb') { nz(t, 0.03, 0.07, bus, { type: 'bandpass', f: 3400, q: 3 }); return osc('triangle', 840, t, 0.05, 0.08, bus, { decay: true }); }
+    if (n === 'Sh') return nz(t, 0.06, 0.045, bus, { type: 'bandpass', f: 6800, q: 1.1, attack: 0.012 });
+    if (n === 'Ah' || n === 'Al') { const f = n === 'Ah' ? 1245 : 932; osc('sine', f, t, 0.3, 0.06, bus, { decay: true }); return osc('sine', f * 2.43, t, 0.12, 0.018, bus, { decay: true }); }
+    if (n === 'Cu') return osc('sine', 430, t, 0.17, 0.07, bus, { f2: 780, attack: 0.02 });
+    if (n === 'Cd') return osc('sine', 720, t, 0.2, 0.06, bus, { f2: 360, attack: 0.02 });
+    if (n === 'Wh') {
+      const s = ac.createOscillator(), l = ac.createOscillator(), lg = ac.createGain(), g = ac.createGain(), e = Math.min(d, 0.9);
+      s.frequency.value = 2650; l.frequency.value = 27; lg.gain.value = 170; l.connect(lg); lg.connect(s.frequency);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.035, t + 0.015); g.gain.setValueAtTime(0.035, t + e * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + e);
+      s.connect(g); g.connect(bus); s.start(t); l.start(t); s.stop(t + e + 0.05); l.stop(t + e + 0.05); return;
+    }
     for (const part of n.split('+')) {
       const f = freq(part) * (tr ? Math.pow(2, tr / 12) : 1);
       if (retro) {
@@ -282,6 +296,28 @@ const Sound = (() => {
       { inst: 'clar', lvl: 1, seq: x2('D5:4 Eb5:4 C5:4 D5:4') },
       { inst: 'drum', lvl: 2, seq: Array(32).fill('-:0.5 H:0.5').join(' ') },
     ] },
+    // Hafen-Samba: eigene Komposition im Karnevals-Stil (D-Dur, A- und B-Teil) – Bläser-Melodie, Cavaquinho-Zupfakkorde
+    // im Partido-alto-Muster, Samba-Bass (Grundton punktiert, Quinte auf zwei) und die ganze Bateria
+    samba: { fill: true, bpm: 104, tracks: [
+      { inst: 'brass', seq: 'A4:0.5 B4:0.25 D5:0.75 F#5:0.5 E5:0.5 D5:0.5 B4:0.5 A4:0.5 -:0.5 F#4:0.25 A4:0.25 D5:0.5 E5:0.5 F#5:1 E5:0.5 D5:0.5 ' +
+        'G5:0.75 F#5:0.25 E5:0.5 D5:0.5 B4:0.75 G4:0.25 B4:0.5 D5:0.5 C#5:1 E5:0.5 A5:0.5 G5:0.5 E5:0.5 C#5:0.5 A4:0.5 ' +
+        'B4:0.5 E5:0.25 G5:0.75 B5:0.5 A5:0.5 G5:0.5 E5:0.5 -:0.5 A5:0.75 G5:0.25 E5:0.5 C#5:0.5 E5:0.5 G5:0.5 F#5:0.5 E5:0.5 ' +
+        'D5:0.5 F#5:0.25 A5:0.75 F#5:0.5 D5:0.5 A4:0.5 B4:0.5 C#5:0.5 D5:1.5 -:0.5 A4:0.5 D5:0.5 F#5:0.5 A5:0.5 ' +
+        'B5:1 A5:0.5 G5:0.5 D5:0.75 B4:0.25 D5:0.5 G5:0.5 Bb5:1 A5:0.5 G5:0.5 D5:0.75 Bb4:0.25 D5:0.5 G5:0.5 ' +
+        'A5:0.75 F#5:0.25 D5:0.5 A4:0.5 F#4:0.5 A4:0.5 D5:0.5 F#5:0.5 D#5:0.75 F#5:0.25 A5:0.5 B5:0.5 A5:0.5 F#5:0.5 D#5:0.5 B4:0.5 ' +
+        'E5:0.5 G5:0.25 B5:0.75 G5:0.5 E5:0.5 B4:0.5 D5:0.5 E5:0.5 C#5:0.5 E5:0.25 G5:0.75 A5:0.5 G5:0.5 E5:0.5 C#5:0.5 A4:0.5 ' +
+        'D5:0.5 E5:0.25 F#5:0.75 A5:0.5 F#5:0.5 E5:0.5 D5:0.5 E5:0.5 C#5:0.5 A4:0.25 E5:0.75 -:0.5 A4:0.25 B4:0.25 C#5:0.5 E5:1' },
+      { inst: 'pluck', seq: ['D4+F#4+A4', 'D4+F#4+A4', 'D4+G4+B4', 'C#4+E4+G4', 'D4+G4+B4', 'C#4+E4+G4', 'D4+F#4+A4', 'D4+F#4+A4',
+        'D4+G4+B4', 'D4+G4+Bb4', 'F#4+A4+D5', 'D#4+F#4+A4', 'D4+G4+B4', 'C#4+E4+G4', 'D4+F#4+A4', 'C#4+E4+G4'].map(c => `${c}:0.75 ${c}:0.75 ${c}:0.5 ${c}:0.5 ${c}:0.75 ${c}:0.75`).join(' ') },
+      { inst: 'pizz', seq: [['D2', 'A1'], ['D2', 'A1'], ['E2', 'B1'], ['A1', 'E2'], ['E2', 'B1'], ['A1', 'E2'], ['D2', 'A1'], ['D2', 'A1'],
+        ['G1', 'D2'], ['G1', 'D2'], ['F#2', 'A1'], ['B1', 'F#2'], ['E2', 'B1'], ['A1', 'E2'], ['D2', 'A1'], ['A1', 'E2']].map(([r, f]) => `${r}:0.75 ${r}:0.25 ${f}:1 ${r}:0.75 ${r}:0.25 ${f}:1`).join(' ') },
+      { inst: 'drum', seq: Array(16).fill('Sm:1 Su:1 Sm:1 Su:1').join(' ') },
+      { inst: 'drum', pan: 0.25, seq: Array(16).fill('Tb:0.5 Tb:0.25 Tb:0.5 Tb:0.5 Tb:0.25 Tb:0.5 Tb:0.25 Tb:0.5 Tb:0.5 Tb:0.25').join(' ') },
+      { inst: 'drum', pan: -0.2, seq: Array(256).fill('Sh:0.25').join(' ') },
+      { inst: 'drum', lvl: 1, pan: -0.35, seq: Array(16).fill('Ah:0.5 Al:0.5 Ah:0.25 Ah:0.25 Al:0.5 -:0.5 Ah:0.5 Al:0.5 Ah:0.5').join(' ') },
+      { inst: 'drum', lvl: 2, pan: 0.35, seq: Array(8).fill('-:2.5 Cu:0.5 Cd:0.5 Cu:0.5 -:4').join(' ') },
+      { inst: 'drum', lvl: 2, seq: x2('-:28 Wh:0.5 -:0.5 Wh:0.5 Wh:0.5 Wh:2') },
+    ] },
     // Tentakel-Rock: Begleitung fürs Minispiel – die Lead-Gitarre spielt der Spieler selbst
     rock: { bpm: 120, tracks: [
       { inst: 'drum', seq: Array(16).fill('K:1 S:1 K:0.5 K:0.5 S:1').join(' ') },
@@ -315,7 +351,7 @@ const Sound = (() => {
   let partyOn = false;
   // Jede Spielfigur färbt die Leitmelodie: Bernard spielt sie auf dem E-Piano mit, Hoagie eine Oktave tiefer
   // auf der E-Gitarre, Laverne eine Oktave höher auf Glocken – beim Figurenwechsel wechselt die Klangfarbe sofort
-  const LEAD = { title: 1, past: 0, present: 1, future: 2, palace: 1, tavern: 0, lounge: 2, ending: 0, march: 1, lab: 0 };
+  const LEAD = { title: 1, past: 0, present: 1, future: 2, palace: 1, tavern: 0, lounge: 2, ending: 0, march: 1, lab: 0, samba: 0 };
   const HERO_INST = { bernard: ['epiano', 0, 0.85], hoagie: ['guitar', -12, 0.55], laverne: ['bell', 12, 0.65] };
   let hero = null, heroLayers = [], loopT0 = 0, loopN = 0;
   function scheduleHero(t0, from) {

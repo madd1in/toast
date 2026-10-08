@@ -2149,7 +2149,7 @@ function drawJukebox(bx, by, bw) {
   // Etikett dreht sich mit
   cx.save(); cx.translate(px, py); cx.rotate(G.jbAng); cx.scale(1 + pulse * 0.05, 1 + pulse * 0.05);
   E(cx, 0, 0, 42, 42, col, 2); E(cx, 0, 0, 32, 32, null, 1.2, 0, 'rgba(0,0,0,0.25)');
-  if (id && ERA) eraIcon(cx, id === 'past' || id === 'tavern' ? 'past' : id === 'future' || id === 'palace' || id === 'march' ? 'future' : 'present', 0, -16, 0.9);
+  if (id && ERA) eraIcon(cx, id === 'past' || id === 'tavern' || id === 'samba' ? 'past' : id === 'future' || id === 'palace' || id === 'march' ? 'future' : 'present', 0, -16, 0.9);
   E(cx, 0, 22, 9, 3, 'rgba(0,0,0,0.3)', 0);
   E(cx, 0, 0, 4, 4, '#d8d8e4', 1.5);
   cx.restore();

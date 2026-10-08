@@ -10,6 +10,84 @@
 //  Hafen 1776 und Landeplatz (Blender), Testkammer (Unreal Engine).
 // ============================================================
 
+// ---------- Hafen in Bewegung ----------
+// Ebenen aus Blender (hafen_post.py): ruhender Hintergrund, ziehende Wolken, das Schiff in vier Windphasen (wehende Flagge,
+// atmende Segel), das auf den Wellen schaukelt, und der Vordergrund. Wellenkämme, Glitzern, Gischt und Möwen zeichnet
+// das Spiel dazu. Im Pixel-Modus und für die Karte bleibt es beim ruhenden Gesamtbild.
+const HAFEN_IMG = { bg: loadImg('img/hafen/bg.jpg'), wolken: loadImg('img/hafen/wolken.png'), vorn: loadImg('img/hafen/vorn.png'), schiff: loadImg('img/hafen/schiff.png'),
+  schlange: loadImg('img/hafen/schlange.png'), voegel: loadImg('img/hafen/voegel.png') };
+HAFEN_IMG.bg.addEventListener('load', () => { delete bgCache.hafen; });
+function hafenBereit() { return typeof HAFEN_EBENEN !== 'undefined' && Object.values(HAFEN_IMG).every(imgOk); }
+function hash01(i) { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function hafenWellen(c, t) {
+  // Wellenkämme in Reihen: hinten klein und dicht, vorn groß – alle treiben mit dem Wind nach links
+  c.save(); c.lineCap = 'round';
+  for (let r = 0; r < 13; r++) {
+    const k = r / 12, y = 212 + Math.pow(k, 1.5) * 92, s = (y - 190) / 242, n = Math.round(26 - k * 14), sp = (W + 60) / n;
+    c.strokeStyle = `rgba(235,250,255,${(0.32 + k * 0.28).toFixed(2)})`; c.lineWidth = 0.8 + s * 2.2;
+    for (let i = 0; i < n; i++) {
+      const x = ((i * sp + hash01(r * 31 + i) * sp - t * (0.004 + s * 0.012)) % (W + 60) + W + 60) % (W + 60) - 30;
+      if (y < 222 && x > 250 && x < 530) continue;   // nicht über die Insel
+      const ph = t * 0.0021 + hash01(i * 7 + r) * 6.28, hgt = (2.2 + Math.sin(ph) * 1.6) * (0.6 + s * 2.4), wd = (7 + hash01(i + r * 3) * 6) * (0.5 + s * 1.6);
+      const yy = y + Math.sin(ph * 0.7) * s * 2.5;
+      c.beginPath(); c.moveTo(x - wd, yy); c.quadraticCurveTo(x, yy - hgt, x + wd, yy); c.stroke();
+    }
+  }
+  // Glitzern der Sonne auf dem Wasser
+  for (let i = 0; i < 22; i++) {
+    const a = Math.pow(Math.max(0, Math.sin(t * 0.0035 + i * 1.91)), 10);
+    if (a < 0.05) continue;
+    const x = 120 + hash01(i * 5.3) * 760, y = 214 + hash01(i * 9.1) * 80, z = 2 + a * 4 * (y - 190) / 120;
+    c.strokeStyle = `rgba(255,255,240,${a.toFixed(2)})`; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(x - z, y); c.lineTo(x + z, y); c.moveTo(x, y - z * 0.6); c.lineTo(x, y + z * 0.6); c.stroke();
+  }
+  c.restore();
+}
+// Aras und Tukan (3D, drei Flügelstellungen): ziehen in großen Bögen über den Himmel, mal hin, mal zurück,
+// zwischendurch segeln sie ein Stück mit ausgebreiteten Flügeln
+const HAFEN_VOEGEL = [   // Art (Atlas-Zeile), Periode ms, Versatz, Richtung, Höhe, Maßstab
+  [0, 17000, 0, 1, 70, 0.52], [1, 23000, 9000, -1, 44, 0.42], [2, 29000, 15000, 1, 96, 0.5], [0, 37000, 26000, -1, 30, 0.34],
+];
+function hafenVoegel(c, t) {
+  const [gw, gh, tw, th] = HAFEN_EBENEN.vogel;
+  for (const [row, per, off, dir, y0, s] of HAFEN_VOEGEL) {
+    const u = ((t + off) % per) / per, x = dir > 0 ? -120 + u * 1300 : 1080 - u * 1300;
+    if (x < -100 || x > 1060) continue;
+    const glide = Math.sin(t * 0.0009 + off) > 0.55, fl = glide ? 1 : [0, 1, 2, 1][Math.floor((t + off) / 95) % 4];
+    const y = y0 + Math.sin(u * 9 + off) * 16 + (glide ? 0 : Math.sin(t * 0.021) * 1.5);
+    c.save(); c.translate(x, y); c.scale(dir * s, s); c.rotate(Math.cos(u * 9 + off) * 0.08);
+    c.drawImage(HAFEN_IMG.voegel, fl * tw, row * th, tw, th, -gw / 2, -gh / 2, gw, gh);
+    c.restore();
+  }
+}
+function hafenAnimiert(c, t) {
+  const E_ = HAFEN_EBENEN;
+  const [wx, wy, ww, wh] = E_.wolken, off = (t * 0.005) % W;
+  for (const dx of [-off, W - off]) c.drawImage(HAFEN_IMG.wolken, wx + dx, wy, ww, wh);
+  hafenWellen(c, t);
+  // Schiff: schaukelt um die Wasserlinie, Segel und Flagge in vier Windphasen
+  const [sx, sy, sw, sh, tw, th, px, py] = E_.schiff, k = Math.floor(t / 230) % 4;
+  const ang = Math.sin(t * 0.00085) * 0.013, bob = Math.sin(t * 0.0013) * 1.8;
+  c.save(); c.translate(px, py + bob); c.rotate(ang); c.translate(-px, -py);
+  c.drawImage(HAFEN_IMG.schiff, (k % 2) * tw, Math.floor(k / 2) * th, tw, th, sx, sy, sw, sh);
+  c.restore();
+  // Gischt an der Wasserlinie (Kiellinie aus dem Rendering, schaukelt mit)
+  c.save(); c.translate(px, py + bob); c.rotate(ang); c.translate(-px, -py);
+  c.strokeStyle = 'rgba(245,252,255,0.75)'; c.lineWidth = 1.7; c.lineCap = 'round';
+  const kl = E_.kiel;
+  for (let i = 0; i < kl.length - 1; i++) {
+    const [x0, y0] = kl[i], [x1, y1] = kl[i + 1], w = 0.5 + 0.5 * Math.sin(t * 0.004 + i * 1.7);
+    c.beginPath(); c.moveTo(x0, y0 - 0.5); c.quadraticCurveTo((x0 + x1) / 2, (y0 + y1) / 2 - 2 - w * 2.5, x1, y1 - 0.5); c.stroke();
+  }
+  c.restore();
+  const [vx, vy, vw, vh] = E_.vorn;
+  c.drawImage(HAFEN_IMG.vorn, vx, vy, vw, vh);
+  // Anakonda: acht Pendelphasen (wippt im Takt der Samba, gut zwei Sekunden je Schwung)
+  const [nx, ny, nw, nh, ntw, nth, nn] = E_.schlange, nk = Math.floor(t / 285) % nn;
+  c.drawImage(HAFEN_IMG.schlange, (nk % 4) * ntw, Math.floor(nk / 4) * nth, ntw, nth, nx, ny, nw, nh);
+  hafenVoegel(c, t);
+}
+
 // ---------- neue Räume ----------
 // Kamera der 3D-Räume (art/blender/raum_build.py): Horizont bei y = 185, Maßstab 1 an der Vorderkante (y = 432)
 // und (350 − 185) / (432 − 185) ≈ 0,67 an der Hinterkante – die Figuren schrumpfen so, wie der Boden im Bild flieht.
@@ -21,17 +99,23 @@ function raum3d(id, src, o) {
   ROOMS[id] = Object.assign({
     id, sMin: 0.67, sMax: 1, yTop: 350, yBot: 432, walk: [[20, 352], [940, 350], [955, 432], [5, 432]],
     draw(g) {
+      if (!g.isPix && o.layers && o.layers(g)) return;   // HD mit Ebenen: nur der ruhende Hintergrund, der Rest kommt animiert in dyn
       if (!imgOk(img)) { g.fillStyle = o.fill || '#241739'; g.fillRect(0, 0, W, SH); return; }
       if (g.isPix) g.drawSprite(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, W, SH);
       else g.drawImage(img, 0, 0, W, SH);
     },
+    thumb(g) { if (o.layers && imgOk(img)) g.drawImage(img, 0, 0, W, SH); },   // Kartenbild: das ruhende Gesamtbild
   }, o);
 }
 raum3d('hafen', 'img/raum_hafen.jpg', {
   era: 'past', name: 'Hafen 1776', floor: 'wood', amb: ['wind', 'birds'], fill: '#5aa0d0',
+  layers(g) { if (!hafenBereit()) return false; g.drawImage(HAFEN_IMG.bg, 0, 0, W, SH); return true; },
+  dyn(c, t) { if (!c.isPix && hafenBereit()) hafenAnimiert(c, t); },
   objs: [
     { id: 'hafen_garten', name: 'Zurück zum Garten', rect: [0, 150, 58, 236], walk: [30, 400], exit: ['garten1776', 918, 380, -1] },
-    { id: 'schiff', name: 'Piratenschiff', rect: [560, 40, 400, 250], walk: [700, 368], look: 'Ein Piratenschiff mit einem Toast auf der Flagge. Ich glaube, die meinen das ernst.' },
+    { id: 'schiff', name: 'Piratenschiff', rect: [560, 40, 400, 250], walk: [700, 368], look: 'Ein Piratenschiff mit einem Toast auf der Flagge. Die Crew jubelt die ganze Zeit. Worüber, weiß keiner. Hauptsache laut.' },
+    { id: 'anakonda', name: 'Anakonda', rect: [66, 26, 192, 136], walk: [150, 362], look: 'Eine Anakonda, dick wie ein Feuerwehrschlauch. Sie wippt im Takt der Trommeln. Ich glaube, gleich ruft hier jemand „Kampf!“.' },
+    { id: 'obstkiste', name: 'Obstkiste', rect: [396, 246, 40, 30], walk: [412, 364], look: 'Bananen, eine Ananas und Mangos. Die Bananen sind krumm vor Lachen.' },
     { id: 'lagerhaus', name: 'Lagerhaus-Tor', rect: [50, 189, 102, 132], walk: [110, 362], look: 'Ein Lagerhaus. Auf dem Schild steht „Rum, Seile und anderes Zeug“. Das Tor ist zu. Das Zeug bleibt drin.' },
     { id: 'faesser', name: 'Fässer', rect: [258, 262, 170, 74], walk: [330, 362], look: 'Fässer. Auf einem steht „RUM“, auf dem anderen „AUCH RUM“, auf dem dritten „KEIN RUM (LÜGE)“.' },
     { id: 'seilrolle', name: 'Tau', rect: [488, 308, 72, 30], walk: [520, 362], look: 'Eine Rolle Tau. Ein Seemann würde jetzt einen Knoten machen. Ich mach höchstens einen Knoten rein.' },
@@ -84,12 +168,18 @@ ROOMS.vorraum.objs.push({ id: 'zur_testkammer', name: 'Aufzug zur Testkammer', r
     E(c, 915, 184, 16, 9, '#24262e', 2); txt(c, '19', 915, 189, '800 11px "Baloo 2", sans-serif', '#ffd84a', 'center');
   } });
 Object.assign(ROOM_FX, {
-  hafen: { verb: [0.4, 0.08], light: [1, '#fff0c8', '#2a4a70'], bloom: 0.24, amb: ['wind'], music: 'tavern' },
+  hafen: { verb: [0.4, 0.08], light: [1, '#fff0c8', '#2a4a70'], bloom: 0.24, amb: ['wind', 'birds'], music: 'samba' },
   landeplatz: { verb: [0.9, 0.12], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.36, amb: ['future', 'traffic'], motes: 'firefly' },
   testkammer: { verb: [1.8, 0.2], light: [1, '#f4f8ff', '#3a4058'], bloom: 0.2, amb: ['hum', 'beeps'], music: 'lab', reflect: 0.12 },
 });
 MAP_ORDER.past.push('hafen');
+JUKEBOX.splice(JUKEBOX.findIndex(j => j[0] === 'tavern') + 1, 0, ['samba', 'Hafen-Samba']);
+JB_COL.samba = '#3ad06a';
 MAP_ORDER.future.push('testkammer', 'landeplatz');
+
+// <hafen-daten> (erzeugt von art/blender/hafen_post.py): [x, y, Breite, Höhe] in Spiel-Einheiten; Schiff/Schlange dazu Atlas-Kachel (px), Schiff Drehpunkt und Kiellinie
+const HAFEN_EBENEN = {"wolken": [121.5, 0.0, 813.0, 124.0], "vorn": [0.0, 34.5, 960.0, 405.5], "schiff": [528.0, 22.0, 433.0, 283.0, 866, 566, 687.3, 257.1], "kiel": [[540.0, 261.0], [552.0, 273.0], [564.0, 275.0], [576.0, 276.5], [588.0, 278.0], [600.0, 279.5], [612.0, 281.0], [624.0, 282.5], [636.0, 284.0], [648.0, 285.5], [660.0, 287.0], [672.0, 288.5], [684.0, 290.0], [696.0, 291.5], [708.0, 293.0], [720.0, 294.0], [732.0, 295.5], [744.0, 297.0], [756.0, 298.5], [768.0, 300.0], [780.0, 301.0], [792.0, 302.5]], "schlange": [0.0, 10.0, 317.0, 148.5, 634, 297, 8], "vogel": [105.0, 92.5, 210, 185]};
+// </hafen-daten>
 
 // ---------- die Gäste ----------
 const GUESTS = ['dave', 'sam', 'max', 'salad', 'guybrush', 'jack', 'bender', 'prof', 'zoid', 'glados', 'simon'];
