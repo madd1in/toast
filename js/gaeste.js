@@ -1457,3 +1457,67 @@ async function TRIO_GAG() {
   Object.assign(ACT.laverne, { room: 'labor', x: 730, y: 414, dir: -1, visible: true });
   await wait(1700); G.caption = null; await fadeTo(0, 600);
 }
+
+// ---------- Cousin Ted und die Riesenpflanze in 3D (art/blender/cameo3d.py, cameo_post.py) ----------
+const CAMEO_IMG = { ted: loadImg('img/ted.png'), pflanze: loadImg('img/pflanze.png') };
+const CAMEO = {"ted": {"upp": 0.4333, "f": {"idle": [0, 0, 211, 484, -46.4, -206.4], "auge": [213, 0, 211, 484, -46.4, -206.4], "wink": [426, 0, 211, 484, -46.4, -206.4]}}, "pflanze": {"upp": 0.4333, "f": {"zu": [0, 0, 366, 485, -79.3, -206.4], "auf": [368, 0, 366, 520, -79.3, -221.5], "schnapp": [736, 0, 366, 469, -79.3, -199.4]}}};
+function drawCameo(c, id, frame, s = 1, flip = false) {
+  const im = CAMEO_IMG[id], d = CAMEO[id], f = d.f[frame];
+  if (!imgOk(im) || !f) return false;
+  c.save(); c.scale(flip ? -s : s, s);
+  if (c.drawSprite) c.drawSprite(im, f[0], f[1], f[2], f[3], f[4], f[5], f[2] * d.upp, f[3] * d.upp); else c.drawImage(im, f[0], f[1], f[2], f[3], f[4], f[5], f[2] * d.upp, f[3] * d.upp);
+  c.restore();
+  return true;
+}
+// Cousin Ted: steht im Labor groß im offenen Sarkophag, blinzelt mit einem glimmenden Auge, winkt ab und zu –
+// und ist das Tipp-Orakel des Hauses: Er murmelt durch die Binden, Bernard übersetzt.
+const TED_S = 0.86;
+{
+  const drawn = EGG_DRAW.mummy;
+  EGG_DRAW.mummy = (c, e, t) => {
+    const wink = G.eggFx && G.eggFx.ted && t - G.eggFx.ted < 1800 || ((t + 9000) % 23000) < 1400;
+    const fr = wink ? 'wink' : ((t + 4000) % 11000) < 900 ? 'auge' : 'idle';
+    if (!hd(c) || !drawCameo(c, 'ted', fr, TED_S)) drawn(c, e, t);
+  };
+  Object.assign(EGGS.mumie, { w: 80, h: 182 });
+  EGGS.mumie.talk = async p => {
+    G.eggFx.ted = G.t; Sound.sfx('page');
+    await say(p, pick(['Hallo, Ted. Hast du einen Tipp für mich?', 'Ted, alter Junge. Was würdest du jetzt tun?', 'Ted? Ich steck fest. Irgendeine Idee?']));
+    await say(null, pick(['„Mmmpf … mmf mmmpf … mmf!“', '„Mmmmf. Mf mf. MMMPF!“', '„Hmmpf … mmf … mmmmf.“']));
+    const h = hintText().replace(/^(Bernard|Hoagie|Laverne): /, '');
+    await say(p, `Ich glaube, er meint: „${h}“`);
+    if (!fl().tedTipp) { fl().tedTipp = 1; await say(p, 'Wahnsinn. Drei Jahrtausende im Sarg, und er kennt sich besser aus als ich.'); }
+  };
+}
+BARKS.drfred = (BARKS.drfred || []).concat(['Ted hat wieder geblinzelt! … Nein. Das war ich.']);
+
+// Die fleischfressende Riesenpflanze: wohnt jetzt im Keller am leuchtenden Kühlbecken. Sie schnappt nach jedem, der
+// zu nah kommt, gähnt hungrig und lässt sich nur mit Frischfleisch beeindrucken. Davon gibt es hier keins.
+const PFLANZE = { x: 92, y: 436 };
+function drawPflanze(c, t) {
+  const p = me(), near = p && p.room === 'keller' && Math.abs(p.x - PFLANZE.x) < 150 && p.y > 360;
+  const snap = (G.eggFx && G.eggFx.pflanze && t - G.eggFx.pflanze < 700) || (near && Math.floor(t / 900) % 3 === 0);
+  const fr = snap ? 'schnapp' : ((t + 3000) % 9000) < 1600 ? 'auf' : 'zu';
+  c.save(); c.translate(PFLANZE.x, PFLANZE.y);
+  c.fillStyle = 'rgba(0,0,0,0.28)'; c.beginPath(); c.ellipse(0, 2, 46, 9, 0, 0, Math.PI * 2); c.fill();
+  c.rotate(Math.sin(t * 0.0021) * 0.02);
+  if (!drawCameo(c, 'pflanze', fr, 1)) { R(c, -30, -60, 60, 60, '#c8643a', 2, 6); E(c, 0, -120, 40, 30, '#5ab84a', 2.5); }
+  c.restore();
+}
+ROOMS.keller.objs.push({ id: 'pflanze', name: 'Fleischfressende Pflanze', rect: [24, 228, 140, 208], walk: [210, 410], fg: true, draw: drawPflanze });
+RULES['look o:pflanze'] = line('Eine Topfpflanze mit Zähnen. Auf dem Topf steht: „BITTE NICHT FÜTTERN – Fred“. Sie trinkt aus dem Kühlbecken. Das erklärt einiges.');
+RULES['talk o:pflanze'] = async () => {
+  G.eggFx.pflanze = G.t; Sound.sfx('chomp');
+  await say(null, '„FUTTER!“');
+  await say(curId(), pick(['Ich bin kein Futter. Ich bin Wissenschaftler. Das ist … zäher.', 'Du hast doch gerade erst … ach, du hattest gar nichts. Verstehe.']));
+};
+multi(['pick', 'use', 'pull', 'push'], 'o:pflanze', async () => {
+  G.eggFx.pflanze = G.t; Sound.sfx('chomp'); shake(260, 3);
+  await say(curId(), 'WAH! Sie schnappt nach meiner Hand! Die brauche ich noch zum Rechnen.');
+});
+for (const it of Object.keys(ITEMS)) RULES[`use i:${it} o:pflanze`] = RULES[`give i:${it} o:pflanze`] = async () => {
+  G.eggFx.pflanze = G.t; Sound.sfx('chomp'); await wait(500);
+  await say(null, '„*schmatz* … *PFUI*“');
+  await say(curId(), 'Sie spuckt es wieder aus. Sie will nur Frisches. Frisches Fleisch. Ich gehe jetzt ganz langsam rückwärts.');
+};
+BARKS.dave.push('Die Pflanze im Keller kenne ich. Gib ihr NIE einen Hamster.');
