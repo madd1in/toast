@@ -1402,3 +1402,58 @@ hintText = function () {
     return 'Laverne: Lila mag keinen kalten Toast. Simon der Zauberer im Thronsaal hat einen Wärmezauber – gib ihm den Toast.';
   return base;
 };
+
+// ---------- Abspann: drei in einem Kleid ----------
+// Dr. Fred holt Hoagie und Laverne durchs Chrono-Klo zurück, Bernard hält als „Anker“ die Verbindung – heraus kommt
+// ein Wesen mit drei Köpfen und sechs Beinen in Lavernes Kleid (3D, art/blender/trio.py), das sich für verschmolzen hält.
+const TRIO_IMG = loadImg('img/trio.png');
+const TRIO = {"upp": 0.4333, "at": [-91.0, -223.3], "mouth": {"bernard": [-36.5, -177.2], "hoagie": [23.4, -140.8], "laverne": [64.0, -150.2]}};
+ACT.trio = mkA('trio', 'Bernard, Hoagie und Laverne', 'trio', '#a6ff8f', 214, 150, { visible: false, speed: 110 });
+START_POS.trio = { room: 'labor', x: 788, y: 358, dir: -1, visible: false };
+Object.assign(ACT.trio, START_POS.trio);
+CHAR.trio = (c, a, t) => {
+  if (!imgOk(TRIO_IMG)) return;
+  const w = TRIO_IMG.naturalWidth * TRIO.upp, h = TRIO_IMG.naturalHeight * TRIO.upp, wob = a.walking ? Math.sin(t * 0.014) * 0.07 : Math.sin(t * 0.003) * 0.015;
+  c.save(); c.rotate(wob);
+  if (c.drawSprite) c.drawSprite(TRIO_IMG, 0, 0, TRIO_IMG.naturalWidth, TRIO_IMG.naturalHeight, TRIO.at[0], TRIO.at[1], w, h); else c.drawImage(TRIO_IMG, TRIO.at[0], TRIO.at[1], w, h);
+  const sp = G.speech;   // wer redet, macht den Mund auf
+  if (sp && sp.a && sp.a.inTrio && TRIO.mouth[sp.a.id]) { const [mx, my] = TRIO.mouth[sp.a.id], k = 0.55 + 0.45 * Math.abs(Math.sin(t * 0.022)); E(c, mx, my + 1, 4.4 * k, 3.6 * k, '#7a2222', 1.6); }
+  c.restore();
+};
+for (const id of ['bernard', 'hoagie', 'laverne']) { const drawn = CHAR[id]; CHAR[id] = (c, a, t) => { if (!a.inTrio) drawn(c, a, t); }; }
+function trioAnker() {   // die drei Sprechblasen sitzen über den drei Köpfen
+  const tr = ACT.trio, d = tr.dir < 0 ? -1 : 1;
+  for (const id of ['bernard', 'hoagie', 'laverne']) Object.assign(ACT[id], { room: tr.room, x: tr.x + TRIO.mouth[id][0] * d, y: tr.y, dir: tr.dir, visible: true, inTrio: true });
+}
+async function TRIO_GAG() {
+  const b = ACT.bernard, tr = ACT.trio;
+  await say('drfred', 'So! Jetzt holen wir Hoagie und Laverne zurück. Die Klos sind wieder für Menschen kalibriert. Ziemlich sicher.');
+  await say('bernard', 'Ziemlich sicher?');
+  await say('drfred', 'Einer muss von innen die Verbindung halten. Als Anker! Rein mit dir, Bernard.');
+  await say('bernard', 'Warum muss ICH immer …');
+  await walkTo('bernard', 788, 356); b.dir = 1; b.visible = false;
+  Sound.sfx('flush'); G.kloAnim = { obj: 'klo_heute', t: G.t }; shake(700, 4); await wait(1000);
+  Sound.sfx('warp'); shake(900, 7); await wait(1200);
+  Sound.sfx('flush'); G.kloAnim = { obj: 'klo_heute', t: G.t }; await wait(900);
+  Object.assign(tr, { room: 'labor', x: 788, y: 358, dir: -1, visible: true });
+  await walkTo('trio', 640, 404); tr.dir = -1; trioAnker();
+  await say('hoagie', 'Whoa. Mann. Ich fühl mich … irgendwie breiter.');
+  await say('laverne', 'Wir sind verschmolzen! Drei Köpfe, sechs Beine, ein Körper! Das ist medizinisch FASZINIEREND!');
+  await say('bernard', 'Das ist medizinisch UNMÖGLICH! Ich spüre Hoagies Bauch an meinem Ellbogen!');
+  await say('hoagie', 'Und ich hab plötzlich voll Lust auf Rechenschieber.');
+  await say('laverne', 'Und ich auf Leichen. … Ach nee, die hatte ich vorher auch schon.');
+  await say('green', 'Ein dreiköpfiges Wesen! Darf ich euch mit auf Band-Tour nehmen? Als Background-Chor?');
+  await say('drfred', '*hüstel* Verschmolzen? Unsinn. Ihr steckt nur alle drei in Lavernes Kleid. Das Klo schrumpft beim Schleudern manchmal die Wäsche.');
+  await wait(600);
+  await say('laverne', '… Oh.');
+  await say('bernard', 'Ich wusste es! Wissenschaft!');
+  await say('hoagie', 'Schade, Mann. Ich hatte mich gerade an uns gewöhnt.');
+  await fadeTo(1, 600, 'black');
+  G.caption = 'Ein paar Minuten und viel Gezerre später ...';
+  tr.visible = false;
+  for (const id of ['bernard', 'hoagie', 'laverne']) ACT[id].inTrio = false;
+  Object.assign(ACT.bernard, { room: 'labor', x: 290, y: 404, dir: 1, visible: true });
+  Object.assign(ACT.hoagie, { room: 'labor', x: 640, y: 398, dir: -1, visible: true });
+  Object.assign(ACT.laverne, { room: 'labor', x: 730, y: 414, dir: -1, visible: true });
+  await wait(1700); G.caption = null; await fadeTo(0, 600);
+}

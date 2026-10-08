@@ -640,7 +640,9 @@ async function ENDING() {
   Object.assign(ACT.laverne, { room: 'labor', x: 730, y: 414, dir: -1, visible: true });
   Object.assign(ACT.green, { room: 'labor', x: 150, y: 396, dir: 1 });
   G.caption = 'Zurück in der Gegenwart ...'; Sound.play('ending');
+  if (typeof TRIO_GAG === 'function') ACT.hoagie.visible = ACT.laverne.visible = false;   // kommen gleich durchs Klo (gaeste.js)
   await fadeTo(0, 700); await wait(1600); G.caption = null;
+  if (typeof TRIO_GAG === 'function') await TRIO_GAG();
   await say('drfred', 'Erfolg! Die Zukunft ist gerettet! Die Vergangenheit ist gefüttert! Die Gegenwart ist... auch da.');
   await say('hoagie', 'Oma Gertrude lässt grüßen. Sie hat mir noch drei Brote eingepackt.');
   await say('green', 'Mein Bruder hat mir gerade eine Postkarte aus der Zukunft geschickt. Mit Herzchen!');
