@@ -110,7 +110,7 @@ function raum3d(id, src, o) {
 raum3d('hafen', 'img/raum_hafen.jpg', {
   era: 'past', name: 'Hafen 1776', floor: 'wood', amb: ['wind', 'birds'], fill: '#5aa0d0',
   layers(g) { if (!hafenBereit()) return false; g.drawImage(HAFEN_IMG.bg, 0, 0, W, SH); return true; },
-  dyn(c, t) { if (!c.isPix && hafenBereit()) hafenAnimiert(c, t); },
+  dyn(c, t) { if (c.isPix || !hafenBereit()) return; if (typeof echt3dOn === 'function' && echt3dOn(ROOMS.hafen)) hafenVoegel(c, t); else hafenAnimiert(c, t); },
   objs: [
     { id: 'hafen_garten', name: 'Zurück zum Garten', rect: [0, 150, 58, 236], walk: [30, 400], exit: ['garten1776', 918, 380, -1] },
     { id: 'schiff', name: 'Piratenschiff', rect: [560, 40, 400, 250], walk: [700, 368], look: 'Ein Piratenschiff mit einem Toast auf der Flagge. Die Crew jubelt die ganze Zeit. Worüber, weiß keiner. Hauptsache laut.' },

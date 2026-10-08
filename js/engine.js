@@ -1442,6 +1442,7 @@ function menuItems() {
     { id: 'ui', label: 'Bedienung: ' + (G.settings.ui === 'classic' ? 'Klassisch (Verben)' : 'Modern (minimal)') },
     { id: 'hotspots', label: 'Hotspot-Hilfe: ' + (G.settings.hotspots ? 'an' : 'aus') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
+    typeof toggleEcht3d === 'function' && { id: 'echt3d', label: 'Echtzeit-3D (Beta, Hafen): ' + (G.settings.echt3d ? 'an' : 'aus') },
     fsAvailable && { id: 'fs', label: 'Vollbild: ' + (isFullscreen() ? 'an' : 'aus') },
     back,
   ].filter(Boolean);
@@ -1472,6 +1473,7 @@ function menuClick(x, y) {
   else if (b.id === 'ui') { G.settings.ui = G.settings.ui === 'classic' ? 'modern' : 'classic'; G.coin = null; G.viewRoomLast = null; saveSettings(); }
   else if (b.id === 'tspeed') { const o = ['langsam', 'normal', 'schnell']; G.settings.textSpeed = o[(o.indexOf(G.settings.textSpeed || 'normal') + 1) % 3]; saveSettings(); }
   else if (b.id === 'retro') toggleRetro();
+  else if (b.id === 'echt3d') toggleEcht3d();
   else if (b.id === 'fs') { G.settings.fullscreen = !isFullscreen(); saveSettings(); toggleFullscreen(); }
   else if (/^save\d$/.test(b.id)) saveSlot(+b.id.slice(4));
   else if (/^load\d$/.test(b.id)) { if (!b.off) loadFrom(readSlot(+b.id.slice(4))); }
