@@ -159,9 +159,13 @@ def jolly_roger(name, w=512, h=340):
     save(arr, name)
 
 
-def speckle(name, cols, w=512, h=512, scale=8, seed=12, blades=False, cracks=False):
-    """Gras, Fels, Sand: Farbverlauf aus Rauschen, dazu Halme bzw. Risse bzw. Körner."""
+def speckle(name, cols, w=512, h=512, scale=8, seed=12, blades=False, cracks=False, tile=False):
+    """Gras, Fels, Sand: Farbverlauf aus Rauschen, dazu Halme bzw. Risse bzw. Körner. tile=True spiegelt das Rauschen, damit die Kanten
+    nahtlos aneinanderpassen (große Böden sonst mit sichtbaren Kachelnähten)."""
     n = noise(w, h, scale, 5, seed)
+    if tile:
+        n = (n + n[:, ::-1]) / 2
+        n = (n + n[::-1, :]) / 2
     c0, c1, c2 = (hexrgb(c) for c in cols)
     img = np.where((n < 0.5)[..., None], c0 + (c1 - c0) * (n / 0.5)[..., None], c1 + (c2 - c1) * ((n - 0.5) / 0.5)[..., None])
     d = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
@@ -241,6 +245,8 @@ def bruchstein(name, w=1024, h=1024, seed=41, cols=('#7a746c', '#857d72', '#6c66
 speckle('gras.png',['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21)
 speckle('fels.png', ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22)
 speckle('sand.png', ['#d8c088', '#e8d29a', '#f4e4b4'], scale=10, seed=23)
+speckle('marssand.png', ['#b4502e', '#cf6c3c', '#e48c54'], scale=9, seed=61, tile=True)   # Marswüste (raum_build.py: Marsgesicht)
+speckle('marsfels.png', ['#7e3c2a', '#a85236', '#c8703f'], scale=6, cracks=True, seed=62)
 planks('holz_steg.png', 1024, 1024, 8, ['#9a6a3a', '#a8743e', '#8f6236', '#b07c44'], seed=1)
 planks('holz_rumpf.png', 1024, 1024, 16, ['#6a3e22', '#5e361e', '#734426', '#58321c'], grain=0.22, seed=2)
 planks('holz_deck.png', 1024, 1024, 10, ['#c08a50', '#b47e48', '#c8955a'], grain=0.15, seed=4)

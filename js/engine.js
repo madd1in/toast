@@ -9,6 +9,12 @@ const cv = document.getElementById('game');
 const mainCx = cv.getContext('2d');
 let cx = mainCx;   // im Klassik-Modus zeigt cx auf den Pixel-Renderer (js/pixel.js)
 let VS = 1, DPR = 1;
+// Schwache Geräte (Xbox-Edge, Handys mit höchstens 2 GB): kleinere Zeichenflächen und weniger zwischengespeicherte Raumbilder,
+// sonst läuft der Arbeitsspeicher voll und der Browser beendet die Seite
+// (Adresszusatz ?lowmem=1 erzwingt den Sparmodus, ?lowmem=0 schaltet ihn ab)
+const LOWMEM = (() => { try { const q = /[?&]lowmem=(\d)/.exec(location.search); return q ? q[1] === '1' : /Xbox/i.test(navigator.userAgent) || (navigator.deviceMemory > 0 && navigator.deviceMemory <= 2); } catch (e) { return false; } })();
+const MAX_PX = LOWMEM ? 2.4e6 : Infinity;   // Pixelbudget der Hauptfläche (Szenen- und Hintergrundpuffer sind je etwa so groß)
+const BG_KEEP = LOWMEM ? 3 : 7;             // so viele Raumhintergründe bleiben im Zwischenspeicher
 
 const VERBS = [['give', 'Gib'], ['pick', 'Nimm'], ['use', 'Benutze'], ['open', 'Öffne'], ['look', 'Schau an'], ['push', 'Drücke'], ['close', 'Schließe'], ['talk', 'Rede mit'], ['pull', 'Ziehe']];
 const VERB_LABEL = Object.fromEntries(VERBS); VERB_LABEL.walk = 'Gehe zu';
@@ -378,15 +384,19 @@ function drawLightFx(hd) {
 const bloomC = document.createElement('canvas'), bloomG = bloomC.getContext('2d');
 bloomC.width = 240; bloomC.height = 110;
 const BLOOM_OK = typeof CanvasRenderingContext2D !== 'undefined' && 'filter' in CanvasRenderingContext2D.prototype;
+let bloomKey = '', bloomT = -1e9;
 function drawBloom(alpha, h = SH) {
   if (!BLOOM_OK || !alpha || G.quality < 1) return;
-  const bw = bloomC.width, bh = Math.round(bw * h / W);
+  const bw = bloomC.width, bh = Math.round(bw * h / W), rk = viewRoomId() + '|' + bh;
   if (bloomC.height !== bh) bloomC.height = bh;
-  bloomG.globalCompositeOperation = 'copy';
-  bloomG.filter = 'brightness(0.7) contrast(3) saturate(1.3) blur(3px)';
-  const src = cx.canvas && cx.canvas !== cv ? cx.canvas : cv;
-  bloomG.drawImage(src, 0, 0, src.width, src === cv ? Math.round(cv.height * h / H) : src.height, 0, 0, bw, bh);
-  bloomG.filter = 'none';
+  if (rk !== bloomKey || G.t - bloomT >= 30) {   // 30 Hz reichen für das weiche Leuchten
+    bloomKey = rk; bloomT = G.t;
+    bloomG.globalCompositeOperation = 'copy';
+    bloomG.filter = 'brightness(0.7) contrast(3) saturate(1.3) blur(3px)';
+    const src = cx.canvas && cx.canvas !== cv ? cx.canvas : cv;
+    bloomG.drawImage(src, 0, 0, src.width, src === cv ? Math.round(cv.height * h / H) : src.height, 0, 0, bw, bh);
+    bloomG.filter = 'none';
+  }
   cx.save(); cx.globalCompositeOperation = 'screen'; cx.globalAlpha = alpha; cx.drawImage(bloomC, 0, 0, W, h); cx.restore();
 }
 
@@ -394,7 +404,7 @@ function drawBloom(alpha, h = SH) {
 const actBuf = document.createElement('canvas'), actG = actBuf.getContext('2d');
 const rimBuf = document.createElement('canvas'), rimG = rimBuf.getContext('2d');
 const inkBuf = document.createElement('canvas'), inkG = inkBuf.getContext('2d');
-const INK_DIRS = Array.from({ length: 12 }, (_, i) => [Math.cos(i * Math.PI / 6), Math.sin(i * Math.PI / 6)]);
+const INK_DIRS = Array.from({ length: 8 }, (_, i) => [Math.cos(i * Math.PI / 4), Math.sin(i * Math.PI / 4)]);
 // Tusche-Kontur: die Silhouette der ganzen Figur rundum versetzt in Konturfarbe hinterlegen –
 // eine durchgehende Außenlinie statt einzeln umrandeter Teile
 function inkify(src, pw, ph, rad, side = 0) {
@@ -403,14 +413,14 @@ function inkify(src, pw, ph, rad, side = 0) {
   const r = rimG; r.setTransform(1, 0, 0, 1, 0, 0); r.globalAlpha = 1; r.globalCompositeOperation = 'source-over'; r.clearRect(0, 0, pw, ph);
   r.drawImage(src, 0, 0, pw, ph, 0, 0, pw, ph); r.globalCompositeOperation = 'source-in'; r.fillStyle = OUT; r.fillRect(0, 0, pw, ph); r.globalCompositeOperation = 'source-over';
   const g = inkG; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, pw, ph);
-  const dirs = G.quality < 1 ? INK_DIRS.filter((_, i) => i % 3 === 0) : INK_DIRS;
+  const dirs = G.quality < 1 ? INK_DIRS.filter((_, i) => i % 2 === 0) : INK_DIRS;
   // Schattenseite und unten dicker, Lichtseite dünner – wie eine Tuschefeder
   for (const [dx, dy] of dirs) { const w = side ? Math.max(0.55, Math.min(1.6, 1 - side * dx * 0.45 + dy * 0.2)) : 1; g.drawImage(rimBuf, 0, 0, pw, ph, dx * rad * w, dy * rad * w, pw, ph); }
   g.drawImage(src, 0, 0, pw, ph, 0, 0, pw, ph);
   return inkBuf;
 }
 function drawActorLit(a, sc, lt, refl) {
-  const bs = Math.min(VS * DPR * SSK, G.quality < 1 ? 1.5 : 3), k = sc * bs, top = a.h + 90, bot = 30, fade = a.h * 0.55;
+  const bs = Math.min(VS * DPR * SSK, G.quality < 1 ? 1.5 : 2.4), k = sc * bs, top = a.h + 90, bot = 30, fade = a.h * 0.55;
   const pw = Math.ceil(270 * k), ph = Math.ceil((top + bot) * k), need = Math.ceil((top + Math.max(bot, fade)) * k);
   if (actBuf.width < pw || actBuf.height < need) { actBuf.width = rimBuf.width = Math.max(actBuf.width, pw); actBuf.height = rimBuf.height = Math.max(actBuf.height, need); }
   const g = actG, ox = pw / 2, oy = top * k, [side, key, fill] = lt;
@@ -768,7 +778,7 @@ function firstInteraction() {
 const bgCache = {};
 function resize() {
   const [vw, vh] = viewSize();
-  const vs = Math.max(0.2, Math.min(vw / W, vh / H)), dpr = Math.min(window.devicePixelRatio || 1, G.quality < 1 ? 1.3 : 2);
+  const vs = Math.max(0.2, Math.min(vw / W, vh / H)), dpr = Math.max(0.5, Math.min(window.devicePixelRatio || 1, G.quality < 1 ? 1.3 : 2, LOWMEM ? 1 : 2, Math.sqrt(MAX_PX / (W * vs * H * vs))));
   const cw = Math.round(W * vs * dpr), ch = Math.round(H * vs * dpr);
   if (vs !== VS || dpr !== DPR || cw !== cv.width || ch !== cv.height) {   // nur bei echter Änderung neu anlegen (Puffer bleiben sonst erhalten)
     VS = vs; DPR = dpr;
@@ -924,6 +934,18 @@ function music() {
   if (fx.verb) Sound.setReverb(fx.verb[0], fx.verb[1]);
   Sound.setIntensity(progress() / MILESTONES.length);
 }
+// Große Bilder vor dem Zeigen dekodieren lassen: auf schwacher Hardware (Xbox-Edge) fehlen sie sonst in den ersten Bildern nach einem
+// Raum- oder Figurenwechsel (zum Beispiel Hoagie nach dem Zeitstrudel). Höchstens ms warten, fertig geladene Bilder kosten fast nichts.
+function warmImgs(list, ms = 1800) {
+  if (G.fast) return Promise.resolve();
+  const ps = list.filter(im => im && im.decode && imgOk(im)).map(im => im.decode().catch(() => {}));
+  return ps.length ? Promise.race([Promise.all(ps), new Promise(r => setTimeout(r, ms))]) : Promise.resolve();
+}
+function warmRoom(roomId) {
+  const imgs = [typeof RAUM3D !== 'undefined' ? RAUM3D[roomId] : null];
+  for (const a of Object.values(ACT)) if (a.room === roomId && a.visible) { const d = typeof FIG3D !== 'undefined' && (FIG3D[a.id] || FIG3D[a.kind]); if (d) imgs.push(d.img); }
+  return warmImgs(imgs);
+}
 async function goRoom(id, roomId, x, y, dir = 1) {
   const a = ACT[id], view = id === curId();
   if (view) { irisAt(a); await fadeTo(1, 280, 'iris'); }
@@ -931,7 +953,7 @@ async function goRoom(id, roomId, x, y, dir = 1) {
   if (PLAYERS.includes(id) && G.state) markVisit(roomId);
   if (view) G.viewRoomLast = null;
   if (view) {
-    G.first = null; G.parts.length = 0; G.ripples.length = 0; if (G.sign && G.sign.room !== roomId) G.sign = null; music(); irisAt(a); await fadeTo(0, 320, 'iris');
+    G.first = null; G.parts.length = 0; G.ripples.length = 0; if (G.sign && G.sign.room !== roomId) G.sign = null; music(); irisAt(a); await warmRoom(roomId); await fadeTo(0, 320, 'iris');
     showSign(roomId);
     const r = ROOMS[roomId]; if (r.onEnter) await r.onEnter();
   }
@@ -948,6 +970,7 @@ async function switchChar(ch) {
     await fadeTo(1, 330, 'warp');
     G.state.cur = ch; G.parts.length = 0; G.ripples.length = 0; G.sign = null; music();
     await wait(260);
+    await warmRoom(me().room);
     await fadeTo(0, 330, 'warp');
     Sound.sting(ch);
     showSign(me().room);
@@ -1424,7 +1447,7 @@ function menuItems() {
   if (G.menu === 'help' || G.menu === 'ach' || G.menu === 'notes') return [back];
   if (G.menu === 'album' || G.menu === 'bios' || G.menu === 'gaeste') return [back];
   if (G.menu === 'eggs') return [{ id: 'extras', label: 'Zurück' }];
-  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'bios', label: 'Figuren-Steckbriefe' }, ...(typeof GUESTS !== 'undefined' && gbKnown() ? [{ id: 'gaeste', label: `Gästebuch (${gbCount()}/${GUESTS.length})` }] : []), { id: 'eggs', label: `Fundstücke (${eggsFound()}/${Object.keys(EGGS).length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
+  if (G.menu === 'extras') return [{ id: 'rock', label: 'Minispiel: Tentakel-Rock' }, { id: 'toaster', label: 'Minispiel: Gut-O-Mat' }, { id: 'album', label: `Fotoalbum (${albumList().length})` }, { id: 'bios', label: 'Figuren-Steckbriefe' }, ...(typeof GUESTS !== 'undefined' && gbKnown() ? [{ id: 'gaeste', label: `Gästebuch (${gbCount()}/${gbGesamt()})` }] : []), { id: 'eggs', label: `Fundstücke (${eggsFound()}/${Object.keys(EGGS).length})` }, { id: 'jukebox', label: 'Musikbox' }, { id: 'ach', label: `Erfolge (${achCount()}/${ACH.length})` }, back];
   if (G.menu === 'jukebox') return [...JUKEBOX.map(([id, label]) => ({ id: 'jb_' + id, label: (Sound.current === id ? '♪  ' : '') + label })), back];
   if (G.menu === 'save') return [...slotItems('save'), { id: 'export', label: 'Als Datei exportieren' }, back];
   if (G.menu === 'load') {
@@ -1490,8 +1513,10 @@ function menuClick(x, y) {
   else if (['help', 'ach', 'main', 'notes', 'save', 'load', 'settings', 'jukebox', 'extras', 'album', 'bios', 'eggs', 'gaeste'].includes(b.id)) {
     G.albumView = null;
     if (b.id === 'notes' || b.id === 'bios' || b.id === 'gaeste') Sound.sfx('page');
+    if (b.id === 'gaeste') G.gbSeite = 0;
     G.menu = b.id;
   }
+  else if (b.id === 'gbseite') { G.gbSeite = gbSeite() + 1 < gbSeiten() ? gbSeite() + 1 : gbSeite() - 1; Sound.sfx('page'); }
   else if (b.id === 'new') G.menu = 'confirm';
   else if (b.id === 'yes') { G.menu = null; startNew(); }
 }
@@ -1697,6 +1722,7 @@ function drawBg(room) {
     Lang.bgTag(true);
     try { room.draw(g); } finally { HDS.deco = HDS.shadow = false; Lang.bgTag(false); }
     finishBg(g, c, room); bgCache[key] = c;
+    const ks = Object.keys(bgCache); for (let i = 0; i < ks.length - BG_KEEP; i++) if (ks[i] !== key) delete bgCache[ks[i]];
   }
   cx.drawImage(c, 0, 0, W, SH);
 }
@@ -2212,7 +2238,7 @@ function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
   const jb = G.menu === 'jukebox';
-  const extra = G.menu === 'eggs' ? Object.keys(EGGS).length * 30 + 34 : G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'gaeste' ? 3 * 128 + 48 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? Math.ceil(ACH.length / 2) * 36 + 14 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const extra = G.menu === 'eggs' ? Object.keys(EGGS).length * 30 + 34 : G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'gaeste' ? gbRows() * 128 + 48 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? Math.ceil(ACH.length / 2) * 36 + 14 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
   const bw = jb ? 820 : G.menu === 'eggs' ? 620 : G.menu === 'bios' ? 780 : G.menu === 'gaeste' ? 824 : G.menu === 'ach' ? 860 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'notes' ? 560 : 420, mst = items.length > 11 ? 40 : items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
   const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe', eggs: 'Fundstücke', gaeste: 'Gästebuch' }[G.menu] || 'Pause';
@@ -2225,7 +2251,7 @@ function drawMenu() {
     y += HELP.length * 23 + 10;
   }
   if (G.menu === 'bios') { drawBios(bx, y); y += 3 * 140 + 8; }
-  if (G.menu === 'gaeste') { drawGuestbook(bx, y); y += 3 * 128 + 48; }
+  if (G.menu === 'gaeste') { drawGuestbook(bx, y); y += gbRows() * 128 + 48; }
   if (G.menu === 'eggs') { drawEggList(bx, y, bw); y += Object.keys(EGGS).length * 30 + 34; }
   if (jb) drawJukebox(bx, by, bw);
   let photoBtns = [];
@@ -2268,6 +2294,10 @@ function drawMenu() {
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
   G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * Math.min(43, (bh - 90) / items.length), w: 340, h: Math.min(35, (bh - 90) / items.length - 5) } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: Math.min(38, mst - 4) }));
   G.menuBtns.filter(b => !b.id.startsWith('ph_')).forEach((b, i) => { cx.globalAlpha = b.off ? 0.45 : 1; button(b, items[i].label, !b.off && inRect(G.mouse.x, G.mouse.y, b)); cx.globalAlpha = 1; });
+  if (G.menu === 'gaeste' && typeof gbBlaettern === 'function' && gbBlaettern()) {   // Seitenwechsel oben rechts im Gästebuch
+    const r = { id: 'gbseite', label: gbSeite() + 1 < gbSeiten() ? `Seite ${gbSeite() + 2}  ▶` : `◀  Seite ${gbSeite()}`, x: bx + bw - 176, y: by + 28, w: 156, h: 34 };
+    G.menuBtns.push(r); button(r, r.label, inRect(G.mouse.x, G.mouse.y, r));
+  }
   if (G.menu === 'album' && G.albumView != null && !cx.isPix) {
     const ph = albumList()[G.albumView];
     if (ph) {
@@ -2987,7 +3017,7 @@ function showSign(roomId) {
 }
 function markVisit(r) {
   const v = G.state.visited || (G.state.visited = {});
-  if (r && !v[r]) { v[r] = 1; if (Object.keys(ROOMS).every(id => v[id])) unlock('reise'); }
+  if (r && !v[r]) { v[r] = 1; if (Object.entries(ROOMS).every(([id, rm]) => v[id] || rm.noMap)) unlock('reise'); }
 }
 function updateVisits() {
   if (G.screen !== 'game' || !G.state) return;
@@ -3032,7 +3062,7 @@ function openMap(fromMenu) {
   G.menu = 'map'; G.mapT0 = G.t; Sound.sfx('unfold');
   if (G.pointer === 'pad') { G.mouse.x = W / 2; G.mouse.y = 0; snapNav(0, 1); }
 }
-function mapRooms(era) { const order = (MAP_ORDER[era] || []).filter(id => ROOMS[id]); return order.concat(Object.values(ROOMS).filter(r => r.era === era && !order.includes(r.id)).map(r => r.id)); }
+function mapRooms(era) { const order = (MAP_ORDER[era] || []).filter(id => ROOMS[id]); return order.concat(Object.values(ROOMS).filter(r => r.era === era && !r.noMap && !order.includes(r.id)).map(r => r.id)); }   // noMap: Ausflugsziele wie das Marsgesicht stehen nicht auf der Karte
 // Postkarten-Vorschau eines Raums: Hintergrund plus Gegenstände im aktuellen Zustand
 function mapThumb(room, w, h) {
   const s = Math.min(2, VS * DPR); let c = mapThumbs[room.id];
@@ -4024,17 +4054,23 @@ function render() {
 }
 // Umgebungslicht: die Ränder neben dem Spielbild (Handy quer, breite Monitore) leuchten weich in den Farben der Szene
 const ambCv = document.getElementById('amb'), ambG = ambCv && ambCv.getContext('2d');
+let ambMid = null, ambMidG = null;
 function updateAmbilight() {
   if (!ambG || document.hidden || G.t - (G.ambT || 0) < (G.quality < 1 ? 260 : 140)) return;
   G.ambT = G.t;
   const r = cv.getBoundingClientRect(), gap = Math.max(window.innerWidth - r.width, window.innerHeight - r.height);
   ambCv.style.opacity = gap > 24 ? '1' : '0';
   if (gap <= 24) return;
+  // Der Rand-Canvas ist winzig und läuft deshalb auf der CPU: das Hauptbild direkt hineinzuziehen zwingt die Grafikkarte, die ganze Fläche
+  // zurückzugeben (spürbarer Ruckler alle 140 ms in Chrome/Edge). Darum erst auf einen kleinen, aber beschleunigbaren Zwischencanvas verkleinern.
+  if (!ambMid) { ambMid = document.createElement('canvas'); ambMid.width = 224; ambMid.height = 140; ambMidG = ambMid.getContext('2d'); }
+  ambMidG.drawImage(cv, 0, 0, cv.width, cv.height, 0, 0, ambMid.width, ambMid.height);
   ambG.globalCompositeOperation = 'source-over'; ambG.filter = 'blur(1.2px)';
-  ambG.drawImage(cv, -3, -3, ambCv.width + 6, ambCv.height + 6); ambG.filter = 'none';
+  ambG.drawImage(ambMid, -3, -3, ambCv.width + 6, ambCv.height + 6); ambG.filter = 'none';
   ambG.fillStyle = 'rgba(10,5,18,0.42)'; ambG.fillRect(0, 0, ambCv.width, ambCv.height);
 }
 function frame(ts) {
+  if (G.last && ts - G.last < 10.5 && !G.fast) { requestAnimationFrame(frame); return; }   // Monitore mit hoher Bildrate: jedes zweite Bild genügt
   const dt = Math.min(50, ts - (G.last || ts)); G.last = ts; G.t += dt;
   // adaptive Qualität: bei anhaltendem Ruckeln DPR und Partikeldichte drosseln, später wieder hoch
   G.fpsAvg += (dt - G.fpsAvg) * 0.03;
@@ -4064,4 +4100,6 @@ async function boot() {
   G.saved = loadSave(); G.hasSaves = anySave();
   G.screen = 'title';
   music();
+  // die großen Figuren-Atlanten der Helden im Hintergrund dekodieren, solange das Titelbild läuft
+  setTimeout(() => warmImgs(PLAYERS.map(id => typeof FIG3D !== 'undefined' && FIG3D[id] && FIG3D[id].img), 6000), 1500);
 }

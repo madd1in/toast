@@ -714,6 +714,8 @@ ACT.drfred.talk = async () => {
     if (c === 'riss' && fl().rissZu) {
       await say(b, 'Wie geht es dem Dimensions-Tor?');
       await say(f, 'Prächtig! Gestern kam ein Pinguin mit Gummihandschuh durch. Ich habe ihm Tee angeboten. Er hat abgelehnt.');
+      if (!fl().bobbinFertig || !fl().zakFertig) await say(f, 'Und das Tor summt heute besonders: ein Signal aus dem Gasthaus 1776, eins vom Landeplatz der Zukunft. Soll Hoagie nachsehen – und Laverne auch!');
+      else await say(f, 'Die beiden letzten Gäste haben sich auch eingetragen. Die zweite Gästebuch-Seite ist mein ganzer Stolz. Neben der Seite mit dem Affen.');
     } else if (c === 'riss') {
       await say(b, 'Wer sind die ganzen komischen Gäste überall?');
       await say(f, 'Ah, das! Der Gut-O-Mat zieht so viel Strom, dass das Chrono-Klo leckt. Durch den Riss fallen Leute aus anderen Welten!');

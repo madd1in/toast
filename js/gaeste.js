@@ -126,13 +126,17 @@ raum3d('landeplatz', 'img/raum_landeplatz.jpg', {
   era: 'future', name: 'Landeplatz', floor: 'tile', amb: ['future', 'hum'], fill: '#2a1a48',
   objs: [
     { id: 'landeplatz_raus', name: 'Zurück zum Zukunftsgarten', rect: [902, 140, 58, 246], walk: [930, 400], exit: ['fgarten', 40, 380, 1] },
-    { id: 'raumschiff', name: 'Lieferraumschiff', rect: [412, 19, 470, 270], walk: [640, 368], look: 'Ein grünes Lieferraumschiff. Auf dem Band steht: „Wir liefern überallhin. Auch nach überallhin.“' },
+    { id: 'raumschiff', name: 'Lieferraumschiff', rect: [388, 11, 558, 283], walk: [640, 368], look: 'Ein grünes Lieferraumschiff. Auf dem Rumpf steht: „Wir liefern überallhin.“ Darunter, kleiner: „Auch nach überallhin.“' },
     { id: 'fracht', name: 'Frachtkisten', rect: [150, 268, 82, 66], walk: [190, 362], look: 'Kisten mit dem Aufdruck „Vorsicht: Inhalt explodiert nur manchmal“.' },
     { id: 'zapfsaeule', name: 'Zapfsäule', rect: [97, 194, 68, 125], walk: [130, 362], look: 'Eine Zapfsäule für Dunkle Materie. Der Preis steht auf „Ja“.' },
     { id: 'skyline', name: 'Skyline', rect: [0, 30, 400, 130], look: 'Die Stadt der Zukunft. Alles leuchtet, nichts ist geöffnet.' },
   ],
   dyn(c, t) {   // blinkende Positionslichter am Landeplatzrand
     for (let i = 0; i < 12; i++) if ((Math.floor(t / 320) + i) % 4 === 0) glow(48 + i * 79, 297, 16, i % 2 ? '#7fe8ff' : '#ff7ad9', 0.55);
+    // das Lieferschiff brummt im Leerlauf: Triebwerke glimmen, das Blinklicht auf der Antenne blinkt
+    const p = 0.5 + 0.5 * Math.sin(t * 0.004);
+    glow(395, 175, 46 + p * 8, '#ffb04a', 0.32 + p * 0.2); glow(472, 211, 30 + p * 5, '#ffb04a', 0.28 + p * 0.2);
+    if (Math.floor(t / 600) % 2) glow(612, 58, 14, '#ff4a5a', 0.7);
   },
 });
 raum3d('testkammer', 'img/raum_testkammer.jpg', {
@@ -182,7 +186,7 @@ const HAFEN_EBENEN = {"wolken": [121.5, 0.0, 813.0, 124.0], "vorn": [0.0, 34.5, 
 // </hafen-daten>
 
 // ---------- die Gäste ----------
-const GUESTS = ['dave', 'sam', 'max', 'salad', 'guybrush', 'jack', 'affe', 'bender', 'prof', 'zoid', 'glados', 'simon'];
+const GUESTS = ['dave', 'sam', 'max', 'salad', 'guybrush', 'jack', 'affe', 'bender', 'prof', 'zoid', 'glados', 'simon', 'bobbin', 'zak'];   // die letzten beiden stehen auf Gästebuch-Seite 2 (js/gaeste2.js)
 const GUEST_DEF = {
   dave: { name: 'Dave', from: 'Maniac Mansion', color: '#ff8a8a', h: 200, bw: 50, room: 'lobby', x: 800, y: 418, dir: -1, voice: [1.05, 1.0, 230, 'square', 'm', 1.0, 1.05],
     look: 'Ein Typ im roten Pulli, der sich umsieht, als wüsste er genau, wo hier der Keller ist.', role: 'Held aus Maniac Mansion · 80er', bio: 'Ist schon einmal in diese Villa eingebrochen, um seine Freundin zu retten. Kennt jede Geheimtür und hat Respekt vor Mikrowellen.' },
@@ -208,6 +212,11 @@ const GUEST_DEF = {
     look: 'Ein Affe mit drei Köpfen: einer mit Kopftuch, einer mit Dreispitz, einer mit Ohrring. Sie reden gleichzeitig. Meistens übereinander.', role: 'Legende der Karibik · Piraten-Running-Gag', bio: 'Taucht immer auf, wenn jemand „Hinter dir!“ ruft. Drei Köpfe, ein Magen, null Einigkeit. Ficht mit einer Bananen-Poolnudel.' },
   simon: { name: 'Simon', from: 'Simon the Sorcerer', color: '#c08aff', h: 240, bw: 56, room: 'thron', x: 232, y: 420, dir: 1, voice: [1.1, 1.05, 250, 'square', 'm', 1.04, 1.06],
     look: 'Ein Junge in lila Robe mit riesigem Zauberhut. Er rollt mit den Augen. Bei allem.', role: 'Zauberlehrling · Simon the Sorcerer', bio: 'Kam durch ein Portal in eine Märchenwelt und findet alle Märchen albern. Der Hut macht angeblich 80 Prozent der Magie.' },
+  // Seite 2: kommen erst durch das fertige Tor (Sichtbarkeit und Gespräche in js/gaeste2.js)
+  bobbin: { name: 'Bobbin Threadbare', card: 'Bobbin', sig: 'Bobbin', from: 'Loom', color: '#9aa4bc', h: 206, bw: 52, room: 'gasthaus', x: 520, y: 414, dir: -1, voice: [0.95, 0.88, 205, 'sine', 'm', 0.95, 0.88],
+    look: 'Ein schlanker Typ in grauer Kapuze mit einem leuchtenden Stab. Er sieht aus wie ein Zauberer, der seine Prüfung zu Hause vergessen hat.', role: 'Weber der Gilde · Loom', bio: 'Sein Stab spinnt aus vier Tönen ein Muster, das die Welt zusammenhält. Spricht leise, hört alles – und hat noch nie jemanden um Hilfe gebeten. Bis jetzt.' },
+  zak: { name: 'Zak McKracken', card: 'Zak McKracken', sig: 'Zak McK.', from: 'Zak McKracken', color: '#e8bc4a', h: 204, bw: 50, room: 'landeplatz', x: 800, y: 430, dir: -1, voice: [1.1, 1.05, 245, 'square', 'm', 1.05, 1.08],
+    look: 'Ein langer Typ mit Vokuhila, Schnurrbart und Kamera um den Hals. Er sieht aus, als würde er hinter jeder Ecke eine Schlagzeile wittern.', role: 'Reporter eines Boulevard-Blatts · Zak McKracken', bio: 'Schreibt für „Die Sensation“ über Außerirdische, Zwergelefanten und alles, was nach Verschwörung riecht. Hat ein Foto-Ziel: das Gesicht auf dem Mars.' },
 };
 for (const id of GUESTS) {
   const d = GUEST_DEF[id], [pitch, rate, blip, wave, g, tp, tr] = d.voice;
@@ -235,6 +244,8 @@ const GAST_IDLE = {
   zoid: (a, t) => gesture(a, t) > 0.45 && 'gest',
   glados: (a, t) => { const p = ((t + (a.seed || 0) * 3000) % 7000) / 7000; return a.talking ? (Math.sin(t * 0.004) > 0 ? 'tilt0' : 'tilt1') : p < 0.3 ? 'idle' : p < 0.55 ? 'tilt0' : p < 0.75 ? 'idle' : 'tilt1'; },
   simon: (a, t) => gesture(a, t) > 0.45 && 'gest',
+  bobbin: (a, t) => a.spielBis > t || idleAct(a, t, 9000, 2800) >= 0 ? 'spiel' : gesture(a, t) > 0.45 && 'gest',   // Stab erhoben, Noten steigen auf
+  zak: (a, t) => a.fotoBis > t || idleAct(a, t, 8000, 1700) >= 0 ? 'foto' : gesture(a, t) > 0.45 && 'gest',   // knipst die Gegend
 };
 for (const id of GUESTS) {
   ACT[id].frameOverride = (a, t) => a.duel && FIG3D[id] && FIG3D[id].f.nudel0 ? duelFrame(a) : (id === 'glados' || !a.talking && !a.walking) && GAST_IDLE[id](a, t);
@@ -253,6 +264,14 @@ function gastExtras(c, a, t, id) {
     glowAt(c, f[6], f[7], 26 * k + 10, '#ffd84a', k);
     E(c, f[6], f[7], 3.2 + k * 1.6, 3.2 + k * 1.6, '#fff8c0', 0);
   }
+  if (id === 'bobbin' && a._fig === FIG3D.bobbin.f.spiel) {   // Noten steigen vom leuchtenden Stab auf, die Gabel glimmt
+    glowAt(c, f[12] + 8, f[13] - 130, 34, '#c4f6ff', 0.55 + Math.sin(t * 0.006) * 0.15);
+    floaters(c, a, t, f[12] + 12, f[13] - 140, 3, (x, y, s) => noteGlyph(c, x, y, s, '#c4f6ff'), 0.9);
+  }
+  if (id === 'zak' && a._fig === FIG3D.zak.f.foto) {   // Blitz am Objektiv
+    const k = (t + (a.seed || 0) * 2311) % 8000 / 1700, fa = a.fotoBis > t ? (t % 900) / 900 : k;
+    if (fa > 0.5 && fa < 0.62) glowAt(c, f[12] + 6, f[13] - 2, 62, '#fff8d0', 1);
+  }
   if (id === 'prof' && a._fig === FIG3D.prof.f.news) floaters(c, a, t, 30, -200, 1, (x, y, s) => txt(c, '!', x, y, `800 ${Math.round(20 * s)}px "Baloo 2", sans-serif`, '#ffe066', 'center', 4, OUT));
   if (id === 'salad' && a._fig === FIG3D.salad.f.touch) floaters(c, a, t, 34, -150, 2, (x, y, s) => E(c, x, y, 3 * s, 3 * s, 'rgba(200,120,60,0.8)', 0));   // Rostkrümel
 }
@@ -264,15 +283,28 @@ function glowAt(c, x, y, r, col, a) {
 }
 
 // ---------- Gästebuch ----------
+// Zwölf Einträge pro Seite. Die ersten zwölf Gäste sind die „Riss-Gäste“: Ihre Unterschriften schließen den Riss (rissZu);
+// Gäste auf weiteren Seiten kommen erst durch das fertige Tor und zählen dafür nicht mit.
+const GB_SEITE = 12;
+const RISS_GAESTE = GUESTS.slice(0, GB_SEITE);
+function gbSeiten() { return Math.ceil(GUESTS.length / GB_SEITE); }
+function gbSeite() { return Math.min(G.gbSeite || 0, gbSeiten() - 1); }
+function gbListe() { return GUESTS.slice(gbSeite() * GB_SEITE, (gbSeite() + 1) * GB_SEITE); }
+// Plätze der aktuellen Seite: auf einer nicht vollen Seite bleibt mindestens ein „Noch frei“-Platz übrig
+function gbSlots() { const n = gbListe().length; return n >= GB_SEITE ? n : (Math.floor(n / 4) + 1) * 4; }
+function gbRows() { return gbSlots() / 4; }
+function gbBlaettern() { return gbSeiten() > 1 && !!G.state && (!!fl().rissZu || GUESTS.slice(GB_SEITE).some(id => bioKnown(id))); }
 function gbCount() { return G.state ? GUESTS.filter(id => fl()['gb_' + id]).length : 0; }
+// Gesamtzahl wie gezeigt: vor dem Tor nur die zwölf Riss-Gäste, danach alle (Seite 2 bleibt bis dahin eine Überraschung)
+function gbGesamt() { return G.state && fl().rissZu ? GUESTS.length : RISS_GAESTE.length; }
 async function gbSign(...ids) {
   const fresh = ids.filter(id => !fl()['gb_' + id]);
   if (!fresh.length) return;
   for (const id of fresh) fl()['gb_' + id] = 1;
   Sound.sfx('page');
-  note(`Gästebuch: ${fresh.map(id => ACT[id].name).join(' & ')} ${fresh.length > 1 ? 'haben' : 'hat'} unterschrieben (${gbCount()}/${GUESTS.length})`);
+  note(`Gästebuch: ${fresh.map(id => ACT[id].name).join(' & ')} ${fresh.length > 1 ? 'haben' : 'hat'} unterschrieben (${gbCount()}/${gbGesamt()})`);
   if (!fl().gbHint) { fl().gbHint = 1; await wait(900); await say(curId(), 'Das Gästebuch findet man im Menü unter Extras. Dr. Fred sammelt da die Unterschriften.'); }
-  if (gbCount() === GUESTS.length && !fl().rissZu) {
+  if (RISS_GAESTE.every(id => fl()['gb_' + id]) && !fl().rissZu) {
     fl().rissZu = 1;
     await wait(700);
     await fadeTo(1, 400, 'black'); G.caption = 'Unterdessen im Labor ...'; Sound.sfx('ding'); await wait(1600); G.caption = null;
@@ -280,14 +312,25 @@ async function gbSign(...ids) {
     await say('drfred', 'Das Gästebuch ist voll! Zwölf Unterschriften aus elf Welten – plus ein Affe mit drei Köpfen. Damit kann ich den Riss endlich berechnen!');
     await say('drfred', 'Ich flicke ihn nicht zu. Ich baue ihn zu einem Tor um! Dann können unsere Gäste kommen und gehen, wie sie wollen.');
     await say('drfred', 'Und wer weiß – vielleicht kommt eines Tages Besuch aus noch mehr Welten. Wissenschaft!');
+    Sound.sfx('ding'); await wait(500);
+    await say('drfred', 'Moment. Das Tor summt schon wieder! Zwei neue Signale … eins aus dem Gasthaus 1776 und eins vom Landeplatz der Zukunft. Das Gästebuch bekommt eine zweite Seite!');
+    fl().neueSignale = 1;
     await fadeTo(1, 400, 'black'); G.viewRoom = keep; await fadeTo(0, 400, 'black');
     unlock('gaeste');
+    note('Zwei neue Gäste sind durch das Tor gekommen – Hoagie in 1776, Laverne auf dem Landeplatz.');
   }
 }
 function gbKnown() { return GUESTS.some(id => G.state && (G.state.talked[id] || G.state.looked['a:' + id])); }
 function drawGuestbook(bx, y) {
-  txt(cx, 'Durch den Riss im Chrono-Klo sind Gäste aus anderen Welten gefallen. Hilf ihnen – dann tragen sie sich ein.', W / 2, y + 12, '600 13px "Baloo 2", sans-serif', '#a99ad0');
-  GUESTS.forEach((id, i) => {
+  const page = gbSeite(), rows = gbRows();
+  txt(cx, page ? 'Seit Dr. Fred den Riss zum Tor gebaut hat, kommt Besuch aus noch mehr Welten. Hilf ihnen – dann tragen sie sich ein.'
+    : 'Durch den Riss im Chrono-Klo sind Gäste aus anderen Welten gefallen. Hilf ihnen – dann tragen sie sich ein.', W / 2, y + 12, '600 13px "Baloo 2", sans-serif', '#a99ad0');
+  for (let i = gbListe().length; i < gbSlots(); i++) {   // freie Plätze
+    const x = bx + 20 + (i % 4) * 196, yy = y + 26 + Math.floor(i / 4) * 128;
+    R(cx, x, yy, 188, 120, '#1a1129', 2, 12, '#2a1c40');
+    txt(cx, 'Noch frei', x + 94, yy + 62, '700 14px "Baloo 2", sans-serif', '#4a3a68');
+  }
+  gbListe().forEach((id, i) => {
     const x = bx + 20 + (i % 4) * 196, yy = y + 26 + Math.floor(i / 4) * 128, w = 188, h = 120, known = bioKnown(id), signed = known && G.state && fl()['gb_' + id], d = GUEST_DEF[id];
     R(cx, x, yy, w, h, signed ? '#2c2046' : known ? '#241838' : '#1a1129', 2, 12, signed ? mix(d.color, '#241739', 0.35) : '#33224d');
     if (known && !cx.isPix) glow(x + 40, yy + h - 30, 56, d.color, 0.12);
@@ -305,7 +348,7 @@ function drawGuestbook(bx, y) {
       txt(cx, '✓ unterschrieben', x + 130, yy + 108, '800 11px "Baloo 2", sans-serif', '#7dff7a', 'center');
     } else txt(cx, known ? 'noch keine Unterschrift' : 'noch nicht getroffen', x + 128, yy + 84, '600 10px "Baloo 2", sans-serif', known ? '#a99ad0' : '#5a4a78', 'center');
   });
-  txt(cx, `${gbCount()} von ${GUESTS.length} Unterschriften${G.state && fl().rissZu ? ' – der Riss ist jetzt ein Tor!' : ''}`, W / 2, y + 26 + 3 * 128 + 12, '800 14px "Baloo 2", sans-serif', '#ffd23a');
+  txt(cx, `${gbCount()} von ${gbGesamt()} Unterschriften${G.state && fl().rissZu ? ' – der Riss ist jetzt ein Tor!' : ''}${gbBlaettern() ? `  ·  Seite ${page + 1} von ${gbSeiten()}` : ''}`, W / 2, y + 26 + rows * 128 + 12, '800 14px "Baloo 2", sans-serif', '#ffd23a');
 }
 
 // ---------- kleine Gespräche und Nebenbei-Sprüche ----------

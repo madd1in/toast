@@ -10,7 +10,7 @@ from bpy_extras.object_utils import world_to_camera_view
 sys.path.insert(0, REPO + '/art/blender')
 import figur_lib
 importlib.reload(figur_lib)
-from figur_lib import Builder, toon
+from figur_lib import Builder, toon, tree
 
 YAW = -0.559
 SKIN = toon('N_Haut', '#f4cba8')
@@ -409,10 +409,87 @@ def build_affe(SC, B, R):
     return dict(mouth='Af_MundM', eyes=('Af_AugeRM', 'Af_AugeLM'), hand='Af_HandR', abd=0.18)
 
 
+# ------------------------------------------------------------------ Bobbin (Loom: Weber im Kapuzenmantel mit Spinnstab)
+def build_bobbin(SC, B, R):
+    """Schlanker Weber in grauem Kapuzenmantel mit Strick am Gürtel. Der Spinnstab (Rocken mit leuchtender Gabel) bleibt in jeder Pose
+    senkrecht in der rechten Hand: 'carry' in render() setzt seinen Fußpunkt auf die Hand."""
+    ROBE, HOOD, LINE, ROPE, WOOD, GLOW = (toon('G_BobMantel', '#7f889c'), toon('G_BobKapuze', '#636c80'), toon('G_BobSaum', '#3b4152'), toon('G_BobStrick', '#c8a870'),
+                                          toon('G_BobHolz', '#8a5a30'), toon('G_BobLicht', '#c4f6ff', hi=0.97))
+    PALE, SHOE = toon('G_BobHaut', '#f4dfcb'), toon('G_BobSchuh', '#3a2a22')
+    for k, y in (('L', 1), ('R', -1)):
+        B.sphere(f'Bo_Schuh{k}', (0.07, y * 0.09, 0.05), (0.13, 0.07, 0.05), SHOE, R)
+    B.cone('Bo_Mantel', 0.04, 1.5, 0.33, 0.17, ROBE, R, scale=(0.9, 1, 1), bevel=0.03)
+    B.cone('Bo_Saum', 0.04, 0.13, 0.335, 0.32, LINE, R, scale=(0.9, 1, 1), bevel=0.01)
+    B.cone('Bo_Strick', 0.95, 1.01, 0.235, 0.232, ROPE, R, scale=(0.9, 1, 1), bevel=0.008)
+    tube(SC, 'Bo_StrickEnde', [(0.2, -0.06, 0.98), (0.22, -0.07, 0.8), (0.2, -0.05, 0.62)], 0.014, ROPE, R, tip=0.7)
+    B.cone('Bo_Kragen', 1.32, 1.56, 0.27, 0.15, HOOD, R, bevel=0.02)   # Schulterumhang
+    B.cone('Bo_Hals', 1.46, 1.6, 0.06, 0.055, PALE, R, bevel=0)
+    face(B, 'Bo_', R, 1.72, PALE, head=(0.15, 0.14, 0.18), nose=(0.07, 0.05, 0.07), eye=(0.042, 0.047, 0.058), pupil=(0.02, 0.024, 0.032), ey=0.065, mz=0.125)
+    B.sphere('Bo_Kapuze', (-0.12, 0, 1.76), (0.22, 0.21, 0.26), HOOD, R)   # sitzt hinter dem Gesicht, das Gesicht schaut vorn heraus
+    B.torus('Bo_Rand', (0.07, 0, 1.745), 0.175, 0.03, HOOD, R, rot=(0, 1.57, 0), seg=32, sseg=8, scale=(1.0, 1.0, 0.88))
+    tube(SC, 'Bo_Spitze', [(-0.2, 0, 1.95), (-0.34, 0, 1.92), (-0.46, 0, 1.78)], 0.06, HOOD, R, tip=0.12, res=8)
+    for k, y in (('L', 1), ('R', -1)):
+        arm(B, 'Bo_', k, R, (0, y * 0.22, 1.42), 0.24, 0.22, 0.08, ROBE, PALE, fore_mat=ROBE)
+    # Spinnstab: Fußpunkt (0,0,0) ist der Griff, der Schaft reicht tiefer als die Hand und weit darüber hinaus
+    S = B.empty('Bo_Stab')
+    S.parent = R
+    B.rod('Bo_Schaft', (0.06, 0, -0.95), (0.06, 0, 1.0), 0.024, WOOD, S, r1=0.03, seg=12)
+    B.sphere('Bo_Knauf', (0.06, 0, -0.96), (0.04, 0.04, 0.04), WOOD, S)
+    tube(SC, 'Bo_GabelA', [(0.06, 0.0, 0.98), (0.06, 0.1, 1.12), (0.06, 0.07, 1.34)], 0.022, WOOD, S, tip=0.55)
+    tube(SC, 'Bo_GabelB', [(0.06, 0.0, 0.98), (0.06, -0.1, 1.12), (0.06, -0.07, 1.34)], 0.022, WOOD, S, tip=0.55)
+    B.sphere('Bo_Licht', (0.06, 0, 1.2), (0.05, 0.05, 0.05), GLOW, S)
+    H = B.empty('Bo_Halo')   # größeres Leuchten, nur in der Spielpose
+    H.parent = S
+    B.sphere('Bo_HaloKugel', (0.06, 0, 1.2), (0.1, 0.1, 0.1), toon('G_BobHalo', '#e8fcff', hi=1.0), H)
+    return dict(mouth='Bo_Mund', eyes=('Bo_AugeR', 'Bo_AugeL'), hand='Bo_HandR', abd=0.12, carry='Bo_Stab', plant=0.99, tilt=-0.13, only=['Bo_Halo'])
+
+
+# ------------------------------------------------------------------ Zak (Reporter vom Boulevard-Blatt, jagt Geschichten bis zum Mars)
+def build_zak(SC, B, R):
+    """Hochgewachsener Reporter mit Vokuhila, Schnurrbart, beiger Jacke, roter Krawatte und Kamera um den Hals. Für das Foto
+    wandert die Kamera in die rechte Hand (Pose 'foto' blendet die Brust-Kamera aus und die Hand-Kamera ein)."""
+    HAIR, COAT, SHIRT, TIE, JEANS, SHOE, SOLE = (toon('G_ZakHaar', '#e8bc4a'), toon('G_ZakJacke', '#b99358'), toon('G_ZakHemd', '#f6f2e6'), toon('G_ZakKrawatte', '#c8323c'),
+                                                 toon('G_ZakJeans', '#46628f'), toon('G_ZakSchuh', '#f6f6f6'), toon('G_ZakSohle', '#c8323c'))
+    BODY, LENS, STRAP, GLASS = toon('G_ZakKamera', '#2e3038', hi=0.5), toon('G_ZakLinse', '#9ad8f0', hi=0.95), toon('G_ZakRiemen', '#5a3a24'), toon('G_ZakBrille', '#1c1a24', hi=0.7)
+    legs(B, 'Zk_', R, 0.92, 0.1, 0.07, JEANS, SHOE, (0.14, 0.075, 0.06))
+    for k, y in (('L', 1), ('R', -1)):
+        B.cone(f'Zk_Sohle{k}', 0.0, 0.035, 0.07, 0.075, SOLE, R, xy=(0.05, y * 0.1), scale=(1.8, 1, 1), bevel=0.004)
+    B.cone('Zk_Jacke', 0.78, 1.5, 0.235, 0.2, COAT, R, scale=(0.9, 1, 1), bevel=0.03)
+    B.cone('Zk_Hemd', 1.0, 1.47, 0.02, 0.12, SHIRT, R, xy=(0.15, 0), scale=(0.6, 1, 1), bevel=0.01)
+    B.rod('Zk_Krawatte', (0.218, 0, 1.4), (0.236, 0, 1.04), 0.026, TIE, R, r1=0.042, seg=8)
+    B.cone('Zk_Hals', 1.44, 1.58, 0.07, 0.065, SKIN, R, bevel=0)
+    face(B, 'Zk_', R, 1.72, SKIN, head=(0.16, 0.15, 0.185), nose=(0.065, 0.05, 0.06))
+    B.sphere('Zk_Haar', (-0.02, 0, 1.82), (0.175, 0.165, 0.125), HAIR, R)
+    B.sphere('Zk_Tolle', (0.11, 0, 1.9), (0.085, 0.13, 0.06), HAIR, R, rot=(0, -0.3, 0))
+    tube(SC, 'Zk_Nacken', [(-0.12, 0, 1.78), (-0.22, 0, 1.64), (-0.21, 0, 1.46)], 0.075, HAIR, R, tip=0.45)   # Vokuhila hinten
+    B.sphere('Zk_Schnurr', (0.155, 0, 1.625), (0.03, 0.075, 0.022), HAIR, R)
+    for k, y in (('L', 1), ('R', -1)):   # Sonnenbrille ins Haar geschoben
+        B.torus(f'Zk_Glas{k}', (0.1, y * 0.065, 1.9), 0.04, 0.008, GLASS, R, rot=(0, 1.2, 0), seg=20, sseg=6)
+    for k, y in (('L', 1), ('R', -1)):
+        arm(B, 'Zk_', k, R, (0, y * 0.22, 1.42), 0.24, 0.22, 0.065, COAT, SKIN)
+    # Kamera um den Hals (Brust) – und dieselbe Kamera für die Hand (nur in der Foto-Pose zu sehen)
+    tube(SC, 'Zk_RiemenL', [(0.0, 0.12, 1.5), (0.13, 0.09, 1.36), (0.21, 0.04, 1.26)], 0.012, STRAP, R, tip=1.0)
+    tube(SC, 'Zk_RiemenR', [(0.0, -0.12, 1.5), (0.13, -0.09, 1.36), (0.21, -0.04, 1.26)], 0.012, STRAP, R, tip=1.0)
+    CB = B.empty('Zk_KameraB')
+    CB.parent = R
+    CB.location = (0.24, 0, 1.2)
+    B.sphere('Zk_KB_Body', (0, 0, 0), (0.05, 0.09, 0.06), BODY, CB)
+    B.sphere('Zk_KB_Linse', (0.05, 0, 0.0), (0.04, 0.04, 0.04), LENS, CB)
+    B.sphere('Zk_KB_Blitz', (0.0, 0.05, 0.07), (0.025, 0.025, 0.02), toon('G_ZakBlitz', '#fff2a0', hi=0.97), CB)
+    CH = B.empty('Zk_KameraH')   # hängt an der Rig-Wurzel, folgt der Hand (follow) und zeigt mit dem Objektiv immer nach vorn
+    CH.parent = R
+    B.sphere('Zk_KH_Body', (0, 0, 0), (0.05, 0.09, 0.06), BODY, CH)
+    B.sphere('Zk_KH_Linse', (0.05, 0, 0.0), (0.04, 0.04, 0.04), LENS, CH)
+    B.sphere('Zk_KH_Blitz', (0.0, 0.05, 0.07), (0.025, 0.025, 0.02), toon('G_ZakBlitz', '#fff2a0', hi=0.97), CH)
+    return dict(mouth='Zk_Mund', eyes=('Zk_AugeR', 'Zk_AugeL'), hand='Zk_HandR', abd=0.1, only=['Zk_KameraH'], hidden_in=['Zk_KameraB'],
+                follow={'Zk_KameraH': (0.035, 0.05, 0.02)})
+
+
 BUILD = {'sam': build_sam, 'max': build_max, 'dave': build_dave, 'guybrush': build_guybrush, 'jack': build_jack, 'salad': build_salad,
-         'bender': build_bender, 'prof': build_prof, 'zoid': build_zoid, 'glados': build_glados, 'simon': build_simon, 'affe': build_affe}
+         'bender': build_bender, 'prof': build_prof, 'zoid': build_zoid, 'glados': build_glados, 'simon': build_simon, 'affe': build_affe,
+         'bobbin': build_bobbin, 'zak': build_zak}
 PREFIX = {'sam': 'Sa_', 'max': 'Mx_', 'dave': 'Dv_', 'guybrush': 'Gb_', 'jack': 'Jk_', 'salad': 'Sf_', 'bender': 'Bd_', 'prof': 'Pf_', 'zoid': 'Zb_', 'glados': 'Ki_', 'simon': 'Sm_',
-          'affe': 'Af_'}
+          'affe': 'Af_', 'bobbin': 'Bo_', 'zak': 'Zk_'}
 # Fecht-Turnier: Poolnudel (Farbe) und Super-Spritzer für drei zusätzliche Bilder; der Säbel bleibt dabei weg
 FECHTER = {'guybrush': '#7fe03a', 'jack': '#ff8a2a', 'salad': '#c87a3a', 'affe': '#ffd23a'}
 FECHT_FRAMES = [('nudel0', dict(aR=-1.45, eR=0.15, xR=0.1, aL=-0.3, eL=1.6, xL=0.6, nudel=1)),
@@ -429,6 +506,9 @@ EXTRA = {
     'max': [('jump', dict(aR=-2.7, eR=0.3, xR=-0.6, aL=-2.7, eL=0.3, xL=0.6, lift=0.12))],
     'prof': [('news', dict(aR=-2.2, eR=0.6, xR=-0.3))],
     'bender': [('lean', dict(aR=-0.1, eR=1.8, xR=0.5, aL=-0.1, eL=1.8, xL=-0.5))],
+    # Bobbin hebt den Spinnstab und spielt die vier Töne; Zak hält die Kamera vors Gesicht ('show'/'hide' schalten die beiden Kameras um)
+    'bobbin': [('spiel', dict(aR=-1.5, eR=0.55, xR=-0.12, aL=-0.8, eL=0.6, xL=0.25, tilt=-0.04, show=['Bo_Halo']))],
+    'zak': [('foto', dict(aR=-1.7, eR=1.2, xR=0.4, aL=-1.35, eL=1.35, xL=-0.45, show=['Zk_KameraH'], hide=['Zk_KameraB']))],
 }
 
 
@@ -462,6 +542,24 @@ def render(name):
             h = p.get('head')
             head.rotation_euler = h if h else head0
         R.location = (0, 0, p.get('lift', 0))
+        # Requisiten: 'only' erscheinen nur in Posen, die sie unter 'show' nennen; 'hidden_in' verschwinden in Posen, die sie unter 'hide' nennen
+        for n in info.get('only', []):
+            for o in tree(OB[n]):
+                o.hide_render = n not in p.get('show', ())
+        for n in info.get('hidden_in', []):
+            for o in tree(OB[n]):
+                o.hide_render = n in p.get('hide', ())
+        if info.get('follow'):   # Gegenstand an der Rig-Wurzel: Mittelpunkt = Hand + Versatz, Ausrichtung bleibt unverändert
+            bpy.context.view_layer.update()
+            hw = R.matrix_world.inverted() @ OB[P + 'HandR'].matrix_world.translation
+            for n, off in info['follow'].items():
+                OB[n].location = (hw.x + off[0], hw.y + off[1], hw.z + off[2])
+        if info.get('carry'):   # der Gegenstand steht auf dem Boden (plant) bzw. bleibt senkrecht, seine Achse folgt der rechten Hand
+            bpy.context.view_layer.update()
+            c = OB[info['carry']]
+            hw = R.matrix_world.inverted() @ OB[P + 'HandR'].matrix_world.translation
+            c.location = (hw.x, hw.y, info['plant'] if info.get('plant') and p.get('plant', True) else hw.z)
+            c.rotation_euler = (0, p.get('tilt', info.get('tilt', 0)), 0)
         for o in props['nudel']:
             o.hide_render = not p.get('nudel')
         for o in props['spritz']:

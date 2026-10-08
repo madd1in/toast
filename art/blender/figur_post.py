@@ -20,6 +20,8 @@ CFG = {
     'lila': dict(top=1.951, h=177, skip=[]),
     'nett': dict(top=1.951, h=177, skip=[]),
     'guard': dict(top=1.951, h=170, skip=[]),
+    # Bobbin: Kapuze bei 2,02 m; der Spinnstab ragt darüber hinaus und zählt nicht für die Größe
+    'bobbin': dict(top=2.02, h=206, skip=[]),
 }.get(NAME)   # Crossover-Gäste (gaeste_build.py): Scheitel aus meta.json, 104 Spiel-Einheiten pro Meter wie bei Bernard
 CONTRAST, SATUR = 1.18, 1.25   # Raumlicht und Papierstruktur im Spiel legen sich darüber und machen die Figur sonst blass
 SRC = f'art/render/{NAME}/'

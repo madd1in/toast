@@ -284,17 +284,9 @@ def build_landeplatz(SC):
     S = B.empty('Raumschiff')
     S.location = (4.4, 20.5, 0.0)
     S.rotation_euler = (0, 0, 0.18)
-    B.sphere('SchiffRumpf', (0, 0, 2.6), (5.2, 2.0, 1.9), SHIP, S)
-    B.sphere('SchiffNase', (4.4, 0, 2.5), (1.6, 1.5, 1.4), SHIP, S)
-    B.sphere('Cockpit', (4.9, -0.1, 3.3), (1.0, 1.2, 0.75), WIN, S)
-    B.cone('Triebwerk', 2.0, 2.4, 1.0, 0.8, SHIPD, S, xy=(-5.0, 0), rot=(0, 1.57, 0), bevel=0.03)
-    B.cone('Flosse', 3.8, 6.2, 1.2, 0.1, SHIP, S, xy=(-3.6, 0), scale=(1.5, 0.15, 1), bevel=0.03)
-    B.sphere('Turbine', (-5.6, 0, 2.4), (0.4, 0.9, 0.9), toon('R_Feuer', '#ffb04a', hi=0.95), S)
-    for i, x in enumerate((-2.5, 0.0, 2.5)):
-        B.sphere(f'Bullauge{i}', (x, -1.86, 2.9), (0.38, 0.12, 0.38), WIN, S)
-        B.cone(f'Bein{i}', 0.0, 1.2, 0.12, 0.08, METAL, S, xy=(x, -0.9 if i % 2 else 0.9), bevel=0)
-    box(B, 'Rampe', (1.2, -2.2, 0.55), (1.8, 2.6, 0.12), METAL, S, rot=(-0.45, 0, 0))
-    box(B, 'Schriftband', (0, -1.95, 3.6), (5.0, 0.1, 0.5), toon('R_Band', '#ff5a4a'), S, bevel=0.01)
+    import lieferschiff
+    importlib.reload(lieferschiff)
+    lieferschiff.build(SC, B, toon, S)   # Drehkörper-Rumpf, Kuppel, Seitentriebwerke, Leitwerk, Landebeine (lieferschiff.py)
     # Skyline mit Neon-Fenstern weit hinten, darüber ein großer blasser Mond
     for i in range(20):
         rnd = random.Random(300 + i)
@@ -582,7 +574,124 @@ def render_hafen_layers(SC, cam):
     json.dump({'pivot': [round(q.x * 960, 1), round((1 - q.y) * 440, 1)]}, open(out + 'meta.json', 'w'))
 
 
-ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12'))}
+# ------------------------------------------------------------------ Marsgesicht (Zukunft: Ausflug vom Landeplatz)
+def build_mars(SC, froh=False):
+    """Rote Wüste mit gelandetem Lieferraumschiff, Briefkasten und dem riesigen steinernen Gesicht (Verbeugung vor dem
+    Mars-Gesicht der Boulevard-Presse): missmutig mit Eisbeutel auf der Stirn (froh=False) oder mit geschlossenen Freudenaugen
+    und breitem Lächeln, nachdem es seine Kopfschmerztabletten bekommen hat (froh=True). Beide Bilder sonst identisch."""
+    B = Builder(SC)
+    tube = tube_in(SC)
+    SAND, ROCK = tex_toon('R_MarsSand', 'marssand.png', 0.09), tex_toon('R_MarsFels', 'marsfels.png', 0.22, hi=0.15)   # Fels matt, kein Glanz
+    ROCKD, ROCKL = toon('R_MarsFelsDunkel', '#6a3226', hi=0.1), toon('R_MarsFelsHell', '#d88252', hi=0.12)
+    NK = bpy.data.collections.get('Ohne_Kontur') or bpy.data.collections.new('Ohne_Kontur')   # flache Dünen und Kraterränder ohne Freestyle-Kontur
+    DARK, PALE, BLACK = toon('R_MarsDunkel', '#2a1418'), toon('R_MarsWeiss', '#f6efe4', hi=0.6), toon('N_Schwarz', '#16121e', hi=0.15)
+    METAL, GREEN, GREEND, WIN = toon('R_Metall', '#9aa0b8', hi=0.75), toon('R_Schiff', '#4fc06a', hi=0.7), toon('R_SchiffDunkel', '#2f8a4a'), toon('R_Fenster', '#bfefff', hi=0.95)
+    WOOD, ICE, BLUSH = toon('R_HolzDunkel', '#6a4426'), toon('R_Eis', '#9ad8f0', hi=0.8), toon('R_Wange', '#ff8f86', hi=0.3)
+    # Boden, ferne Berge in drei Dunststufen, Dünen-Wellen
+    box(B, 'Boden', (0, 160, -0.6), (700, 320, 1.2), SAND, bevel=0.0)
+    for i in range(16):
+        rnd = random.Random(700 + i)
+        B.sphere(f'Berg{i}', (-300 + i * 40 + rnd.uniform(-10, 10), rnd.uniform(190, 250), -1), (rnd.uniform(28, 55), rnd.uniform(18, 26), rnd.uniform(9, 24)),
+                 toon(f'R_MarsBerg{i % 3}', ['#c47a5c', '#b86e54', '#aa6450'][i % 3]), None)
+    for i in range(40):
+        rnd = random.Random(900 + i)
+        NK.objects.link(B.sphere(f'Duene{i}', (rnd.uniform(-40, 40), rnd.uniform(14, 60), 0.02), (rnd.uniform(1.8, 5.5), 0.35, 0.05), ROCKL, None))
+    # Felsbrocken (die Mitte vorn bleibt frei für die Lauffläche)
+    for i in range(14):
+        rnd = random.Random(300 + i)
+        x, y = rnd.uniform(-34, 34), rnd.uniform(15, 62)
+        if abs(x) < 9 and y < 20:
+            x += 14 if x >= 0 else -14
+        if 1.5 < x < 9.5 and y < 28:   # Briefkasten und Sicht aufs Gesicht freihalten
+            x += 8
+        s = rnd.uniform(0.5, 1.4)
+        B.sphere(f'Fels{i}', (x, y, s * 0.3), (s * 1.3, s * 1.0, s * 0.7), ROCKD if i % 3 else ROCK, None, rot=(0, 0, rnd.uniform(0, 3)))
+    for i, (x, y, r) in enumerate([(-12, 34, 4.2), (30, 40, 5.5), (-26, 52, 6.5)]):   # Krater
+        NK.objects.link(B.torus(f'Krater{i}', (x, y, 0.05), r, 0.35, ROCKD, None, seg=40, sseg=8, scale=(1, 0.5, 1)))
+    # Monde am Himmel: Phobos (Kartoffel mit Kratern) und das kleine Deimos
+    B.sphere('Phobos', (-62, 320, 44), (13, 10, 10), toon('R_Mond1', '#c9b6aa', hi=0.5), None, rot=(0, 0.2, 0.4))
+    for j, (dx, dz, rr) in enumerate([(-4, 2, 2.2), (3, -2, 1.7), (5, 3, 1.3), (-7, -3, 1.5)]):
+        B.sphere(f'PhobosKrater{j}', (-62 + dx, 310.5, 44 + dz), (rr, 0.5, rr), toon('R_Mond1D', '#8a7a72'), None)
+    B.sphere('Deimos', (96, 330, 37), (4.8, 4.5, 4.5), toon('R_Mond2', '#d8c8bc', hi=0.5), None)
+    # --- das Gesicht ---
+    FX, FY, FZ = 20.0, 75.0, 6.5
+    G_ = B.empty('Gesicht')
+    B.sphere('Sockel', (FX, FY + 3, 0.2), (13.5, 9.5, 3.6), ROCKD, G_)
+    box(B, 'Kopf', (FX, FY, FZ + 1), (14, 10.5, 13.5), ROCK, G_, bevel=0.1)
+    box(B, 'Kopfschmuck', (FX, FY + 0.6, FZ + 8.5), (12.6, 8.4, 3.0), ROCKD, G_, bevel=0.1)
+    for i, x in enumerate((-4.2, 0, 4.2)):
+        box(B, f'Zacke{i}', (FX + x, FY + 0.6, FZ + 10.4), (2.2, 3.0, 1.3), ROCKD, G_, bevel=0.1)
+    for s, k in (('L', -1), ('R', 1)):   # Ohren und Wangen
+        box(B, f'Ohr{s}', (FX + k * 7.4, FY + 0.6, FZ + 1.0), (1.3, 2.3, 4.2), ROCKD, G_, bevel=0.25)
+        B.sphere(f'Wange{s}', (FX + k * 4.6, FY - 5.0, FZ - 1.8), (2.8, 1.5, 2.3), ROCKL, G_)
+    FRONT = FY - 5.5
+    B.sphere('Nase', (FX, FRONT - 0.7, FZ - 0.2), (1.4, 2.1, 2.5), ROCKL, G_)
+    for s, k in (('L', -1), ('R', 1)):
+        B.sphere(f'Nasenloch{s}', (FX + k * 0.7, FRONT - 2.6, FZ - 1.9), (0.4, 0.4, 0.3), DARK, G_)
+        # Brauen: missmutig mit nach innen fallenden Enden, froh sanft gewölbt
+        box(B, f'Braue{s}', (FX + k * 3.4, FRONT - 0.2, FZ + (4.5 if froh else 4.1)), (4.4, 1.2, 1.0), ROCKD, G_, rot=(0, k * 0.12 if froh else -k * 0.34, 0), bevel=0.2)   # missmutig: Innenenden nach unten
+        if froh:   # Freudenaugen: zwei geschlossene Bögen, dazu rosige Wangen
+            tube(f'Lachauge{s}', [(FX + k * 4.9, FRONT - 0.6, FZ + 1.7), (FX + k * 3.4, FRONT - 0.9, FZ + 2.9), (FX + k * 1.9, FRONT - 0.6, FZ + 1.7)], 0.3, DARK, G_)
+            B.sphere(f'Rouge{s}', (FX + k * 4.9, FRONT - 0.4, FZ - 0.5), (1.3, 0.25, 0.8), BLUSH, G_)
+        else:      # Augen: dunkle Höhle, Augapfel, Pupille, schwere Oberlider
+            B.sphere(f'Hoehle{s}', (FX + k * 3.4, FRONT - 0.1, FZ + 2.3), (2.2, 1.0, 1.8), DARK, G_)
+            B.sphere(f'Augapfel{s}', (FX + k * 3.4, FRONT - 0.6, FZ + 2.1), (1.5, 0.8, 1.4), PALE, G_)
+            B.sphere(f'Pupille{s}', (FX + k * 3.2, FRONT - 1.3, FZ + 1.8), (0.6, 0.3, 0.6), BLACK, G_)
+            B.sphere(f'Lid{s}', (FX + k * 3.4, FRONT - 1.0, FZ + 3.0), (1.8, 0.9, 1.0), ROCK, G_)
+    if froh:   # breites Lächeln mit offenem Mund und Zahnreihe
+        B.sphere('Mundoeffnung', (FX, FRONT - 0.2, FZ - 4.2), (3.6, 0.55, 1.4), DARK, G_)
+        for i in range(5):
+            box(B, f'Zahn{i}', (FX - 2.4 + i * 1.2, FRONT - 0.65, FZ - 3.2), (0.9, 0.35, 0.9), PALE, G_, bevel=0.2)
+        tube('Lachen', [(FX - 4.0, FRONT - 0.5, FZ - 3.0), (FX - 2.0, FRONT - 0.9, FZ - 5.2), (FX + 2.0, FRONT - 0.9, FZ - 5.2), (FX + 4.0, FRONT - 0.5, FZ - 3.0)], 0.4, DARK, G_)
+    else:      # Schmollmund
+        tube('Schmollen', [(FX - 3.6, FRONT - 0.5, FZ - 5.0), (FX - 1.6, FRONT - 0.9, FZ - 3.8), (FX + 1.6, FRONT - 0.9, FZ - 3.8), (FX + 3.6, FRONT - 0.5, FZ - 5.0)], 0.45, DARK, G_)
+        box(B, 'Eisbeutel', (FX + 0.4, FRONT - 0.5, FZ + 6.1), (5.0, 1.0, 2.6), ICE, G_, rot=(0, 0, 0.08), bevel=0.3)
+        box(B, 'Band', (FX, FRONT - 0.15, FZ + 6.1), (14.2, 0.7, 0.8), PALE, G_, bevel=0.2)
+        for i, x in enumerate((1.4, -0.3)):
+            B.sphere(f'Tropfen{i}', (FX + x, FRONT - 0.9, FZ + 4.5 - i * 0.5), (0.22, 0.2, 0.4), ICE, G_)
+    # --- gelandetes Lieferraumschiff links ---
+    S = B.empty('Raumschiff')
+    S.location = (-10.5, 33.0, 0.0)
+    S.rotation_euler = (0, 0, 0.18)
+    import lieferschiff
+    importlib.reload(lieferschiff)
+    lieferschiff.build(SC, B, toon, S)
+    # --- Briefkasten „Lieferungen für das Gesicht“, Warnschild und ein havarierter Rover ---
+    B.cone('Pfosten', 0.0, 1.1, 0.07, 0.06, WOOD, None, xy=(4.6, 14.2), bevel=0)
+    BK = box(B, 'Briefkasten', (4.6, 14.2, 1.3), (1.0, 0.6, 0.6), toon('R_Briefkasten', '#d8323a'), bevel=0.12)
+    box(B, 'BriefSchlitz', (4.6, 13.89, 1.42), (0.55, 0.03, 0.08), DARK, bevel=0)
+    box(B, 'BriefFahne', (5.14, 14.2, 1.55), (0.05, 0.05, 0.5), toon('R_BriefFahne', '#ffd23a'), bevel=0)
+    for name, body, pos, size, extra in (('BriefText', 'FÜR: DAS GESICHT', (4.6, 13.88, 1.18), 0.085, None),):
+        cd = bpy.data.curves.get(name + ('F' if froh else '')) or bpy.data.curves.new(name + ('F' if froh else ''), 'FONT')
+        cd.body, cd.size, cd.align_x, cd.align_y, cd.extrude = body, size, 'CENTER', 'CENTER', 0.005
+        cd.materials.clear(); cd.materials.append(toon('R_BriefSchrift', '#ffe9a0'))
+        o = bpy.data.objects.new(name, cd); SC.collection.objects.link(o)
+        o.location, o.rotation_euler = pos, (math.pi / 2, 0, 0)
+    for x in (-2.7, -0.1):
+        B.cone(f'SchildPfosten{int(x * 10)}', 0.0, 1.9, 0.06, 0.05, WOOD, None, xy=(x, 13.6), bevel=0)
+    SCH = box(B, 'Schild', (-1.4, 13.52, 1.6), (3.0, 0.1, 1.2), toon('R_SchildHolz', '#c89a62'), bevel=0.05)
+    cd = bpy.data.curves.get('SchildTextM' + ('F' if froh else '')) or bpy.data.curves.new('SchildTextM' + ('F' if froh else ''), 'FONT')
+    cd.body, cd.size, cd.align_x, cd.align_y, cd.extrude = ('BITTE LEISE!\nGesicht hat Kopfweh' if not froh else 'DANKE!\nGesicht ist wieder gut'), 0.26, 'CENTER', 'CENTER', 0.01
+    cd.materials.clear(); cd.materials.append(toon('R_SchildSchrift', '#6a1a1a'))
+    st = bpy.data.objects.new('SchildTextM', cd); SC.collection.objects.link(st)
+    st.location, st.rotation_euler = (-1.4, 13.44, 1.6), (math.pi / 2, 0, 0)
+    RV = B.empty('Rover')
+    RV.location, RV.rotation_euler = (-4.4, 16.8, 0.0), (0, 0, 0.5)
+    box(B, 'RoverKoerper', (0, 0, 0.62), (1.8, 1.0, 0.5), toon('R_RoverGrau', '#d8d4cc', hi=0.6), RV, bevel=0.1)
+    B.sphere('RoverKuppel', (0.5, 0, 0.98), (0.4, 0.35, 0.22), toon('R_RoverGlas', '#7fd8ff', hi=0.9), RV)
+    B.rod('RoverMast', (-0.6, 0.2, 0.85), (-0.7, 0.2, 1.7), 0.03, METAL, RV, seg=8)
+    B.sphere('RoverSchuessel', (-0.7, 0.2, 1.72), (0.22, 0.22, 0.08), METAL, RV, rot=(0.5, 0, 0))
+    for i, (x, y) in enumerate([(-0.65, 0.5), (0, 0.5), (0.65, 0.5), (-0.65, -0.5), (0.65, -0.5)]):
+        B.torus(f'RoverRad{i}', (x, y, 0.28), 0.2, 0.09, toon('R_RoverReifen', '#2a2630'), RV, rot=(math.pi / 2, 0, 0), seg=24, sseg=8)
+    B.torus('RoverRadAb', (-1.5, -0.2, 0.09), 0.2, 0.09, toon('R_RoverReifen', '#2a2630'), None, seg=24, sseg=8)   # das sechste Rad liegt daneben
+    box(B, 'RoverPanel', (0.1, 0, 1.15), (1.3, 0.8, 0.04), toon('R_RoverSolar', '#2a3a8a', hi=0.6), RV, rot=(0.25, 0, 0), bevel=0.01)
+    sun(SC, (0.95, 0.0, -0.6), 4.0, (1.0, 0.86, 0.7))
+    sun(SC, (1.2, 0.0, 0.9), 1.0, (0.9, 0.6, 0.62))
+    return {'Gesicht': G_, 'Raumschiff': S, 'Briefkasten': BK, 'Schild': SCH, 'Rover': RV, 'Mond': bpy.data.objects['Phobos']}
+
+
+ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12')),
+           'mars': (lambda SC: build_mars(SC, False), ('#f4c496', '#7a3c52')), 'mars_froh': (lambda SC: build_mars(SC, True), ('#f4c496', '#7a3c52'))}
 
 
 def render(name):

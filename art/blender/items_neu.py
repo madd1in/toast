@@ -26,7 +26,23 @@ def i_sicherung(SC, B, R):
     t.location, t.rotation_euler = (0, -0.128, 0.24), (math.pi / 2, 0, 0)
 
 
-NEU = {'sicherung': i_sicherung}
+def i_tabletten(SC, B, R):
+    """Röhrchen mit Kopfschmerztabletten: weißes Plastik, rote Kappe, gelbes Etikett „KOPF WEG“, daneben zwei Tabletten."""
+    WEI, ROT, ETI, SCH, PIL = toon('I_Pillenweiss', '#f4f2ee', hi=0.5), toon('I_Pillenrot', '#d8323a', hi=0.5), toon('I_Etikett', '#ffe27a', hi=0.4), toon('N_Schwarz', '#16121e', hi=0.15), toon('I_Pille', '#ffb04a', hi=0.6)
+    B.cone('IT_Roehre', 0.0, 0.32, 0.1, 0.1, WEI, R, seg=40, bevel=0.01)
+    B.cone('IT_Kappe', 0.32, 0.4, 0.108, 0.1, ROT, R, seg=40, bevel=0.01)
+    B.cone('IT_Etikett', 0.07, 0.27, 0.103, 0.103, ETI, R, seg=40, bevel=0)
+    cd = bpy.data.curves.get('IT_Text') or bpy.data.curves.new('IT_Text', 'FONT')
+    cd.body, cd.size, cd.align_x, cd.align_y, cd.extrude = 'KOPF\nWEG', 0.05, 'CENTER', 'CENTER', 0.004
+    cd.materials.clear(); cd.materials.append(SCH)
+    t = bpy.data.objects.new('IT_Text', cd); SC.collection.objects.link(t)
+    t.parent = R
+    t.location, t.rotation_euler = (0, -0.108, 0.17), (math.pi / 2, 0, 0)
+    for i, (x, y) in enumerate(((0.2, -0.04), (0.3, 0.05))):
+        B.sphere(f'IT_Pille{i}', (x, y, 0.03), (0.07, 0.07, 0.03), PIL, R)
+
+
+NEU = {'sicherung': i_sicherung, 'tabletten': i_tabletten}
 
 
 def tree(o):
