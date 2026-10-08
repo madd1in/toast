@@ -387,7 +387,7 @@ const BLOOM_OK = typeof CanvasRenderingContext2D !== 'undefined' && 'filter' in 
 let bloomKey = '', bloomT = -1e9;
 function drawBloom(alpha, h = SH) {
   if (!BLOOM_OK || !alpha || G.quality < 1) return;
-  const bw = bloomC.width, bh = Math.round(bw * h / W), rk = viewRoomId() + '|' + bh;
+  const bw = bloomC.width, bh = Math.round(bw * h / W), rk = (G.state ? viewRoomId() : G.screen) + '|' + bh;   // auf dem Titelbild gibt es noch keinen Spielstand
   if (bloomC.height !== bh) bloomC.height = bh;
   if (rk !== bloomKey || G.t - bloomT >= 30) {   // 30 Hz reichen für das weiche Leuchten
     bloomKey = rk; bloomT = G.t;
