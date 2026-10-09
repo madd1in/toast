@@ -358,7 +358,7 @@ class PixCtx {
       const c = ((255 << 24) | (st(d[k + 2]) << 16) | (st(d[k + 1]) << 8) | st(d[k])) >>> 0;
       if (this.plot(x, y, { u32: c, a: 1 })) cols[(y - y0 + 1) * bw + (x - x0 + 1)] = c;
     }
-    if (full) return;
+    if (full || img.noSel) return;   // noSel: Bildausschnitt eines Raums (Altbau-Zustände), kein Figuren-Umriss
     for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
       if (cols[y * bw + x]) continue;
       const n = (x > 0 && cols[y * bw + x - 1]) || (x < bw - 1 && cols[y * bw + x + 1]) || (y > 0 && cols[(y - 1) * bw + x]) || (y < bh - 1 && cols[(y + 1) * bw + x]);
@@ -370,15 +370,16 @@ class PixCtx {
   blitRoom(room) {
     // je Maßstab einmal gerendert: klassisch 1:3, mit der Kamera der minimalen Bedienung etwas größer
     const k = Math.round(this.m[0] / PSCALE * 1000) / 1000, cache = room._pix || (room._pix = {});
-    if (!cache[k]) {
+    const ck = room.bgKey ? k + '|' + room.bgKey() : k;   // Raumzustand (Altbau in 3D: Falltür offen …)
+    if (!cache[ck]) {
       const sw = Math.ceil(W * PSCALE * k), sh = Math.ceil(SH * PSCALE * k), pc = new PixCtx(sw, sh);
       pc.isStatic = true;   // Hintergründe werden einmal "gemalt": volle VGA-Schattierung und Textur
       pc.scale(k, k);
       if (typeof Lang !== 'undefined') Lang.bgTag(true);
       try { room.draw(pc); } finally { if (typeof Lang !== 'undefined') Lang.bgTag(false); }
-      cache[k] = { buf: pc.bufs[0], texts: pc.texts, w: sw, h: sh };
+      cache[ck] = { buf: pc.bufs[0], texts: pc.texts, w: sw, h: sh };
     }
-    const src = cache[k], dx = Math.round(this.m[4]), dy = Math.round(this.m[5]);
+    const src = cache[ck], dx = Math.round(this.m[4]), dy = Math.round(this.m[5]);
     if (!dx && !dy && src.w === this.w && src.h <= this.h) this.buf.set(src.buf);
     else for (let y = 0; y < src.h; y++) {
       const ty = y + dy; if (ty < 0 || ty >= this.h) continue;

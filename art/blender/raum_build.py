@@ -694,7 +694,15 @@ ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_
            'mars': (lambda SC: build_mars(SC, False), ('#f4c496', '#7a3c52')), 'mars_froh': (lambda SC: build_mars(SC, True), ('#f4c496', '#7a3c52'))}
 
 
+import altbau   # die alten, gezeichneten Räume in 3D (Lobby …): eigene Varianten und Sprites, siehe altbau.py
+importlib.reload(altbau)
+altbau.init(globals())
+ROOMS3D.update(altbau.ROOMS)
+
+
 def render(name):
+    if name in altbau.ROOMS:
+        return altbau.render(name, setup, only=globals().get('ONLY'), no_render=globals().get('NO_RENDER'))
     build, sky = ROOMS3D[name]
     SC, cam = setup(name, sky)
     anchors = build(SC)

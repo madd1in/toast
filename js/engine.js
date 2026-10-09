@@ -1712,7 +1712,7 @@ async function cutscene(fn) {
 // ---------- Rendering ----------
 function drawBg(room) {
   if (cx.isPix) return cx.blitRoom(room);
-  const s = VS * DPR * SSK, key = room.id;
+  const s = VS * DPR * SSK, key = room.bgKey ? room.id + '|' + room.bgKey() : room.id;   // bgKey: Zustand des Raums (Altbau in 3D, js/altbau.js)
   let c = bgCache[key];
   // neu zeichnen bei anderer Auflösung – oder wenn der Browser den Puffer verworfen hat (Speicherdruck auf Mobilgeräten)
   if (!c || c._s !== s || (c._g.isContextLost && c._g.isContextLost())) {
@@ -3677,11 +3677,12 @@ function drawCandles(room) {
     E(cx, x, 66.5, 1.2, 1.8, '#fff6d0', 0);
   });
 }
+const LOBBY_FENSTER = { x: 582, y: 70, w: 58, h: 110 };   // Fensterglas der Lobby (die 3D-Lobby in js/altbau.js setzt es neu)
 function drawLobbyBat(room) {
   if (room.id !== 'lobby') return;
   const k = batK(); if (k < 0) return;
-  const x = 572 + k * 82, y = 128 - Math.sin(k * Math.PI) * 34 + Math.sin(k * 30) * 4, fl = Math.sin(G.t * 0.05);
-  cx.save(); cx.beginPath(); cx.rect(582, 70, 58, 110); cx.clip();
+  const F = LOBBY_FENSTER, x = F.x - 10 + k * (F.w + 24), y = F.y + F.h * 0.53 - Math.sin(k * Math.PI) * 34 + Math.sin(k * 30) * 4, fl = Math.sin(G.t * 0.05);
+  cx.save(); cx.beginPath(); cx.rect(F.x, F.y, F.w, F.h); cx.clip();
   cx.translate(x, y);
   for (const s of [-1, 1]) P(cx, [0, 0, s * 7, -4 - fl * 5, s * 12, -1 - fl * 3, s * 9, 2, s * 5, 1], '#1a1020', 1);
   E(cx, 0, 0, 3, 2.6, '#1a1020', 0); E(cx, 1.2, -0.6, 0.6, 0.6, '#ff6040', 0);

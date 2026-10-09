@@ -242,20 +242,178 @@ def bruchstein(name, w=1024, h=1024, seed=41, cols=('#7a746c', '#857d72', '#6c66
     save(arr, name)
 
 
-speckle('gras.png',['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21)
-speckle('fels.png', ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22)
-speckle('sand.png', ['#d8c088', '#e8d29a', '#f4e4b4'], scale=10, seed=23)
-speckle('marssand.png', ['#b4502e', '#cf6c3c', '#e48c54'], scale=9, seed=61, tile=True)   # Marswüste (raum_build.py: Marsgesicht)
-speckle('marsfels.png', ['#7e3c2a', '#a85236', '#c8703f'], scale=6, cracks=True, seed=62)
-planks('holz_steg.png', 1024, 1024, 8, ['#9a6a3a', '#a8743e', '#8f6236', '#b07c44'], seed=1)
-planks('holz_rumpf.png', 1024, 1024, 16, ['#6a3e22', '#5e361e', '#734426', '#58321c'], grain=0.22, seed=2)
-planks('holz_deck.png', 1024, 1024, 10, ['#c08a50', '#b47e48', '#c8955a'], grain=0.15, seed=4)
-planks('holz_fass.png', 512, 512, 6, ['#b07a40', '#a06c36', '#bc864a'], grain=0.2, nails=False, seed=8)
-canvas_cloth('segeltuch.png')
-plaster('putz.png')
-roof_tiles('dachziegel.png')
-jolly_roger('flagge.png')
-schlangenhaut('schlange.png')
-bruchstein('mauer.png')
-bruchstein('pflaster.png', cols=('#6a645c', '#76706a', '#5c5850', '#807a70'), rows=10, seed=43, floor=True)
-print(sorted(os.listdir(OUT)))
+def tapete(name, base, dark, dot, w=512, h=512, seed=51):
+    """Tapete mit Rautenmuster und Pünktchen (Lobby), leicht fleckig gealtert; kachelbar (Muster geht in w und h glatt auf)."""
+    d = Image.new('RGB', (w, h), tuple(int(v) for v in hexrgb(base)))
+    dr = ImageDraw.Draw(d)
+    cw, ch = w // 4, h // 4
+    for j in range(-1, 5):
+        for i in range(-1, 5):
+            x, y = i * cw + (j % 2) * cw // 2, j * ch
+            dr.polygon([(x, y - ch * 0.36), (x + cw * 0.15, y), (x, y + ch * 0.36), (x - cw * 0.15, y)], fill=tuple(int(v) for v in hexrgb(dark)))
+            dr.ellipse([x + cw // 2 - 7, y + ch // 2 - 7, x + cw // 2 + 7, y + ch // 2 + 7], fill=tuple(int(v) for v in hexrgb(dot)))
+            dr.line([(x, y - ch * 0.46), (x, y - ch * 0.4)], fill=tuple(int(v) for v in hexrgb(dot)), width=2)
+    arr = np.asarray(d.filter(ImageFilter.GaussianBlur(0.8)), np.float32)
+    n = noise(w, h, 4, 4, seed)
+    n = (n + n[:, ::-1] + n[::-1, :] + n[::-1, ::-1]) / 4
+    arr *= (0.9 + 0.2 * n)[..., None]
+    save(arr, name)
+
+
+def zifferblatt(name, w=512):
+    """Zifferblatt der Standuhr: elfenbein, römische Ziffern, Messingring, Mondphasen-Bogen oben."""
+    s = 4 * w
+    d = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(d)
+    c = s / 2
+    dr.ellipse([0, 0, s - 1, s - 1], fill=(196, 154, 64, 255))
+    dr.ellipse([s * 0.05, s * 0.05, s * 0.95, s * 0.95], fill=(242, 230, 200, 255), outline=(90, 60, 20, 255), width=int(s * 0.012))
+    try:
+        from PIL import ImageFont
+        font = ImageFont.truetype('C:/Windows/Fonts/georgiab.ttf', int(s * 0.085))
+    except OSError:
+        font = None
+    roman = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']
+    for i, t in enumerate(roman):
+        a = i / 12 * 2 * math.pi
+        x, y = c + math.sin(a) * s * 0.36, c - math.cos(a) * s * 0.36
+        dr.text((x, y), t, fill=(40, 24, 12, 255), font=font, anchor='mm')
+        for k in range(5):   # Minutenstriche
+            b = a + k / 60 * 2 * math.pi
+            r0 = 0.43 if k else 0.41
+            dr.line([(c + math.sin(b) * s * r0, c - math.cos(b) * s * r0), (c + math.sin(b) * s * 0.445, c - math.cos(b) * s * 0.445)], fill=(40, 24, 12, 255), width=int(s * (0.008 if k else 0.014)))
+    dr.ellipse([c - s * 0.04, c - s * 0.04, c + s * 0.04, c + s * 0.04], fill=(40, 24, 12, 255))
+    # Zeiger: zehn vor zwei
+    for ang, ln, wd in ((-1.05, 0.3, 0.024), (0.95, 0.22, 0.034)):
+        dr.line([(c, c), (c + math.sin(ang) * s * ln, c - math.cos(ang) * s * ln)], fill=(30, 18, 10, 255), width=int(s * wd))
+    d = d.resize((w, w), Image.LANCZOS)
+    a = np.asarray(d, np.float32)
+    a[..., :3] *= (0.92 + 0.12 * noise(w, w, 5, 3, 71))[..., None]
+    Image.fromarray(np.clip(a, 0, 255).astype(np.uint8)).save(OUT + name, optimize=True)
+
+
+def nachthimmel(name, w=1024, h=512, seed=81):
+    """Nachthimmel für den Blick aus dem Fenster: tiefes Blau nach unten heller, Sterne, Sichelmond, Wolkenschleier, kahler Ast."""
+    yy = np.linspace(0, 1, h)[:, None, None]
+    arr = hexrgb('#0e0a2e') * (1 - yy) + hexrgb('#3a2a6e') * yy
+    arr = arr * np.ones((1, w, 1), np.float32)
+    n = noise(w, h, 3, 4, seed)
+    arr += (n[..., None] - 0.5) * 30
+    d = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    dr = ImageDraw.Draw(d)
+    r = random.Random(seed)
+    for _ in range(160):
+        x, y, s = r.randint(0, w), r.randint(0, int(h * 0.8)), r.choice((1, 1, 1, 2, 2, 3))
+        dr.ellipse([x - s, y - s, x + s, y + s], fill=(255, 250, 230))
+    mx, my, mr = int(w * 0.66), int(h * 0.26), int(h * 0.12)
+    halo = Image.new('L', (w, h), 0)   # weicher Hof um den Mond
+    ImageDraw.Draw(halo).ellipse([mx - mr * 2.2, my - mr * 2.2, mx + mr * 2.2, my + mr * 2.2], fill=110)
+    halo = halo.filter(ImageFilter.GaussianBlur(mr * 0.9))
+    d = Image.composite(Image.new('RGB', (w, h), (150, 140, 220)), d, halo)
+    moon = Image.new('L', (w, h), 0)   # Sichel: Vollkreis minus versetzter Kreis
+    md = ImageDraw.Draw(moon)
+    md.ellipse([mx - mr, my - mr, mx + mr, my + mr], fill=255)
+    md.ellipse([mx - mr + int(mr * 0.55), my - mr - int(mr * 0.25), mx + mr + int(mr * 0.55), my + mr - int(mr * 0.25)], fill=0)
+    d = Image.composite(Image.new('RGB', (w, h), (255, 244, 196)), d, moon.filter(ImageFilter.GaussianBlur(0.8)))
+    dr = ImageDraw.Draw(d)
+    dr = ImageDraw.Draw(d)
+    # kahler Ast von links oben, Spukvilla-Stimmung
+    def ast(x, y, a, ln, wd, depth):
+        if depth == 0 or wd < 1:
+            return
+        x2, y2 = x + math.cos(a) * ln, y + math.sin(a) * ln
+        dr.line([(x, y), (x2, y2)], fill=(10, 6, 20), width=int(wd))
+        ast(x2, y2, a + r.uniform(-0.6, -0.15), ln * 0.72, wd * 0.62, depth - 1)
+        ast(x2, y2, a + r.uniform(0.15, 0.6), ln * 0.66, wd * 0.6, depth - 1)
+    ast(-10, int(h * 0.12), 0.35, w * 0.22, 26, 6)
+    save(np.asarray(d, np.float32), name)
+
+
+def gemaelde(name, portrait, w=600, h=720, seed=91):
+    """Ölporträt: das 3D-Rendering der Figur (art/render/portrait_*.png) vor dunkelgrünem Malgrund mit Vignette,
+    gemalt wirkende Flächen (Medianfilter), Firnis-Gelbstich und feines Krakelee."""
+    fig = Image.open(portrait).convert('RGBA').resize((w, h), Image.LANCZOS)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    rr = np.hypot((xx - w * 0.5) / (w * 0.62), (yy - h * 0.42) / (h * 0.62))
+    bg = hexrgb('#3f6a4a') * (1 - np.clip(rr, 0, 1))[..., None] + hexrgb('#16261c') * np.clip(rr, 0, 1)[..., None]
+    bg += (noise(w, h, 5, 4, seed)[..., None] - 0.5) * 40
+    base = Image.fromarray(np.clip(bg, 0, 255).astype(np.uint8)).convert('RGBA')
+    base.alpha_composite(fig)
+    img = base.convert('RGB').filter(ImageFilter.ModeFilter(5)).filter(ImageFilter.SMOOTH_MORE)
+    a = np.asarray(img, np.float32)
+    a = a * np.array([1.0, 0.95, 0.8], np.float32) + np.array([14, 8, 0], np.float32)   # Firnis
+    a *= (0.88 + 0.12 * (1 - np.clip(rr, 0, 1)))[..., None]
+    cr = Image.new('L', (w, h), 0)   # Krakelee: feine Haarrisse, nur angedeutet
+    dr = ImageDraw.Draw(cr)
+    r = random.Random(seed)
+    for _ in range(45):
+        x, y = r.randint(0, w), r.randint(0, h)
+        pts = [(x, y)]
+        for _ in range(r.randint(2, 4)):
+            x += r.randint(-30, 30); y += r.randint(-30, 30); pts.append((x, y))
+        dr.line(pts, fill=255, width=1)
+    k = np.asarray(cr.filter(ImageFilter.GaussianBlur(0.5)), np.float32)[..., None] / 255 * 0.22
+    a = a * (1 - k) + np.array([40, 34, 20], np.float32) * k
+    save(a, name)
+
+
+def labor_glas(name, w=256, h=384, seed=93):
+    """Milchglas der Labortür: grünes Leuchten von hinten, Kolben-Schatten und Bläschen."""
+    yy = np.linspace(0, 1, h)[:, None, None]
+    arr = (hexrgb('#1c5a46') * (1 - yy) + hexrgb('#3aa878') * yy) * np.ones((1, w, 1), np.float32)
+    xx = np.linspace(-1, 1, w)[None, :, None]
+    arr *= 1.15 - 0.35 * xx ** 2
+    d = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    dr = ImageDraw.Draw(d)
+    dark = (12, 40, 30)
+    for i, (cx, base, kind) in enumerate(((0.25, 0.92, 0), (0.52, 0.88, 1), (0.78, 0.9, 2))):
+        x, y = cx * w, base * h
+        if kind == 0:   # Erlenmeyer
+            dr.polygon([(x - 34, y), (x + 34, y), (x + 9, y - 70), (x + 9, y - 110), (x - 9, y - 110), (x - 9, y - 70)], fill=dark)
+        elif kind == 1:   # Rundkolben
+            dr.ellipse([x - 30, y - 62, x + 30, y - 2], fill=dark)
+            dr.rectangle([x - 8, y - 120, x + 8, y - 50], fill=dark)
+        else:   # Reagenzglas im Ständer
+            dr.rectangle([x - 26, y - 14, x + 26, y], fill=dark)
+            for k in (-15, 0, 15):
+                dr.rounded_rectangle([x + k - 5, y - 80, x + k + 5, y - 6], radius=5, fill=dark)
+    r = random.Random(seed)
+    for _ in range(26):
+        x, y, s = r.uniform(0.1, 0.9) * w, r.uniform(0.1, 0.75) * h, r.uniform(2, 7)
+        dr.ellipse([x - s, y - s, x + s, y + s], outline=(170, 255, 200), width=2)
+    save(np.asarray(d.filter(ImageFilter.GaussianBlur(2.2)), np.float32), name)
+
+
+JOBS = {
+    'gras.png': lambda n: speckle(n, ['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21),
+    'fels.png': lambda n: speckle(n, ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22),
+    'sand.png': lambda n: speckle(n, ['#d8c088', '#e8d29a', '#f4e4b4'], scale=10, seed=23),
+    'marssand.png': lambda n: speckle(n, ['#b4502e', '#cf6c3c', '#e48c54'], scale=9, seed=61, tile=True),   # Marswüste (raum_build.py: Marsgesicht)
+    'marsfels.png': lambda n: speckle(n, ['#7e3c2a', '#a85236', '#c8703f'], scale=6, cracks=True, seed=62),
+    'holz_steg.png': lambda n: planks(n, 1024, 1024, 8, ['#9a6a3a', '#a8743e', '#8f6236', '#b07c44'], seed=1),
+    'holz_rumpf.png': lambda n: planks(n, 1024, 1024, 16, ['#6a3e22', '#5e361e', '#734426', '#58321c'], grain=0.22, seed=2),
+    'holz_deck.png': lambda n: planks(n, 1024, 1024, 10, ['#c08a50', '#b47e48', '#c8955a'], grain=0.15, seed=4),
+    'holz_fass.png': lambda n: planks(n, 512, 512, 6, ['#b07a40', '#a06c36', '#bc864a'], grain=0.2, nails=False, seed=8),
+    'segeltuch.png': canvas_cloth,
+    'putz.png': plaster,
+    'dachziegel.png': roof_tiles,
+    'flagge.png': jolly_roger,
+    'schlange.png': schlangenhaut,
+    'mauer.png': bruchstein,
+    'pflaster.png': lambda n: bruchstein(n, cols=('#6a645c', '#76706a', '#5c5850', '#807a70'), rows=10, seed=43, floor=True),
+    # Altbau-Räume in 3D (art/blender/altbau.py)
+    'parkett.png': lambda n: planks(n, 1024, 1024, 12, ['#9a5f32', '#8e5530', '#a46838', '#86502c'], grain=0.16, nails=False, seed=52),
+    'holz_moebel.png': lambda n: planks(n, 512, 512, 5, ['#6a3a1c', '#5e3218', '#744020'], grain=0.25, nails=False, seed=53),
+    'tapete_lila.png': lambda n: tapete(n, '#6a3f96', '#5a3484', '#8b62b8'),
+    'zifferblatt.png': zifferblatt,
+    'nachthimmel.png': nachthimmel,
+    'gemaelde_gertrude.png': lambda n: gemaelde(n, 'art/render/portrait_gertrude.png'),
+    'labor_glas.png': labor_glas,
+}
+
+if __name__ == '__main__':
+    import sys
+    want = sys.argv[1:] or list(JOBS)   # python art/blender/texturen.py parkett.png tapete_lila.png -> nur diese
+    for n in want:
+        JOBS[n](n)
+    print(sorted(os.listdir(OUT)))
