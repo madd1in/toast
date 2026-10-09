@@ -12,7 +12,7 @@ function mimikVon(text) {
   const s = String(text || '').replace(/^[„"“*\s…]+/, '');
   const laut = (s.match(/\b[A-ZÄÖÜ]{3,}\b/g) || []).filter(w => !/^(GUT|BÖSE|LILA|KLO|CHRONO|KAFFEE|UNITREE|EHRENGAST|DR|ED|FRED)$/.test(w)).length;
   if (/^(Hups|Ups|Äh|Ähm|Oh-oh|Oje|Peinlich|Hm\. )/.test(s)) return 'peinlich';
-  if (/(HALT|VERBOTEN|Finger weg|STAATSEIGENTUM|NEIN!|SOFORT|unverzeihlich|Wer hat .* genehmigt)/.test(s)) return 'wut';
+  if (/(HALT|VERBOTEN|Finger weg|Staatseigentum|STAATSEIGENTUM|^HEY!|NEIN!|SOFORT|unverzeihlich|Wer hat .* genehmigt)/.test(s)) return 'wut';
   if (/(\?!|!\?)/.test(s) || /^(HUCH|Huch|OH NEIN|Oh nein|AAAH|Hilfe|Moment\. |Oh\. Oh)/.test(s)) return 'schreck';
   if (/^(JAAA|JA!|Juhu|JUHU|Hurra|Wunderbar|Großartig|Hervorragend|Exzellent|Perfekt|FERTIG|Erfolg|Bravo|WOOO|Yeah|ENDLICH|Endlich|Haha)/.test(s)) return 'freude';
   if (/^(Whoa|Wow|Wahnsinn|Donnerwetter|Ooh|Uiii|Alter!)/.test(s)) return 'staunen';
