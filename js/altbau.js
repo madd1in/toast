@@ -295,3 +295,45 @@ function drehDraw(data, name, winkel) {
     };
   }
 }
+
+// =================== ZUKUNFT: PALAST-VORRAUM ===================
+// Gartenbogen, Thronsaaltür und Aufzug liegen wie gezeichnet: Regen im Bogen, Wache, Götzenbild und Drohne passen weiter.
+{
+  altbau3d('vorraum', {
+    fill: '#2e0f45',
+    objs: {
+      zum_garten: { rect: [0, 137, 100, 198], walk: [52, 362] },
+      plakat: { rect: [148, 92, 134, 146] },
+      banner: { rect: [294, 40, 48, 192] },
+      banner2: { rect: [640, 40, 44, 192] },
+      verbot: { rect: [712, 96, 141, 80] },
+      thron_tuer: { rect: [390, 64, 190, 271], walk: () => fl().guardGone ? [485, 358] : [396, 398] },
+      zur_testkammer: { rect: [876, 174, 84, 160], walk: [905, 374], draw: null },
+    },
+  });
+}
+
+// =================== ZUKUNFT: THRONSAAL ===================
+// Der Kronleuchter ist ein 3D-Bild, das an seiner Kette pendelt; die Kerzenflammen malt das Spiel (drawCandles).
+{
+  const D = altbau3d('thron', {
+    fill: '#3a0f52',
+    walk: [[20, 356], [945, 356], [955, 432], [5, 432]],
+    objs: {
+      thron_raus: { rect: [0, 137, 100, 198], walk: [52, 376] },
+      thron: { rect: [573, 81, 179, 244] },
+      teppich: { rect: [380, 352, 260, 88] },
+    },
+  });
+  if (D) {
+    const leuchter = drehDraw(D, 'leuchter', t => Math.sin(t * 0.0015) * 0.04);
+    ROOMS.thron.dyn = (c, t) => {
+      for (let i = 0; i < 6; i++) {   // Glitzer steigt um den Thron auf
+        const k = ((t * 0.0004) + i / 6) % 1, x = 600 + Math.cos(i * 2.1) * 110, y = 300 - k * 220;
+        c.save(); c.globalAlpha = Math.sin(k * Math.PI) * 0.8;
+        L(c, [x - 4, y, x + 4, y], 2, '#ffe9a0'); L(c, [x, y - 4, x, y + 4], 2, '#ffe9a0'); c.restore();
+      }
+      leuchter(c, t);
+    };
+  }
+}

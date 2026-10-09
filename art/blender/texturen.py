@@ -536,6 +536,59 @@ def zukunftshimmel(name, w=1024, h=512, seed=131):
     save(np.asarray(d, np.float32), name)
 
 
+def plakat(name, figur, w=520, h=600):
+    """Propaganda-Plakat im Palast: gelber Grund mit Strahlenkranz, „LILA IST“ / „DEIN FREUND“, Lila Tentakel (Spielbild) in der Mitte."""
+    from PIL import ImageFont
+    d = Image.new('RGB', (w, h), (255, 210, 58))
+    dr = ImageDraw.Draw(d)
+    cx_, cy_ = w / 2, h * 0.55
+    for i in range(24):   # Strahlenkranz
+        a0, a1 = 2 * math.pi * i / 24, 2 * math.pi * (i + 0.5) / 24
+        dr.polygon([(cx_, cy_), (cx_ + math.cos(a0) * w, cy_ + math.sin(a0) * w), (cx_ + math.cos(a1) * w, cy_ + math.sin(a1) * w)], fill=(255, 226, 110))
+    fig = Image.open(figur).convert('RGBA')
+    fig = fig.crop(fig.getbbox())
+    s = min((w * 0.82) / fig.width, (h * 0.6) / fig.height)
+    fig = fig.resize((int(fig.width * s), int(fig.height * s)), Image.LANCZOS)
+    d.paste(fig, (int(cx_ - fig.width / 2), int(h * 0.86 - fig.height)), fig)
+    f1 = ImageFont.truetype('C:/Windows/Fonts/ariblk.ttf', 64)
+    f2 = ImageFont.truetype('C:/Windows/Fonts/ariblk.ttf', 50)
+    purple = (91, 37, 137)
+    dr.text((w / 2, 52), 'LILA IST', font=f1, fill=purple, anchor='mm')
+    dr.text((w / 2, h - 44), 'DEIN FREUND', font=f2, fill=purple, anchor='mm')
+    dr.rectangle([6, 6, w - 7, h - 7], outline=purple, width=8)
+    save(np.asarray(d, np.float32), name)
+
+
+def marmor(name, a, b, ader, n=0, w=512, seed=141):
+    """Marmor mit Adern; n > 0 legt ein Schachbrett aus zwei Marmorfarben (Palastboden), kachelbar."""
+    yy, xx = np.mgrid[0:w, 0:w].astype(np.float32)
+    if n:
+        s = w // n
+        k = ((xx // s + yy // s) % 2)[..., None]
+        arr = hexrgb(a) * k + hexrgb(b) * (1 - k)
+    else:
+        arr = hexrgb(a) * np.ones((w, w, 1), np.float32)
+    nz = noise(w, w, 3, 5, seed)
+    nz = (nz + nz[:, ::-1] + nz[::-1, :] + nz[::-1, ::-1]) / 4
+    v = np.abs(np.sin((xx / w * 3 + yy / w * 5) * math.pi + nz * 9))   # Adern
+    vein = np.clip(1 - v * 7, 0, 1)[..., None]
+    arr = arr * (1 - 0.45 * vein) + hexrgb(ader) * 0.45 * vein
+    arr *= (0.94 + 0.1 * nz)[..., None]
+    if n:
+        s = w // n
+        arr[((xx % s) < 2) | ((yy % s) < 2)] *= 0.7
+    save(arr, name)
+
+
+def palastwand(name, w=512, h=512):
+    """Lila Palastwand mit senkrechten Streifen (wie gezeichnet: 20 breit, Abstand 40) und leichter Seidenstruktur."""
+    xx = np.arange(w)[None, :, None]
+    k = ((xx // 64) % 2 == 1)
+    arr = np.where(k, hexrgb('#55267a'), hexrgb('#4b1f6e')) * np.ones((h, 1, 1), np.float32)
+    arr *= (0.94 + 0.1 * noise(w, h, 8, 3, 151))[..., None]
+    save(arr, name)
+
+
 JOBS = {
     'gras.png': lambda n: speckle(n, ['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21),
     'fels.png': lambda n: speckle(n, ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22),
@@ -572,6 +625,10 @@ JOBS = {
     'wiese.png': lambda n: speckle(n, ['#4a8a34', '#5fae3e', '#7cc95a'], blades=True, seed=123, tile=True),
     'wiese_zukunft.png': lambda n: speckle(n, ['#5aa83a', '#76c44a', '#9ee46a'], blades=True, seed=133, tile=True),
     'zukunftshimmel.png': zukunftshimmel,
+    'plakat_lila.png': lambda n: plakat(n, 'art/render/lila/idle.png'),
+    'marmor_schach.png': lambda n: marmor(n, '#cdb6e6', '#9d7cc4', '#f4ecff', n=4),
+    'marmor_lila.png': lambda n: marmor(n, '#6b2f96', None, '#c8a0e8', seed=143),
+    'palastwand.png': palastwand,
 }
 
 if __name__ == '__main__':

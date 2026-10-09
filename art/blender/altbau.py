@@ -1477,8 +1477,273 @@ def build_fgarten(SC):
     return spec
 
 
+# ------------------------------------------------------------------ Palast-Vorraum und Thronsaal (Zukunft)
+def palast_bogen(B, SC, name, gx0, gx1, mat, ziel):
+    """Rundbogen-Durchgang links in der Palastwand (zum Garten bzw. Vorraum) mit Goldrahmen; dahinter Nachthimmel und Wiese
+    (Garten) oder ein lila Gang (Vorraum)."""
+    x0, x1 = wx(gx0, YW), wx(gx1, YW)
+    zs = 2.3
+    r = (x1 - x0) / 2
+    GOLD = toon('FG_Gold', '#d8b040', hi=0.6)
+    R.tube_in(SC)(name + 'Goldbogen', [((x0 + x1) / 2 + math.cos(a) * (r + 0.08), YW - 0.05, zs + math.sin(a) * (r + 0.08)) for a in (math.pi * i / 12 for i in range(13))], 0.07, GOLD, None)
+    for k, x in enumerate((x0 - 0.08, x1 + 0.08)):
+        R.box(B, f'{name}Goldpfosten{k}', (x, YW - 0.05, zs / 2), (0.14, 0.14, zs), GOLD, bevel=0.02)
+    if ziel == 'garten':
+        quad(B, name + 'Himmel', 14, 8, unlit('FG_Himmel', 'zukunftshimmel.png', 1.0), ((x0 + x1) / 2 + 1.5, YW + 6, 3.5))
+        R.box(B, name + 'Wiese', ((x0 + x1) / 2, YW + 3, -0.05), (8, 6, 0.1), tex('FG_Wiese', 'wiese_zukunft.png', 0.12, hi=0.0), bevel=0)
+        for k, (dx, dy, h) in enumerate(((-1.4, 7, 5.5), (1.6, 9, 7))):
+            tentakelturm(B, R.tube_in(SC), f'{name}Turm{k}', (x0 + x1) / 2 + dx, YW + dy, h, 1.2, '#4a1f73', glow(toon('FG_Fenster', '#ffe36b', hi=0.9), 1.8), 700 + k)
+    else:
+        R.box(B, name + 'Gang', ((x0 + x1) / 2, YW + 2.0, 2.0), (x1 - x0 + 1, 0.1, 4.0), toon('PV_Gang', '#2a0d3e', hi=0.0), bevel=0)
+        R.box(B, name + 'GangBoden', ((x0 + x1) / 2, YW + 1.0, -0.05), (x1 - x0 + 1, 2.2, 0.1), tex('PV_Boden', 'marmor_schach.png', 0.28, hi=0.0), bevel=0)
+    for o in [o for o in SC.objects if o.name.startswith(name) and o.type == 'MESH']:
+        o.visible_shadow = o.name.endswith(('Goldbogen', 'Goldpfosten0', 'Goldpfosten1'))
+    return (x0, x1, zs, r)
+
+
+def build_vorraum(SC):
+    """Palast-Vorraum: gestreifte lila Seidenwand, Marmor-Pilaster mit Goldkapitellen, Schachbrett-Marmorboden, Rundbogen zum
+    Garten, Propaganda-Plakat „LILA IST DEIN FREUND“, zwei Banner, die riesige Bogentür zum Thronsaal mit Wappen,
+    „KAFFEE VERBOTEN“-Schild und der Aufzug zur Testkammer (Stockwerk 19)."""
+    B = R.Builder(SC)
+    tube = R.tube_in(SC)
+    WALL, FLOOR = tex('PV_Wand', 'palastwand.png', 0.4, hi=0.0), tex('PV_Boden', 'marmor_schach.png', 0.28, hi=0.0)
+    MARBLE, GOLD, DARK = tex('PV_Marmor', 'marmor_lila.png', 0.6, hi=0.05), toon('FG_Gold', '#d8b040', hi=0.6), toon('PV_Dunkel', '#2e0f45', hi=0.05)
+    DOOR, VIO, POSTER = toon('PV_Tuer', '#3a1252', hi=0.2), toon('PV_Banner', '#9b2fd1', hi=0.2), tex('PV_Plakat', 'plakat_lila.png', uv=True, hi=0.0)
+    STEEL, STEELD = toon('PV_Stahl', '#d8dce4', hi=0.6), toon('PV_StahlDunkel', '#9aa0b0', hi=0.5)
+    BLACKF = 'C:/Windows/Fonts/ariblk.ttf'
+    # Öffnungen: Bogen zum Garten links, Thronsaaltür (400..570, Scheitel bei 46), Aufzug rechts
+    ax0, ax1 = wx(6, YW), wx(90, YW)
+    tx0, tx1 = wx(404, YW), wx(566, YW)
+    tzs = wz(160, YW)
+    ex0, ex1, ez1 = wx(886, YW), wx(944, YW), wz(206, YW)
+    flaeche(B, 'PV_Wand', 'xz', -9.5, 9.5, 0, ZC + 0.2, [(ax0, ax1, 0, 2.3 + (ax1 - ax0) / 2), (tx0, tx1, 0, ZC), (ex0, ex1, 0, ez1)], WALL, (0, YW + 0.2, 0), 0.4)
+    bogenzwickel(B, 'PV_Gartenbogen', (ax0 + ax1) / 2, 2.3, (ax1 - ax0) / 2, 2.3 + (ax1 - ax0) / 2, YW, 0.4, WALL)
+    bogenzwickel(B, 'PV_Tuerbogen', (tx0 + tx1) / 2, tzs, (tx1 - tx0) / 2, ZC, YW, 0.4, WALL)
+    for sx in (-1, 1):
+        R.box(B, f'PV_Seitenwand{sx}', (sx * 8.4, 10.0, ZC / 2), (0.4, 7.0, ZC), WALL, bevel=0)
+    R.box(B, 'PV_Boden', (0, 9.6, -0.06), (19, 8.4, 0.12), FLOOR, bevel=0)
+    R.box(B, 'PV_Decke', (0, 9.5, ZC + 0.1), (19, 8.4, 0.2), DARK, bevel=0)
+    R.box(B, 'PV_Kranz', (0, YW - 0.1, ZC - 0.15), (19, 0.2, 0.3), DARK, bevel=0.02)
+    R.box(B, 'PV_Goldleiste', (0, YW - 0.22, ZC - 0.33), (19, 0.08, 0.1), GOLD, bevel=0.01)
+    for k, (xa, xb) in enumerate(((-9.5, ax0 - 0.2), (ax1 + 0.2, tx0 - 0.2), (tx1 + 0.2, ex0 - 0.2), (ex1 + 0.2, 9.5))):
+        R.box(B, f'PV_Sockel{k}', ((xa + xb) / 2, YW - 0.05, 0.12), (xb - xa, 0.1, 0.24), DARK, bevel=0.01)
+        R.box(B, f'PV_SockelGold{k}', ((xa + xb) / 2, YW - 0.1, 0.25), (xb - xa, 0.04, 0.04), GOLD, bevel=0)
+    palast_bogen(B, SC, 'PV_Garten', 6, 90, WALL, 'garten')
+    # Marmor-Pilaster mit Goldkapitell und -basis
+    for k, gx in enumerate((121, 369, 609)):
+        x = wx(gx, YW)
+        R.box(B, f'PV_Pilaster{k}', (x, YW - 0.15, ZC / 2), (0.56, 0.3, ZC), MARBLE, bevel=0.02)
+        for j, z in enumerate((0.15, ZC - 0.55)):
+            R.box(B, f'PV_PilGold{k}{j}', (x, YW - 0.2, z), (0.74, 0.4, 0.26), GOLD, bevel=0.03)
+        # Wandleuchter mit rosa Flamme
+        B.cone(f'PV_Leuchterschale{k}', 2.75, 2.92, 0.06, 0.16, GOLD, None, xy=(x, YW - 0.48), seg=20, bevel=0.01)
+        B.rod(f'PV_LeuchterArm{k}', (x, YW - 0.3, 2.6), (x, YW - 0.48, 2.78), 0.03, GOLD, None, seg=8)
+        ohne_kontur(B.sphere(f'PV_Flamme{k}', (x, YW - 0.48, 3.04), (0.07, 0.07, 0.15), glow(toon('PV_Flamme', '#ff9ad8', hi=0.95), 2.8), None))
+        lamp(SC, f'PV_LichtLeuchter{k}', (x, YW - 0.7, 3.0), 90, (1.0, 0.6, 0.85), 0.2)
+    # Plakat „LILA IST DEIN FREUND“
+    p0, p1 = gp(150, 238, YW - 0.04), gp(280, 92, YW - 0.04)
+    quad(B, 'PV_Plakat', p1.x - p0.x, p1.z - p0.z, POSTER, ((p0.x + p1.x) / 2, YW - 0.04, (p0.z + p1.z) / 2))
+    for k, (cx_, cz_, sx_, sz_) in enumerate((((p0.x + p1.x) / 2, p1.z, p1.x - p0.x + 0.08, 0.05), ((p0.x + p1.x) / 2, p0.z, p1.x - p0.x + 0.08, 0.05), (p0.x, (p0.z + p1.z) / 2, 0.05, p1.z - p0.z), (p1.x, (p0.z + p1.z) / 2, 0.05, p1.z - p0.z))):
+        R.box(B, f'PV_PlakatRand{k}', (cx_, YW - 0.05, cz_), (sx_, 0.03, sz_), GOLD, bevel=0)
+    # Banner mit Wappen (Tentakel umarmt kleineren Tentakel)
+    for k, gx in enumerate((296, 640)):
+        b0, b1 = gp(gx, 232, YW - 0.08), gp(gx + 44, 40, YW - 0.08)
+        bm = bmesh.new()
+        f = bm.faces.new([bm.verts.new((x, 0, z)) for x, z in ((b0.x, b0.z + 0.3), ((b0.x + b1.x) / 2, b0.z), (b1.x, b0.z + 0.3), (b1.x, b1.z), (b0.x, b1.z))])
+        if f.normal.y > 0:
+            f.normal_flip()
+        B.obj(f'PV_Banner{k}', bm, VIO, None, (0, YW - 0.08, 0), smooth=False, solid=0.03)
+        for j, x in enumerate((b0.x + 0.08, b1.x - 0.08)):
+            R.box(B, f'PV_BannerGold{k}{j}', (x, YW - 0.11, (b0.z + 0.3 + b1.z) / 2), (0.03, 0.02, b1.z - b0.z - 0.4), GOLD, bevel=0)
+        R.box(B, f'PV_BannerStange{k}', ((b0.x + b1.x) / 2, YW - 0.1, b1.z + 0.04), (b1.x - b0.x + 0.2, 0.06, 0.06), GOLD, bevel=0.01)
+        em = gp(gx + 22, 120, YW - 0.12)
+        B.cone(f'PV_Wappen{k}', 0, 0.03, 0.22, 0.22, GOLD, None, rot=(math.pi / 2, 0, 0), seg=32, bevel=0.005)
+        bpy.data.objects[f'PV_Wappen{k}'].location = (em.x, YW - 0.12, em.z)
+        B.sphere(f'PV_WappenTentakel{k}', (em.x - 0.04, YW - 0.16, em.z + 0.02), (0.06, 0.03, 0.15), toon('PV_WappenLila', '#8e44c9', hi=0.4), None)
+        B.sphere(f'PV_WappenKlein{k}', (em.x + 0.07, YW - 0.16, em.z - 0.05), (0.04, 0.03, 0.09), toon('PV_WappenGruen', '#55b84a', hi=0.4), None)
+    # Thronsaaltür: zwei Flügel mit Goldbändern, Knäufe, Wappenmedaillon im Bogenfeld
+    tw = tx1 - tx0
+    for k, sx in enumerate((-1, 1)):
+        R.box(B, f'PV_Fluegel{k}', ((tx0 + tx1) / 2 + sx * tw / 4, YW + 0.15, tzs / 2), (tw / 2 - 0.02, 0.1, tzs), DOOR, bevel=0.02)
+        for j, gy in enumerate((204, 292)):
+            z = wz(gy, YW)
+            R.box(B, f'PV_Goldband{k}{j}', ((tx0 + tx1) / 2 + sx * tw / 4, YW + 0.09, z), (tw / 2 - 0.1, 0.03, 0.1), GOLD, bevel=0.01)
+        B.sphere(f'PV_Knauf{k}', ((tx0 + tx1) / 2 + sx * 0.2, YW + 0.06, wz(250, YW)), (0.09, 0.06, 0.09), GOLD, None)
+    bogenfeld = bmesh.new()
+    cxa = (tx0 + tx1) / 2
+    vs = [bogenfeld.verts.new((cxa + math.cos(a) * tw / 2, 0, tzs + math.sin(a) * tw / 2)) for a in (math.pi * i / 32 for i in range(33))]
+    f = bogenfeld.faces.new(vs)
+    if f.normal.y > 0:
+        f.normal_flip()
+    B.obj('PV_Bogenfeld', bogenfeld, DOOR, None, (0, YW + 0.15, 0), smooth=False, solid=0.1)
+    R.box(B, 'PV_Kaempfer', (cxa, YW + 0.09, tzs), (tw, 0.05, 0.1), GOLD, bevel=0.01)
+    md = gp(485, 140, YW)
+    B.cone('PV_Medaillon', 0, 0.06, 0.36, 0.36, GOLD, None, rot=(math.pi / 2, 0, 0), seg=40, bevel=0.01)
+    bpy.data.objects['PV_Medaillon'].location = (cxa, YW + 0.06, md.z)
+    B.sphere('PV_MedaillonTentakel', (cxa, YW + 0.0, md.z - 0.02), (0.1, 0.04, 0.24), toon('PV_WappenLila', '#8e44c9', hi=0.4), None)
+    tube('PV_Torbogen', [(cxa + math.cos(a) * (tw / 2 + 0.1), YW - 0.06, tzs + math.sin(a) * (tw / 2 + 0.1)) for a in (math.pi * i / 16 for i in range(17))], 0.09, GOLD, None)
+    for k, x in enumerate((tx0 - 0.1, tx1 + 0.1)):
+        R.box(B, f'PV_Torpfosten{k}', (x, YW - 0.06, tzs / 2), (0.18, 0.18, tzs), GOLD, bevel=0.02)
+    # „KAFFEE VERBOTEN“
+    s0, s1 = gp(712, 176, YW - 0.04), gp(852, 96, YW - 0.04)
+    R.box(B, 'PV_Verbot', ((s0.x + s1.x) / 2, YW - 0.04, (s0.z + s1.z) / 2), (s1.x - s0.x, 0.04, s1.z - s0.z), toon('PV_Schildweiss', '#f4f0f6', hi=0.2), bevel=0.04)
+    vc = gp(752, 136, YW - 0.08)
+    RED = glow(toon('PV_Verbotsrot', '#d8243a', hi=0.3), 1.2)
+    B.torus('PV_Verbotsring', (vc.x, YW - 0.08, vc.z), 0.33, 0.04, RED, None, rot=(math.pi / 2, 0, 0), seg=40, sseg=8)
+    R.box(B, 'PV_Verbotsbalken', (vc.x, YW - 0.09, vc.z), (0.66, 0.02, 0.07), RED, rot=(0, -0.785, 0), bevel=0)
+    R.box(B, 'PV_Tasse', (vc.x - 0.02, YW - 0.07, vc.z - 0.03), (0.2, 0.02, 0.22), toon('PV_Tasse', '#8a5a2a', hi=0.1), bevel=0.03)
+    B.torus('PV_TassenHenkel', (vc.x + 0.1, YW - 0.07, vc.z - 0.02), 0.06, 0.015, toon('PV_Tasse', '#8a5a2a', hi=0.1), None, rot=(math.pi / 2, 0, 0), seg=16, sseg=6)
+    for k, (t_, gy) in enumerate((('KAFFEE', 128), ('VERBOTEN', 150))):
+        p = gp(812, gy, YW - 0.07)
+        text(SC, f'PV_VerbotText{k}', t_, 0.17, RED, (p.x, YW - 0.07, p.z), font=BLACKF, extrude=0.004)
+    # Aufzug zur Testkammer: Edelstahlrahmen, Schiebetüren, Stockwerksanzeige „19“
+    for k, (cx_, cz_, sx_, sz_) in enumerate((((ex0 + ex1) / 2, ez1 + 0.08, ex1 - ex0 + 0.32, 0.16), (ex0 - 0.08, ez1 / 2, 0.16, ez1), (ex1 + 0.08, ez1 / 2, 0.16, ez1))):
+        R.box(B, f'PV_AufzugRahmen{k}', (cx_, YW - 0.04, cz_), (sx_, 0.1, sz_), STEEL, bevel=0.02)
+    R.box(B, 'PV_AufzugInnen', ((ex0 + ex1) / 2, YW + 0.3, ez1 / 2), (ex1 - ex0, 0.05, ez1), STEELD, bevel=0)
+    for k, sx in enumerate((-1, 1)):
+        R.box(B, f'PV_Aufzugtuer{k}', ((ex0 + ex1) / 2 + sx * (ex1 - ex0) / 4, YW + 0.1, ez1 / 2), ((ex1 - ex0) / 2 - 0.02, 0.05, ez1 - 0.04), STEELD, bevel=0.01)
+    R.box(B, 'PV_Aufzugspalt', ((ex0 + ex1) / 2, YW + 0.07, ez1 / 2), (0.02, 0.01, ez1 - 0.1), toon('PV_Spalt', '#5a5e6a', hi=0.1), bevel=0)
+    ia = gp(915, 184, YW - 0.08)
+    B.sphere('PV_Anzeige', (ia.x, YW - 0.08, ia.z), (0.26, 0.05, 0.15), toon('PV_Anzeige', '#24262e', hi=0.4), None)
+    text(SC, 'PV_Anzeige19', '19', 0.16, glow(toon('PV_AnzeigeGelb', '#ffd84a', hi=0.9), 2.4), (ia.x, YW - 0.135, ia.z - 0.01), font=BLACKF, extrude=0.004)
+    B.sphere('PV_Rufknopf', (ex1 + 0.3, YW - 0.05, 1.3), (0.06, 0.04, 0.06), glow(toon('PV_Knopf', '#3cf0ff', hi=0.9), 2.0), None)
+    # Licht: lila Grundlicht, Mondlicht durch den Gartenbogen, Leuchter (oben)
+    sonne_aus(SC, (0.2, -0.95, -0.25), 1.1, (0.95, 0.8, 1.0))
+    sonne_aus(SC, (0.6, -0.4, -0.7), 0.9, (0.8, 0.75, 1.0))
+    spec = {
+        'anchors': {'Garten': [bpy.data.objects['PV_GartenGoldbogen'], bpy.data.objects['PV_GartenGoldpfosten0'], bpy.data.objects['PV_GartenGoldpfosten1']],
+                    'Plakat': [bpy.data.objects['PV_Plakat']], 'Banner0': [bpy.data.objects['PV_Banner0']], 'Banner1': [bpy.data.objects['PV_Banner1']],
+                    'Verbot': [bpy.data.objects['PV_Verbot']], 'Tuer': [bpy.data.objects['PV_Torbogen'], bpy.data.objects['PV_Torpfosten0'], bpy.data.objects['PV_Torpfosten1']],
+                    'Aufzug': [bpy.data.objects[f'PV_AufzugRahmen{k}'] for k in range(3)] + [bpy.data.objects['PV_Anzeige']]},
+        'points': {'regen0': (ax0, YW, 2.6), 'regen1': (ax1, YW, 0.0)},
+        'sprites': {}, 'variants': {},
+    }
+    return spec
+
+
+def build_thron(SC):
+    """Thronsaal Seiner Lilaheit: Wand aus schweren lila Vorhängen mit goldenen Schabracken, dunkler Boden mit rotem Läufer,
+    zweistufiges Podest, goldener Thron mit lila Polstern und Zyan-Juwel, zwei Feuerschalen mit rosa Flammen und ein
+    Kronleuchter (Sprite, schwingt im Spiel)."""
+    B = R.Builder(SC)
+    tube = R.tube_in(SC)
+    CURT, GOLD, FLOOR = toon('TH_Vorhang', '#7a1fa2', hi=0.15), toon('FG_Gold', '#d8b040', hi=0.6), toon('TH_Boden', '#2a0a3a', hi=0.0)
+    GOLDL, CUSH, RUG = toon('TH_Goldhell', '#f2c14e', hi=0.7), toon('TH_Polster', '#7a1fa2', hi=0.05), toon('TH_Laeufer', '#b0213a', hi=0.05)
+    # Rundbogen links zurück in den Vorraum (in einer kurzen Wand vor den Vorhängen)
+    ax0, ax1 = wx(6, YW), wx(90, YW)
+    flaeche(B, 'TH_Wand', 'xz', -9.5, ax1 + 0.6, 0, ZC + 0.2, [(ax0, ax1, 0, 2.3 + (ax1 - ax0) / 2)], toon('TH_Wandlila', '#4b1f6e', hi=0.0), (0, YW + 0.2, 0), 0.4)
+    bogenzwickel(B, 'TH_Bogen', (ax0 + ax1) / 2, 2.3, (ax1 - ax0) / 2, 2.3 + (ax1 - ax0) / 2, YW, 0.4, toon('TH_Wandlila', '#4b1f6e', hi=0.0))
+    palast_bogen(B, SC, 'TH_Vorraum', 6, 90, None, 'vorraum')
+    # Vorhangwand: ein Tuch mit tiefen Falten über die ganze Breite
+    nx, nz = 180, 8
+    bm = bmesh.new()
+    rows = []
+    x_a, x_b = ax1 + 0.6, 9.5
+    for j in range(nz + 1):
+        z = ZC * j / nz
+        rows.append([bm.verts.new((x_a + (x_b - x_a) * i / nx, YW + 0.05 + 0.24 * math.sin(i / nx * (x_b - x_a) / 0.95 * 2 * math.pi), z)) for i in range(nx + 1)])
+    for j in range(nz):
+        for i in range(nx):
+            bm.faces.new((rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]))
+    for f in bm.faces:
+        if f.normal.y > 0:
+            f.normal_flip()
+    B.obj('TH_Vorhaenge', bm, CURT, None, (0, 0, 0), smooth=True, solid=0.03)
+    # goldene Schabracken (Bögen) oben
+    n = 9
+    for i in range(n):
+        x0_ = x_a + (x_b - x_a) * i / n
+        x1_ = x_a + (x_b - x_a) * (i + 1) / n
+        tube(f'TH_Schabracke{i}', [(x0_, YW - 0.05, ZC - 0.05), ((x0_ + x1_) / 2, YW - 0.12, ZC - 0.75), (x1_, YW - 0.05, ZC - 0.05)], 0.09, GOLD, None)
+        B.sphere(f'TH_Quaste{i}', (x1_, YW - 0.08, ZC - 0.25), (0.07, 0.07, 0.16), GOLD, None)
+    R.box(B, 'TH_Boden', (0, 9.6, -0.06), (19, 8.4, 0.12), FLOOR, bevel=0)
+    R.box(B, 'TH_Decke', (0, 9.5, ZC + 0.1), (19, 8.4, 0.2), toon('PV_Dunkel', '#2e0f45', hi=0.05), bevel=0)
+    # Roter Läufer zum Podest mit Goldkanten
+    pts = []
+    for gx, gy in ((380, 440), (640, 440), (612, 350), (518, 350)):
+        y = wy(gy)
+        pts.append((wx(gx, y), y))
+    bm = bmesh.new()
+    f = bm.faces.new([bm.verts.new((x, y, 0.006)) for x, y in pts])
+    if f.normal.z < 0:
+        f.normal_flip()
+    ohne_kontur(B.obj('TH_Laeufer', bm, RUG, None, (0, 0, 0), smooth=False))
+    for k, (a, b) in enumerate(((pts[0], pts[3]), (pts[1], pts[2]))):
+        B.rod(f'TH_LaeuferGold{k}', (a[0], a[1], 0.01), (b[0], b[1], 0.01), 0.03, GOLD, None, seg=6)
+    # Podest in zwei Stufen
+    for k, (gx0, gx1, y) in enumerate(((440, 862, 11.8), (456, 848, 12.35))):
+        x0_, x1_ = wx(gx0, y), wx(gx1, y)
+        z0 = 0.15 * k   # flache Stufen: Lila steht im Spiel bei y 338 genau auf der ersten
+        R.box(B, f'TH_Stufe{k}', ((x0_ + x1_) / 2, (y + YW) / 2, z0 + 0.075), (x1_ - x0_, YW - y, 0.15), toon(f'TH_Stufe{k}', ['#c9a040', '#e0bc5a'][k], hi=0.5), bevel=0.02)
+    # Goldener Thron
+    yT = 12.55
+    tcx = wx(657, yT)
+    TT = B.empty('TH_Thron')
+    TT.location = (tcx, yT, 0.3)
+    R.box(B, 'TH_Sitz', (0, 0.2, 0.42), (1.8, 1.0, 0.84), GOLDL, TT, bevel=0.05)
+    R.box(B, 'TH_Sitzkissen', (0, 0.12, 0.92), (1.5, 0.82, 0.18), CUSH, TT, bevel=0.07)
+    bm = bmesh.new()   # Rückenlehne mit zwei Bögen (Tentakelkuppen) und Spitze für das Juwel
+    outline = [(-0.95, 0.0), (0.95, 0.0), (0.95, 2.6)]
+    outline += [(0.48 + math.cos(a) * 0.47, 2.6 + math.sin(a) * 0.6) for a in (math.pi * i / 12 for i in range(1, 12))]
+    outline += [(0.0, 2.75)]
+    outline += [(-0.48 + math.cos(a) * 0.47, 2.6 + math.sin(a) * 0.6) for a in (math.pi * i / 12 for i in range(1, 12))]
+    outline += [(-0.95, 2.6)]
+    f = bm.faces.new([bm.verts.new((x, 0, z)) for x, z in outline])
+    if f.normal.y > 0:
+        f.normal_flip()
+    B.obj('TH_Lehne', bm, GOLDL, TT, (0, 0.65, 0.5), smooth=False, solid=0.25)
+    bm = bmesh.new()
+    inner = [(x * 0.8, 0.15 + z * 0.86) for x, z in outline]
+    f = bm.faces.new([bm.verts.new((x, 0, z)) for x, z in inner])
+    if f.normal.y > 0:
+        f.normal_flip()
+    B.obj('TH_LehnePolster', bm, CUSH, TT, (0, 0.49, 0.5), smooth=False, solid=0.06)
+    B.sphere('TH_Juwel', (0, 0.48, 3.38), (0.14, 0.06, 0.14), glow(toon('TH_Juwel', '#3cf0ff', hi=0.95), 2.2), TT)
+    for k, sx in enumerate((-1, 1)):
+        R.box(B, f'TH_Armlehne{k}', (sx * 1.05, 0.2, 0.9), (0.32, 1.0, 0.62), GOLDL, TT, bevel=0.08)
+        B.sphere(f'TH_Armkugel{k}', (sx * 1.05, -0.32, 1.25), (0.2, 0.2, 0.2), GOLDL, TT)
+    lamp(SC, 'TH_LichtJuwel', (tcx, yT - 0.4, 3.9), 30, (0.4, 1.0, 1.0), 0.2, dist=1.5)
+    # Feuerschalen links und rechts vor dem Podest
+    for k, gx in enumerate((430, 884)):
+        y = wy(372)
+        x = wx(gx, y)
+        B.cone(f'TH_Feuersaeule{k}', 0, 1.3, 0.12, 0.09, GOLD, None, xy=(x, y), seg=16, bevel=0.01)
+        B.cone(f'TH_Feuerfuss{k}', 0, 0.12, 0.3, 0.26, GOLD, None, xy=(x, y), seg=24, bevel=0.01)
+        B.cone(f'TH_Feuerschale{k}', 1.3, 1.55, 0.14, 0.38, GOLD, None, xy=(x, y), seg=28, bevel=0.01)
+        for j in range(5):
+            a = j * 1.26
+            ohne_kontur(B.sphere(f'TH_Flamme{k}{j}', (x + math.cos(a) * 0.12, y + math.sin(a) * 0.08, 1.7 + (j % 2) * 0.12), (0.12, 0.1, 0.28), glow(toon('PV_Flamme', '#ff9ad8', hi=0.95), 2.8), None))
+        lamp(SC, f'TH_LichtFeuer{k}', (x, y - 0.3, 1.9), 220, (1.0, 0.55, 0.85), 0.3)
+    # Kronleuchter (Sprite, hängt bei x 300 von der Decke und schwingt; Kerzenflammen malt das Spiel bei y 64 … 68)
+    yC = 10.6
+    piv = gp(300, 0, yC)
+    CL = B.empty('TH_Leuchter')
+    CL.location = (piv.x, yC, piv.z)
+    u = upm(yC, piv.z)
+    ring_z = -96 / u
+    B.rod('TH_LeuchterKette', (0, 0, 0.6), (0, 0, ring_z + 0.05), 0.02, GOLD, CL, seg=8)
+    B.torus('TH_LeuchterRing', (0, 0, ring_z), 50 / u, 0.05, GOLD, CL, seg=40, sseg=8, scale=(1, 0.35, 1))
+    B.sphere('TH_LeuchterKugel', (0, 0, ring_z - 0.08), (0.14, 0.14, 0.12), GOLD, CL)
+    for i in range(-2, 3):
+        x = i * 20 / u
+        B.cone(f'TH_KerzeL{i}', ring_z + 0.02, -74 / u + 0.02, 0.035, 0.035, toon('L_Kerze', '#fff4dc', hi=0.3), CL, xy=(x, -0.05), seg=10, bevel=0)
+    lamp(SC, 'TH_LichtLeuchter', (piv.x, yC, piv.z + ring_z), 180, (1.0, 0.8, 0.5), 0.5)
+    sonne_aus(SC, (0.15, -0.9, -0.4), 0.9, (0.95, 0.75, 1.0))
+    sonne_aus(SC, (-0.3, 0.3, -0.9), 1.4, (1.0, 0.85, 0.7))   # Spot von oben auf den Thron
+    spec = {
+        'anchors': {'Vorraum': [bpy.data.objects['TH_VorraumGoldbogen'], bpy.data.objects['TH_VorraumGoldpfosten0'], bpy.data.objects['TH_VorraumGoldpfosten1']],
+                    'Thron': [TT], 'Laeufer': [bpy.data.objects['TH_Laeufer']]},
+        'points': {'leuchter': CL},
+        'sprites': {'leuchter': (CL, [o for o in SC.objects if o.parent == CL])},
+        'variants': {},
+    }
+    return spec
+
+
 ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c')), 'gasthaus': (build_gasthaus, ('#d8b88a', '#4a2e18')),
-         'garten1776': (build_garten1776, ('#d6f1ff', '#62bdf6')), 'fgarten': (build_fgarten, ('#c85a8e', '#1c0838'))}
+         'garten1776': (build_garten1776, ('#d6f1ff', '#62bdf6')), 'fgarten': (build_fgarten, ('#c85a8e', '#1c0838')),
+         'vorraum': (build_vorraum, ('#3a1a5a', '#140828')), 'thron': (build_thron, ('#3a1a5a', '#140828'))}
 
 
 # ------------------------------------------------------------------ Porträts für Gemälde (texturen.py: gemaelde())
