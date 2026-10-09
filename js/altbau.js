@@ -211,3 +211,26 @@ function drehDraw(data, name, winkel) {
     };
   }
 }
+
+// =================== 1776: GARTEN ===================
+// Zaun, Brunnenwasser und Wiese liegen wie gezeichnet: Vögel, Eichhörnchen, Glitzern, Pfützen und Regenbogen passen weiter.
+{
+  const beet = k => () => ((G.state && G.state.flags && G.state.flags.beet) || 0) === k;
+  const D = altbau3d('garten1776', {
+    fill: '#62bdf6',
+    zustand: { eimer_weg: () => flagOn('eimer'), beet1: beet(1), beet2: beet(2), beet3: beet(3) },
+    objs: {
+      tuer_gasthaus: { rect: [3, 148, 113, 196], walk: [66, 362] },
+      zaun: { rect: [343, 242, 367, 60] },
+      brunnen: { rect: [187, 143, 156, 195], walk: [272, 362] },
+      eimer: { rect: [304, 248, 36, 32], walk: [306, 362], draw: null },
+      beet: { rect: [474, 330, 156, 56], walk: [660, 386], draw: null },
+      plumpsklo: { rect: [727, 77, 180, 264], walk: [826, 362] },
+      zum_hafen: { rect: [901, 230, 59, 128], walk: [934, 374], draw: null },
+    },
+  });
+  if (D) {
+    const P = D.points;
+    ROOMS.garten1776.objs.find(q => q.id === 'plumpsklo').draw = c => kloFx(c, 'plumpsklo', P.kloOben[0], P.kloOben[1], P.kloUnten[1], P.kloBirne[0], P.kloBirne[1]);
+  }
+}

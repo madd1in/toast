@@ -547,6 +547,8 @@ JOBS = {
     'dielen_dunkel.png': lambda n: planks(n, 1024, 1024, 9, ['#6e4626', '#5e3c20', '#7a4e2a', '#664024'], grain=0.2, seed=113),
     'landschaft_1776.png': landschaft,
     'hancock_zettel.png': unterschrift,
+    'erde.png': lambda n: speckle(n, ['#5e3c22', '#6e4828', '#84583a'], scale=8, seed=121, tile=True),
+    'wiese.png': lambda n: speckle(n, ['#4a8a34', '#5fae3e', '#7cc95a'], blades=True, seed=123, tile=True),
 }
 
 if __name__ == '__main__':

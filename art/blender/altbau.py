@@ -1078,7 +1078,217 @@ def build_gasthaus(SC):
     return spec
 
 
-ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c')), 'gasthaus': (build_gasthaus, ('#d8b88a', '#4a2e18'))}
+# ------------------------------------------------------------------ Garten 1776
+def sonne_aus(SC, richtung, energy, col):
+    """Sonnenlicht, das in Richtung 'richtung' scheint (Vektor von der Sonne in die Szene)."""
+    o = R.sun(SC, (0, 0, 0), energy, col)
+    o.rotation_euler = Vector(richtung).normalized().to_track_quat('-Z', 'Y').to_euler()
+    return o
+
+
+def baum(B, name, x, y, s, LEAF, LEAF2, TRUNK, parent=None, aepfel=None):
+    """Laubbaum im Toon-Stil: Stamm mit zwei Ästen und eine Krone aus Kugeln (optional mit roten Äpfeln)."""
+    B.cone(name + 'Stamm', 0, 2.2 * s, 0.32 * s, 0.22 * s, TRUNK, parent, xy=(x, y), seg=16, bevel=0.02)
+    for k, (dx, dz) in enumerate(((-0.9, 2.6), (0.8, 2.8))):
+        B.rod(f'{name}Ast{k}', (x, y, 1.9 * s), (x + dx * s, y, dz * s), 0.12 * s, TRUNK, parent, r1=0.07 * s, seg=10)
+    for k, (dx, dy, dz, r) in enumerate(((0, 0, 3.4, 1.5), (-1.2, 0.2, 2.9, 1.1), (1.15, -0.1, 3.0, 1.15), (-0.5, -0.4, 3.9, 1.0), (0.6, 0.3, 3.95, 1.05), (0, -0.6, 2.8, 0.9))):
+        B.sphere(f'{name}Krone{k}', (x + dx * s, y + dy * s, dz * s), (r * s, r * s * 0.9, r * s * 0.85), LEAF if k % 2 else LEAF2, parent)
+    if aepfel:
+        for k in range(9):
+            rnd = random.Random(k + len(name))
+            a, zz = rnd.uniform(0, 6.28), rnd.uniform(2.6, 4.2)
+            B.sphere(f'{name}Apfel{k}', (x + math.cos(a) * 1.3 * s, y - 1.0 * s, zz * s), (0.13 * s,) * 3, aepfel, parent)
+
+
+def build_garten1776(SC):
+    """Garten hinter dem Gasthaus 1776: Sommerhimmel mit Sonne und Wolken, Hügel mit Bäumen und Kühen, Weidezaun (Vögel und
+    Eichhörnchen sitzen darauf), Fachwerkwand des Gasthauses mit Hintertür, Feldweg, Brunnen mit Kurbel und Eimer, Erdbeet
+    (vier Stufen als Varianten), Plumpsklo mit Dr.-Fred-Technik und ein Wegweiser zum Hafen."""
+    B = R.Builder(SC)
+    tube = R.tube_in(SC)
+    GRASS, DIRT = tex('GA_Gras', 'wiese.png', 0.12, hi=0.0), tex('GA_Erde', 'erde.png', 0.35, hi=0.0)
+    HILL = [toon(f'GA_Huegel{i}', c, hi=0.0) for i, c in enumerate(('#9fd88a', '#7cc95a', '#5fae3e'))]
+    LEAF, LEAF2, TRUNK = toon('GA_Laub', '#3f9a3a', hi=0.1), toon('GA_LaubHell', '#55b84a', hi=0.1), toon('GA_Stamm', '#6b4424', hi=0.05)
+    WOOD, WOODL, WOODD = toon('GA_Holz', '#9a6a3a', hi=0.15), toon('GA_HolzHell', '#c69458', hi=0.15), toon('GA_HolzDunkel', '#6a3a1e', hi=0.1)
+    STONE, ROOF, BEAM = tex('GA_Stein', 'mauer.png', 0.7, hi=0.0), toon('GA_Dach', '#a04a2a', hi=0.1), toon('G_Balken', '#4e3218', hi=0.1)
+    WALL, CLOUD, IRON = tex('G_Putz', 'putz.png', 0.3, hi=0.0), toon('R_Wolke', '#ffffff', hi=0.5), toon('G_Eisen', '#2a2a30', hi=0.1)
+    BLACKF = 'C:/Windows/Fonts/ariblk.ttf'
+    # Boden: Wiese bis zum Horizont, Feldweg vom Gasthaus nach vorn
+    wiese = R.plane(B, 'GA_Wiese', -210, 210, 4, 300, 0.0, GRASS)
+    bm = bmesh.new()
+    bm.from_mesh(wiese.data)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=60, use_grid_fill=True)   # viele kleine Flächen: sonst verdeckt Freestyle die Hügel unter der Wiese nicht
+    bm.to_mesh(wiese.data)
+    bm.free()
+    pts = [(-6.4, 12.4), (-5.6, 12.4), (-3.2, 9.0), (-2.2, 6.0), (-6.4, 6.0), (-6.6, 9.0)]
+    bm = bmesh.new()
+    f = bm.faces.new([bm.verts.new((x, y, 0.004)) for x, y in pts])
+    if f.normal.z < 0:
+        f.normal_flip()
+    ohne_kontur(B.obj('GA_Weg', bm, DIRT, None, (0, 0, 0), smooth=False))
+    # Hügelketten, Bäume und Kühe in der Ferne, Sonne und Wolken
+    for i in range(14):
+        rnd = random.Random(200 + i)
+        k = i % 3
+        B.sphere(f'GA_Huegel{i}', (-120 + i * 19 + rnd.uniform(-6, 6), [70, 52, 36][k] + rnd.uniform(-4, 4), -2), (rnd.uniform(18, 30), 10, [9, 6.5, 4.5][k] + rnd.uniform(-1, 1.5)), HILL[k], None)
+    for i, (x, y, s) in enumerate(((-14, 42, 1.6), (-5, 46, 1.3), (9, 40, 1.7), (22, 48, 1.4), (-24, 50, 1.5), (31, 38, 1.2))):
+        baum(B, f'GA_Fernbaum{i}', x, y, s, LEAF, LEAF2, TRUNK)
+    for i, (x, y, d) in enumerate(((-3.2, 28, 1), (6.8, 31, -1))):   # Kühe (es muht ja ständig)
+        COW, SPOT = toon('GA_Kuh', '#f4f0ea', hi=0.2), toon('GA_Fleck', '#2a2228', hi=0.1)
+        Kh = B.empty(f'GA_Kuh{i}')
+        Kh.location, Kh.rotation_euler = (x, y, 0.3), (0, 0, 0.2 * d)
+        B.sphere(f'GA_KuhLeib{i}', (0, 0, 1.0), (1.0, 0.5, 0.55), COW, Kh)
+        B.sphere(f'GA_KuhKopf{i}', (d * 1.05, -0.05, 1.3), (0.32, 0.27, 0.3), COW, Kh)
+        B.sphere(f'GA_KuhMaul{i}', (d * 1.3, -0.08, 1.2), (0.16, 0.2, 0.15), toon('GA_Maul', '#f0a8a8', hi=0.2), Kh)
+        for j, (dx, dz) in enumerate(((-0.3, 1.25), (0.35, 0.95), (0.0, 1.15))):
+            B.sphere(f'GA_KuhFleck{i}{j}', (dx, -0.45, dz), (0.22, 0.08, 0.18), SPOT, Kh)
+        for j, (lx, ly) in enumerate(((-0.6, -0.25), (0.6, -0.25), (-0.6, 0.25), (0.6, 0.25))):
+            B.cone(f'GA_KuhBein{i}{j}', -0.3, 0.6, 0.09, 0.1, COW, Kh, xy=(lx, ly), seg=10, bevel=0)
+        for j, sx in enumerate((-1, 1)):
+            B.cone(f'GA_KuhHorn{i}{j}', 1.55, 1.75, 0.04, 0.01, toon('GA_Horn', '#e8dcb8', hi=0.3), Kh, xy=(d * 1.05, sx * 0.15), seg=8, bevel=0)
+    sp = gp(200, 68, 160)
+    B.sphere('GA_Sonne', tuple(sp), (7.5, 7.5, 7.5), glow(toon('GA_Sonne', '#ffe36b', hi=0.9), 2.2), None)
+    for i, (gx, gy, s) in enumerate(((380, 70, 1.0), (640, 46, 1.3), (900, 100, 0.9), (110, 130, 0.8))):
+        p = gp(gx, gy, 120)
+        for j in range(4):
+            rnd = random.Random(500 + i * 7 + j)
+            B.sphere(f'GA_Wolke{i}{j}', (p.x + (j - 1.5) * 4.6 * s, 120 + rnd.uniform(-2, 2), p.z + rnd.uniform(-1.2, 1.4) * s), (rnd.uniform(3.6, 5.2) * s, 2.5, rnd.uniform(2.2, 3.2) * s), CLOUD, None)
+    # großer Apfelbaum hinter dem Zaun: seine Krone hängt oben ins Bild (dort fallen im Spiel Lichtbänder durch)
+    baum(B, 'GA_Apfelbaum', wx(600, 26.0), 26.0, 2.2, LEAF, LEAF2, TRUNK, aepfel=toon('G_Apfel', '#e0302a', hi=0.7))
+
+    # --- Weidezaun (Oberkante der oberen Latte bei Spiel-y 247: dort sitzen die Vögel) ---
+    yZ = wy(302)
+    za, zb = wx(344, yZ), wx(708, yZ)
+    ztop = wz(247, yZ)
+    for k, z in enumerate((ztop - 0.07, ztop - 0.6)):
+        R.box(B, f'GA_Latte{k}', ((za + zb) / 2, yZ - 0.05, z), (zb - za, 0.08, 0.14), WOOD, bevel=0.01)
+    n = 15
+    for i in range(n):
+        x = za + (zb - za) * (i + 0.5) / n
+        R.box(B, f'GA_Pfahl{i}', (x, yZ + 0.02, ztop / 2 + 0.05), (0.16, 0.08, ztop + 0.1), WOODL, bevel=0.01)
+        B.cone(f'GA_PfahlSpitze{i}', ztop + 0.1, ztop + 0.26, 0.11, 0.0, WOODL, None, xy=(x, yZ + 0.02), seg=4, bevel=0, scale=(1, 0.5, 1))
+
+    # --- Fachwerkwand des Gasthauses links mit Hintertür, Fenster oben, Dachüberstand ---
+    yH = 12.5
+    hx1 = wx(124, yH)
+    tx0, tx1 = wx(24, yH), wx(104, yH)
+    flaeche(B, 'GA_Hauswand', 'xz', -10.0, hx1, 0, 5.6, [(tx0, tx1, 0, 2.75), (tx0 + 0.15, tx1 - 0.15, 3.4, 4.4)], WALL, (0, yH + 0.2, 0), 0.4)
+    R.box(B, 'GA_HausSeite', (hx1 + 0.2, yH + 1.2, 2.8), (0.4, 2.4, 5.6), WALL, bevel=0)
+    for k, x in enumerate((hx1 - 0.12, -9.0)):
+        R.box(B, f'GA_Eckpfosten{k}', (x, yH - 0.06, 2.8), (0.24, 0.14, 5.6), BEAM, bevel=0.02)
+    for k, z in enumerate((0.15, 3.0, 5.5)):
+        R.box(B, f'GA_Schwelle{k}', ((hx1 - 10.0) / 2, yH - 0.06, z), (hx1 + 10.0, 0.14, 0.22), BEAM, bevel=0.02)
+    R.box(B, 'GA_Dachkante', ((hx1 - 10.0) / 2, yH - 0.6, 5.85), (hx1 + 10.6, 1.4, 0.25), ROOF, rot=(0.35, 0, 0), bevel=0.02)
+    TT = B.empty('GA_Tuer')
+    TT.location = ((tx0 + tx1) / 2, yH + 0.12, 0)
+    R.box(B, 'GA_TuerBlatt', (0, 0, 1.37), (tx1 - tx0 - 0.04, 0.07, 2.73), toon('G_Tuerholz', '#7a4a22', hi=0.2), TT, bevel=0.015)
+    for i in range(4):
+        ohne_kontur(R.box(B, f'GA_TuerBrett{i}', (-(tx1 - tx0) / 2 + (i + 1) * (tx1 - tx0) / 5, -0.04, 1.37), (0.02, 0.01, 2.6), WOODD, TT, bevel=0))
+    B.sphere('GA_TuerKnauf', ((tx1 - tx0) / 2 - 0.16, -0.08, 1.15), (0.05, 0.05, 0.05), toon('L_Messing', '#d8a83c', hi=0.75), TT)
+    for k, (cx_, cz_, sx_, sz_) in enumerate((((tx0 + tx1) / 2, 2.84, tx1 - tx0 + 0.36, 0.18), (tx0 - 0.09, 1.375, 0.18, 2.75), (tx1 + 0.09, 1.375, 0.18, 2.75))):
+        R.box(B, f'GA_Tuerrahmen{k}', (cx_, yH - 0.05, cz_), (sx_, 0.12, sz_), BEAM, bevel=0.015)
+    R.box(B, 'GA_Fensterkreuz', ((tx0 + tx1) / 2, yH + 0.25, 3.9), (tx1 - tx0 - 0.3, 0.06, 0.06), BEAM, bevel=0)
+    R.box(B, 'GA_FensterInnen', ((tx0 + tx1) / 2, yH + 0.5, 3.9), (tx1 - tx0, 0.05, 1.2), toon('GA_Innen', '#3a2414', hi=0.0), bevel=0)
+    B.cone('GA_Regentonne', 0, 0.95, 0.38, 0.38, tex('R_Fassholz', 'holz_fass.png', 1.1, hi=0.1), None, xy=(hx1 - 0.6, yH - 0.5), seg=24, bevel=0.03)
+    for j, z in enumerate((0.15, 0.8)):
+        B.torus(f'GA_TonnenReif{j}', (hx1 - 0.6, yH - 0.5, z), 0.385, 0.025, IRON, None, seg=32, sseg=6)
+
+    # --- Brunnen mit Dach, Kurbel, Seil und Eimer ---
+    yB = 12.83 + 0.95
+    bx_ = wx(271, yB)
+    B.cone('GA_Brunnen', 0, 0.96, 0.95, 0.95, STONE, None, xy=(bx_, yB), seg=40, bevel=0.03)
+    B.torus('GA_BrunnenRand', (bx_, yB, 0.98), 0.92, 0.09, toon('GA_Randstein', '#b5ae9f', hi=0.0), None, seg=48, sseg=8)
+    B.cone('GA_Wasser', 0.9, 0.93, 0.84, 0.84, toon('GA_Wasser', '#2a4a6a', hi=0.6), None, xy=(bx_, yB), seg=40, bevel=0)   # randvoll: sonst sieht man das Wasser nicht
+    for k, sx in enumerate((-1, 1)):
+        B.cone(f'GA_BrunnenPfosten{k}', 0.9, 2.45, 0.08, 0.08, WOODD, None, xy=(bx_ + sx * 0.84, yB), seg=10, bevel=0)
+    for k, sx in enumerate((-1, 1)):
+        R.box(B, f'GA_BrunnenDach{k}', (bx_ + sx * 0.55, yB, 2.62), (1.3, 1.5, 0.08), ROOF, rot=(0, sx * 0.62, 0), bevel=0.01)
+    B.rod('GA_Kurbelwelle', (bx_ - 0.86, yB, 2.1), (bx_ + 0.95, yB, 2.1), 0.06, WOOD, None, seg=12)
+    B.rod('GA_Kurbelarm', (bx_ + 0.95, yB, 2.1), (bx_ + 0.95, yB - 0.05, 1.82), 0.03, IRON, None, seg=8)
+    B.rod('GA_Kurbelgriff', (bx_ + 0.95, yB - 0.05, 1.82), (bx_ + 1.12, yB - 0.05, 1.82), 0.035, WOODD, None, seg=8)
+    B.rod('GA_Seil', (bx_, yB, 2.08), (bx_, yB, 1.2), 0.015, toon('GA_Seil', '#d8c098', hi=0.0), None, seg=6)
+    ep = Vector((wx(322, yB - 0.75, 0.98), yB - 0.75, 0.98))
+    eimer = [B.cone('GA_Eimer', 0.98, 1.3, 0.13, 0.16, toon('GA_Eimerholz', '#a87a48', hi=0.1), None, xy=(ep.x, ep.y), seg=20, bevel=0.01)]
+    for j, z in enumerate((1.03, 1.24)):
+        eimer.append(B.torus(f'GA_EimerReif{j}', (ep.x, ep.y, z), 0.15 + (z - 0.98) * 0.09, 0.012, IRON, None, seg=24, sseg=6))
+    eimer.append(B.torus('GA_EimerBuegel', (ep.x, ep.y, 1.3), 0.15, 0.01, IRON, None, rot=(math.pi / 2, 0, 0), seg=24, sseg=6, scale=(1, 1, 1.2)))
+
+    # --- Beet: Erdfleck (Grundbild), dann Loch, Hügel, Setzling (Varianten) ---
+    yBe = wy(374)
+    bex = wx(550, yBe)
+    B.cone('GA_Beet', 0.0, 0.03, 0.92, 0.92, DIRT, None, xy=(bex, yBe), seg=40, bevel=0.01, scale=(1, 0.55, 1))
+    beet1 = [B.cone('GA_Loch', 0.0, 0.035, 0.32, 0.32, toon('GA_Lochdunkel', '#2a1a0e', hi=0.0), None, xy=(bex, yBe), seg=32, bevel=0, scale=(1, 0.6, 1)),
+             B.sphere('GA_Aushub', (bex + 0.55, yBe - 0.05, 0.03), (0.22, 0.14, 0.09), DIRT, None)]
+    beet2 = [B.sphere('GA_Huegel', (bex, yBe, 0.02), (0.32, 0.22, 0.13), toon('GA_Huegelerde', '#5a3a1e', hi=0.0), None)]
+    sapl = [B.rod('GA_Setzling', (bex, yBe, 0.1), (bex, yBe, 0.62), 0.025, TRUNK, None, seg=8)]
+    for k, (dx, dz, r) in enumerate(((0, 0.66, 0), (-0.1, 0.42, -0.8), (0.1, 0.48, 0.8))):
+        sapl.append(B.sphere(f'GA_SetzBlatt{k}', (bex + dx, yBe, dz), (0.09, 0.03, 0.05), toon('GA_Setzgruen', '#55b84a', hi=0.2), None, rot=(0, r, 0)))
+
+    # --- Plumpsklo mit Dr.-Fred-Technik ---
+    yP = 12.6
+    px0, px1 = wx(770, yP), wx(882, yP)
+    pcx, pw = (px0 + px1) / 2, px1 - px0
+    PK = B.empty('GA_Plumpsklo')
+    PK.location = (pcx, yP, 0)
+    R.box(B, 'GA_KloHaus', (0, 0.7, 1.4), (pw, 1.4, 2.8), tex('R_Stegholz', 'holz_steg.png', 0.32, hi=0.1), PK, bevel=0.03)
+    R.box(B, 'GA_KloTuer', (0, -0.02, 1.25), (pw - 0.5, 0.05, 2.3), WOOD, PK, bevel=0.02)
+    for i in range(3):
+        ohne_kontur(R.box(B, f'GA_KloBrett{i}', (-(pw - 0.5) / 2 + (i + 1) * (pw - 0.5) / 4, -0.05, 1.25), (0.02, 0.01, 2.2), WOODD, PK, bevel=0))
+    for k, z in enumerate((0.5, 1.9)):
+        R.box(B, f'GA_KloRiegel{k}', (0, -0.06, z), (pw - 0.6, 0.03, 0.12), WOODD, PK, bevel=0.01)
+    mond = bmesh.new()   # Mondsichel in der Tür
+    vs = [mond.verts.new((math.cos(a) * 0.17, 0, math.sin(a) * 0.17)) for a in (math.pi * (0.25 + 1.5 * i / 20) for i in range(21))]
+    vs += [mond.verts.new((0.07 + math.cos(a) * 0.13, 0, math.sin(a) * 0.13)) for a in (math.pi * (1.75 - 1.5 * i / 20) for i in range(21))]
+    mond.faces.new(vs)
+    B.obj('GA_KloMond', mond, toon('GA_Mondloch', '#2a1408', hi=0.0), PK, (0, -0.06, 2.05), smooth=False)
+    B.sphere('GA_KloKnauf', (pw / 2 - 0.35, -0.08, 1.2), (0.05, 0.05, 0.05), toon('L_Messing', '#d8a83c', hi=0.75), PK)
+    for k, sx in enumerate((-1, 1)):
+        R.box(B, f'GA_KloDach{k}', (sx * 0.5, 0.7, 3.05), (1.25, 1.8, 0.1), ROOF, PK, rot=(0, sx * 0.5, 0), bevel=0.01)
+    R.box(B, 'GA_KloSchild', (0, -0.08, 2.62), (0.95, 0.03, 0.22), toon('GA_Schildcreme', '#f2e6c0', hi=0.1), PK, bevel=0.01)
+    text(SC, 'GA_KloSchildText', 'ABORT', 0.15, toon('GA_Schildbraun', '#5a3a10', hi=0.1), (0, -0.1, 2.615), font=BLACKF, extrude=0.004, parent=PK)
+    B.rod('GA_Antenne', (0, 0.7, 3.3), (0, 0.7, 3.95), 0.02, toon('L2_Metall', '#8d959e', hi=0.7), PK, seg=8)
+    B.sphere('GA_Antennenbirne', (0, 0.7, 4.0), (0.08, 0.08, 0.08), toon('L2_Birnenrot', '#7a2020', hi=0.6), PK)
+    B.cone('GA_Messuhr', 0, 0.04, 0.12, 0.12, toon('GA_Messing', '#d8b040', hi=0.6), PK, rot=(math.pi / 2, 0, 0), seg=24, bevel=0.01)
+    bpy.data.objects['GA_Messuhr'].location = (-pw / 2 + 0.2, -0.04, 2.25)
+    B.sphere('GA_KloLicht', (-pw / 2 + 0.2, -0.05, 1.85), (0.06, 0.03, 0.06), glow(toon('L2_Zyan', '#3cf0ff', hi=0.9), 2.4), PK)
+    tube('GA_KloKabel', [(pcx - pw / 2 + 0.2, yP - 0.05, 2.3), (pcx - pw / 2 - 0.15, yP + 0.2, 3.0), (pcx - 0.1, yP + 0.6, 3.35)], 0.025, toon('GA_Kabelrot', '#c03030', hi=0.3), None)
+
+    # --- Wegweiser zum Hafen (rechter Rand) ---
+    ys = 11.4
+    sx_ = wx(930, ys)
+    B.rod('GA_WegPfahl', (sx_, ys, 0), (sx_, ys, 1.75), 0.06, WOODD, None, seg=10)
+    WS = B.empty('GA_Wegschild')
+    WS.location = (sx_, ys - 0.07, 1.45)
+    bm = bmesh.new()
+    f = bm.faces.new([bm.verts.new((x, 0, z)) for x, z in ((-0.45, -0.14), (0.35, -0.14), (0.52, 0), (0.35, 0.14), (-0.45, 0.14))])
+    if f.normal.y > 0:
+        f.normal_flip()
+    B.obj('GA_WegBrett', bm, toon('GA_Wegholz', '#e8c890', hi=0.1), WS, (0, 0, 0), smooth=False, solid=0.05)
+    text(SC, 'GA_WegText', 'Hafen', 0.15, toon('GA_Wegschrift', '#2a1a10', hi=0.1), (0.0, -0.035, -0.005), font=BLACKF, extrude=0.004, parent=WS)
+
+    # Blumen auf der Wiese
+    for i, (gx, gy, col) in enumerate(((60, 352, '#ff8a8a'), (180, 362, '#ffd23a'), (386, 356, '#fff0f0'), (446, 418, '#ff5f8a'), (690, 360, '#ffd23a'), (720, 420, '#fff0f0'), (900, 400, '#ff8a8a'), (330, 410, '#ffd23a'))):
+        y = wy(gy)
+        x = wx(gx, y)
+        B.rod(f'GA_Stiel{i}', (x, y, 0), (x, y, 0.16), 0.008, toon('GA_Stielgruen', '#3f7a48', hi=0.0), None, seg=4)
+        B.sphere(f'GA_Bluete{i}', (x, y, 0.18), (0.05, 0.05, 0.03), toon(f'GA_Bluete{col}', col, hi=0.3), None)
+    # Licht: Sommersonne von links hinten, Himmelslicht von vorn
+    sonne_aus(SC, (0.45, -0.5, -0.74), 4.2, (1.0, 0.95, 0.82))
+    sonne_aus(SC, (-0.2, 0.9, -0.4), 0.9, (0.8, 0.9, 1.0))
+    spec = {
+        'anchors': {'Tuer': [bpy.data.objects[f'GA_Tuerrahmen{k}'] for k in range(3)], 'Zaun': [bpy.data.objects['GA_Latte0'], bpy.data.objects['GA_Latte1']] + [bpy.data.objects[f'GA_Pfahl{i}'] for i in range(n)],
+                    'Brunnen': [bpy.data.objects['GA_Brunnen'], bpy.data.objects['GA_BrunnenDach0'], bpy.data.objects['GA_BrunnenDach1']], 'Eimer': eimer[:1],
+                    'Beet': [bpy.data.objects['GA_Beet']], 'Klo': [PK], 'Wegweiser': [WS, bpy.data.objects['GA_WegPfahl']]},
+        'points': {'kloBirne': bpy.data.objects['GA_Antennenbirne'], 'kloOben': (pcx, yP, 3.0), 'kloUnten': (pcx, yP, 0.0), 'sonne': tuple(sp),
+                   'wasser': (bx_, yB, 0.93), 'beet': (bex, yBe, 0.0), 'zaunVogel0': (wx(376, yZ, ztop), yZ, ztop), 'zaunVogel1': (wx(478, yZ, ztop), yZ, ztop), 'zaunVogel2': (wx(640, yZ, ztop), yZ, ztop)},
+        'sprites': {},
+        'variants': {'eimer_weg': ([], eimer), 'beet1': (beet1, []), 'beet2': (beet2, []), 'beet3': (beet2 + sapl, [])},
+    }
+    return spec
+
+
+ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c')), 'gasthaus': (build_gasthaus, ('#d8b88a', '#4a2e18')),
+         'garten1776': (build_garten1776, ('#d6f1ff', '#62bdf6'))}
 
 
 # ------------------------------------------------------------------ Porträts für Gemälde (texturen.py: gemaelde())
