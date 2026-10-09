@@ -58,6 +58,17 @@ function pendelDraw(data, name, fenster, amp = 0.16) {
   };
 }
 
+// Bild, das sich um einen Drehpunkt dreht (Hebel); winkel(t) liefert den Drehwinkel
+function drehDraw(data, name, winkel) {
+  const s = data.sprites[name], im = loadImg(s.src), [px, py] = s.pivot;
+  return (c, t) => {
+    if (!imgOk(im)) return;
+    c.save(); c.translate(px, py); c.rotate(winkel(t)); c.translate(-px, -py);
+    malBild(c, im, s.x, s.y, s.w, s.h);
+    c.restore();
+  };
+}
+
 // =================== GEGENWART: LOBBY ===================
 {
   const D = altbau3d('lobby', {
@@ -99,6 +110,50 @@ function pendelDraw(data, name, fenster, amp = 0.16) {
       // eine Motte umkreist den grünen Lampenschirm auf dem Tresen
       const mx = 54 + Math.cos(t * 0.004) * 24, my = 222 + Math.sin(t * 0.007) * 12, f = Math.sin(t * 0.06) * 3;
       E(c, mx, my, 3, 2, '#d9cdb8', 1.2); L(c, [mx - 4, my - f, mx, my, mx + 4, my - f], 1.2);
+    };
+  }
+}
+
+// =================== GEGENWART: LABOR ===================
+// Der Gut-O-Mat steht wie gezeichnet: LEDs, Toast, Dampf und das Absperrband (rooms.js, gaeste.js) passen ohne Umrechnung.
+{
+  const D = altbau3d('labor', {
+    fill: '#12302e',
+    zustand: { regler_gut: () => !!(G.state && G.state.flags && G.state.flags.regler === 'good'), zelle: () => flagOn('cellIn'), brot: () => flagOn('breadIn') && !flagOn('toast') },
+    objs: {
+      tuer_lobby: { rect: [7, 150, 110, 185], walk: [72, 362] },
+      tafel: { rect: [134, 52, 186, 104] },
+      regal: { rect: [132, 208, 195, 96], walk: [228, 362] },
+      gutomat: { rect: [385, 102, 209, 220], walk: [490, 366] },
+      regler: { rect: [444, 274, 36, 36], walk: [462, 366], draw: null },
+      hebel: { rect: [587, 172, 54, 120], walk: [604, 362] },
+      klo_heute: { rect: [705, 100, 144, 247], walk: [788, 362] },
+    },
+  });
+  if (D) {
+    const P = D.points;
+    // Hebel: Bild um die Achse drehen (gezogen = 2 rad nach unten, wie früher 900 ms lang)
+    ROOMS.labor.objs.find(q => q.id === 'hebel').draw = drehDraw(D, 'hebel', () => {
+      const lt = G.leverT ? G.t - G.leverT : 1e9;
+      return 2.01 * (lt < 120 ? lt / 120 : lt < 900 ? 1 : lt < 1150 ? 1 - (lt - 900) / 250 : 0);
+    });
+    ROOMS.labor.objs.find(q => q.id === 'klo_heute').draw = c => kloFx(c, 'klo_heute', P.kloOben[0], P.kloOben[1], P.kloUnten[1], P.kloBirne[0], P.kloBirne[1]);
+    Object.assign(LAB_ARC, { x0: P.klemme[0], y0: P.klemme[1], x1: P.pol[0], y1: P.pol[1] });
+    RAYS.labor[0].cone[0] = P.neon[0]; RAYS.labor[0].cone[1] = P.neon[1] + 4;
+    const [fx, fy] = P.funken;
+    ROOMS.labor.dyn = (c, t) => {
+      // gelegentliche Funken am angekokelten Kabelende
+      const sp = (t % 5200) / 5200;
+      if (sp < 0.06) for (let i = 0; i < 6; i++) {
+        const a = i * 1.05 + t * 0.01, r = 4 + sp * 260;
+        L(c, [fx + Math.cos(a) * r * 0.4, fy + Math.sin(a) * r * 0.25, fx + Math.cos(a) * r * 0.5, fy + Math.sin(a) * r * 0.32], 2.5, '#ffe36b');
+      }
+      // Bläschen steigen aus den Kolben im Regal
+      for (let i = 0; i < 6; i++) {
+        const x = [152, 186, 246, 196, 236, 284][i], y0 = [208, 206, 208, 268, 266, 206][i];
+        const k = ((t * 0.0007) + i * 0.37) % 1;
+        c.save(); c.globalAlpha = 1 - k; E(c, x + Math.sin(t * 0.004 + i) * 3, y0 - k * 34, 2.5 + k * 2, 2.5 + k * 2, null, 1.5, 0, '#e8fff0'); c.restore();
+      }
     };
   }
 }

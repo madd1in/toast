@@ -6,6 +6,7 @@
 # (Pendel) als eigene Bilder („Sprites“); altbau_post.py schneidet sie zu und schreibt js/altbau-daten.js.
 import bpy, bmesh, json, math, os, random
 from mathutils import Vector
+from figur_lib import hexlin
 from bpy_extras.object_utils import world_to_camera_view
 
 R = None   # Helfer aus raum_build.py (box, tex_toon, toon, tube_in, sun, Builder, solve_cam, REPO)
@@ -55,6 +56,38 @@ def wy(gy, z=0.0):
     return t * (F * math.cos(phi) + v * math.sin(phi))
 
 
+def gp(gx, gy, y):
+    """Welt-Punkt in Tiefe y, der an der Spiel-Koordinate (gx, gy) erscheint."""
+    z = wz(gy, y)
+    return Vector((wx(gx, y, z), y, z))
+
+
+def upm(y, z=None):
+    """Spiel-Einheiten pro Meter in Tiefe y (für Größen wie „Knauf mit 11 Einheiten Radius“)."""
+    h, phi, F, fwd, up = _basis()
+    z = h if z is None else z
+    return 220 * F / (y * fwd.y + (z - h) * fwd.z)
+
+
+def gbox(B, name, gx0, gy0, gx1, gy1, y, depth, mat, parent=None, bevel=0.02, rot=(0, 0, 0)):
+    """Kasten, dessen Vorderseite (Tiefe y) im Bild das Rechteck gx0..gx1 × gy0..gy1 bedeckt und der depth nach hinten reicht."""
+    a, b = gp(gx0, gy1, y), gp(gx1, gy0, y)
+    return R.box(B, name, ((a.x + b.x) / 2, y + depth / 2, (a.z + b.z) / 2), (b.x - a.x, depth, b.z - a.z), mat, parent, rot=rot, bevel=bevel)
+
+
+def toon(name, col, hi=None):
+    """Toon wie in raum_build, aber ohne Glanz bei matten Stoffen (hi ≤ 0,1), siehe matt()."""
+    m = R.toon(name, col, hi=hi)
+    m.node_tree.nodes['ToonEmi2'].inputs['Strength'].default_value = 0.0 if hi is not None and hi <= 0.1 else 1.0
+    return m
+
+
+def tex(name, file, scale=0.35, uv=False, hi=None, rot=0.0):
+    m = R.tex_toon(name, file, scale, uv=uv, hi=hi, rot=rot)
+    m.node_tree.nodes['ToonEmi2'].inputs['Strength'].default_value = 0.0 if hi is not None and hi <= 0.1 else 1.0
+    return m
+
+
 # ------------------------------------------------------------------ Bausteine
 def matt(m):
     """Glanzzweig des Toon-Shaders aus: er gibt sonst weiche weiße Flecken (Lampen-Spiegelungen) auf großen Flächen."""
@@ -88,13 +121,13 @@ def unlit(name, file, strength=1.0):
     return m
 
 
-def quad(B, name, w, h, mat, loc, parent=None, rot=(0, 0, 0)):
-    """Rechteck in der x-z-Ebene (schaut nach −y, zur Kamera) mit UV 0..1."""
+def quad(B, name, w, h, mat, loc, parent=None, rot=(0, 0, 0), su=1.0, sv=1.0):
+    """Rechteck in der x-z-Ebene (schaut nach −y, zur Kamera) mit UV 0..su × 0..sv (su > 1 wiederholt das Bild)."""
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
     vs = [bm.verts.new((x, 0, z)) for x, z in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2))]
     f = bm.faces.new(vs)
-    for l, c in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
+    for l, c in zip(f.loops, ((0, 0), (su, 0), (su, sv), (0, sv))):
         l[uv].uv = c
     return B.obj(name, bm, mat, parent, loc, rot, smooth=False)
 
@@ -289,16 +322,6 @@ def build_lobby(SC):
     Ur-Ur-Ur-Ur-Oma Gertrude, Mondfenster mit Samtvorhängen, rotes Sofa, KAFFEE-O-MAT 5000 und die Tür zum Labor."""
     B = R.Builder(SC)
     tube = R.tube_in(SC)
-
-    def toon(name, col, hi=None):   # Toon wie in raum_build, aber ohne Glanz bei matten Stoffen (hi ≤ 0,1)
-        m = R.toon(name, col, hi=hi)
-        m.node_tree.nodes['ToonEmi2'].inputs['Strength'].default_value = 0.0 if hi is not None and hi <= 0.1 else 1.0
-        return m
-
-    def tex(name, file, scale=0.35, uv=False, hi=None, rot=0.0):
-        m = R.tex_toon(name, file, scale, uv=uv, hi=hi, rot=rot)
-        m.node_tree.nodes['ToonEmi2'].inputs['Strength'].default_value = 0.0 if hi is not None and hi <= 0.1 else 1.0
-        return m
     WALLP = tex('L_Tapete', 'tapete_lila.png', 0.55, hi=0.0)
     PANEL, PANELD, GOLD = toon('L_Taefel', '#4a2a70', hi=0.1), toon('L_TaefelDunkel', '#38205a', hi=0.05), toon('L_Gold', '#e2b85c', hi=0.6)
     FLOOR = tex('L_Parkett', 'parkett.png', 0.42, rot=math.pi / 2, hi=0.0)   # ganz matt (siehe matt())
@@ -593,7 +616,257 @@ def build_lobby(SC):
     return spec
 
 
-ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c'))}
+# ------------------------------------------------------------------ Labor (Gegenwart)
+def kolben(B, name, x, y, z, art, col, glas, parent=None):
+    """Laborglas mit leuchtender Flüssigkeit: 0 Erlenmeyer, 1 Rundkolben, 2 Standzylinder (Größen in Metern)."""
+    FL = glow(toon(f'L2_Fluessig{col}', col, hi=0.6), 1.5)
+    # Toon-Glas ist undurchsichtig: die Flüssigkeit ist eine Spur dicker als das Glas und füllt so den unteren Teil sichtbar aus
+    if art == 0:
+        B.cone(name, z, z + 0.24, 0.13, 0.035, glas, parent, xy=(x, y), seg=24, bevel=0.005)
+        B.cone(name + 'Inhalt', z + 0.003, z + 0.11, 0.135, 0.087, FL, parent, xy=(x, y), seg=24, bevel=0)
+        B.cone(name + 'Hals', z + 0.24, z + 0.36, 0.035, 0.035, glas, parent, xy=(x, y), seg=16, bevel=0)
+    elif art == 1:
+        B.sphere(name, (x, y, z + 0.13), (0.13, 0.13, 0.13), glas, parent)
+        B.sphere(name + 'Inhalt', (x, y, z + 0.115), (0.134, 0.134, 0.11), FL, parent)
+        B.cone(name + 'Hals', z + 0.24, z + 0.4, 0.035, 0.035, glas, parent, xy=(x, y), seg=16, bevel=0)
+    else:
+        B.cone(name, z, z + 0.42, 0.075, 0.075, glas, parent, xy=(x, y), seg=20, bevel=0.005)
+        B.cone(name + 'Inhalt', z + 0.03, z + 0.27, 0.079, 0.079, FL, parent, xy=(x, y), seg=20, bevel=0)
+        B.cone(name + 'Fuss', z, z + 0.03, 0.1, 0.1, glas, parent, xy=(x, y), seg=20, bevel=0)
+
+
+def build_labor(SC):
+    """Dr. Freds Labor: türkise Kachelwand, Schachbrettboden mit Warnschraffur an der Wand, Kreidetafel, Regal mit
+    leuchtenden Kolben, der Gut-O-Mat (Chromkasten mit Toasterschlitzen, Leuchtschild, Zellenschacht, Regler BÖSE/GUT,
+    Hebel), das Chrono-Klo, Rohre, Neonröhren und ein Kabel, an dem ab und zu ein Lichtbogen überspringt.
+    Die Teile stehen genau dort, wo sie gezeichnet waren: die Spiel-Overlays (LEDs, Toast, Dampf, Klo-Effekt) passen weiter."""
+    B = R.Builder(SC)
+    tube = R.tube_in(SC)
+    WALL, FLOOR = tex('L2_Kacheln', 'kacheln_tuerkis.png', 0.25, hi=0.0), tex('L2_Boden', 'schachboden.png', 0.3125, hi=0.0)
+    STRIPE = tex('L2_Warnstreifen', 'warnstreifen.png', uv=True, hi=0.0)
+    CEIL, METAL, METALD = toon('L2_Decke', '#1d3b38', hi=0.0), toon('L2_Metall', '#8d959e', hi=0.7), toon('L2_MetallDunkel', '#5a6068', hi=0.5)
+    CHROME, CHROMED, DARK = toon('L2_Chrom', '#c3ced8', hi=0.55), toon('L2_ChromDunkel', '#93a0ad', hi=0.7), toon('L2_Dunkel', '#15151a', hi=0.05)
+    WOOD, WOODD, BRASS = toon('L2_Holz', '#8a4f26', hi=0.25), toon('L2_HolzDunkel', '#6a3a1c', hi=0.15), toon('L_Messing', '#d8a83c', hi=0.75)
+    PURPLE, PURPLED, YEL = toon('L2_Lila', '#7b4bb5', hi=0.45), toon('L2_LilaDunkel', '#5e3492', hi=0.3), toon('L2_Gelb', '#ffd23a', hi=0.4)
+    CREAM, RED, GREEN, BLACK = toon('L2_Creme', '#efe8d2', hi=0.2), toon('L2_Rot', '#d8243a', hi=0.6), toon('L2_Gruen', '#208040', hi=0.3), toon('N_Schwarz', '#16121e', hi=0.15)
+    GLAS = toon('L2_Glas', '#dcf0ff', hi=0.9)
+    NEON, BULB = glow(toon('L2_Neon', '#e8fbff', hi=0.95), 2.6), glow(toon('L2_Gluehbirne', '#ffe7a0', hi=0.95), 2.4)
+    TAFEL = tex('L2_Tafel', 'kreidetafel.png', uv=True, hi=0.0)
+    BLACKF = 'C:/Windows/Fonts/ariblk.ttf'
+    YW_ = YW
+    # Rückwand mit Türöffnung links, Decke, Boden, Warnschraffur
+    dx0, dx1 = wx(28, YW_), wx(104, YW_)
+    dz1 = 2.75
+    flaeche(B, 'L2_Wand', 'xz', -9.5, 9.5, 0, ZC + 0.2, [(dx0, dx1, 0, dz1)], WALL, (0, YW_ + 0.2, 0), 0.4)
+    for sx in (-1, 1):
+        R.box(B, f'L2_Seitenwand{sx}', (sx * 8.4, 10.0, ZC / 2), (0.4, 7.0, ZC), WALL, bevel=0)
+    R.box(B, 'L2_Boden', (0, 9.6, -0.06), (19, 8.4, 0.12), FLOOR, bevel=0)
+    R.box(B, 'L2_Decke', (0, 9.5, ZC + 0.1), (19, 8.4, 0.2), CEIL, bevel=0)
+    for i in range(7):
+        R.box(B, f'L2_Deckentraeger{i}', (-7.5 + i * 2.5, 9.6, ZC - 0.1), (0.25, 8.0, 0.2), toon('L2_Traeger', '#16302e', hi=0.0), bevel=0.01)
+    for k, (xa, xb) in enumerate(((-9.5, dx0 - 0.2), (dx1 + 0.2, 9.5))):
+        quad(B, f'L2_Schraffur{k}', xb - xa, 0.32, STRIPE, ((xa + xb) / 2, YW_ - 0.015, 0.16), su=(xb - xa) / 2.56, sv=1.0)
+        R.box(B, f'L2_Sockel{k}', ((xa + xb) / 2, YW_ - 0.03, 0.34), (xb - xa, 0.06, 0.05), METALD, bevel=0.005)
+    # Rohre: oben entlang der Wand, senkrecht bei x 490 (zum Gut-O-Mat-Schild) und x 886 (neben dem Klo bis zum Boden)
+    B.rod('L2_RohrOben', (-9.5, YW_ - 0.25, 4.3), (9.5, YW_ - 0.25, 4.3), 0.11, METAL, None, seg=20)
+    for k, x in enumerate(range(-8, 9, 3)):
+        R.box(B, f'L2_Rohrschelle{k}', (x, YW_ - 0.13, 4.3), (0.08, 0.28, 0.3), METALD, bevel=0.01)
+    r1 = gp(490, 104, YW_ - 0.25)
+    B.rod('L2_RohrMitte', (r1.x, YW_ - 0.25, 4.3), (r1.x, YW_ - 0.25, r1.z), 0.08, METAL, None, seg=16)
+    B.torus('L2_RohrMitteFlansch', (r1.x, YW_ - 0.25, r1.z + 0.05), 0.1, 0.03, METALD, None, seg=24, sseg=6)
+    r2 = gp(886, 330, YW_ - 0.25)
+    B.rod('L2_RohrRechts', (r2.x, YW_ - 0.25, 4.3), (r2.x, YW_ - 0.25, 0.0), 0.09, METAL, None, seg=16)
+    for k, z in enumerate((1.2, 2.6)):
+        B.torus(f'L2_RohrFlansch{k}', (r2.x, YW_ - 0.25, z), 0.12, 0.035, METALD, None, seg=24, sseg=6)
+    # Ventilrad und Manometer am rechten Rohr
+    B.torus('L2_Ventilrad', (r2.x - 0.24, YW_ - 0.3, 1.9), 0.16, 0.025, RED, None, rot=(0, math.pi / 2, 0), seg=28, sseg=6)
+    B.rod('L2_VentilStiel', (r2.x - 0.06, YW_ - 0.3, 1.9), (r2.x - 0.24, YW_ - 0.3, 1.9), 0.025, METALD, None, seg=8)
+    B.cone('L2_Manometer', 0, 0.06, 0.16, 0.16, CREAM, None, rot=(math.pi / 2, 0, 0), seg=28, bevel=0.01)
+    bpy.data.objects['L2_Manometer'].location = (r2.x, YW_ - 0.4, 3.2)
+    B.torus('L2_ManoRing', (r2.x, YW_ - 0.43, 3.2), 0.16, 0.02, BRASS, None, rot=(math.pi / 2, 0, 0), seg=28, sseg=6)
+    B.rod('L2_ManoZeiger', (r2.x, YW_ - 0.44, 3.2), (r2.x + 0.1, YW_ - 0.44, 3.27), 0.012, RED, None, seg=6)
+
+    # --- Tür links (zur Lobby) ---
+    T = B.empty('L2_Tuer')
+    T.location = ((dx0 + dx1) / 2, YW_ + 0.12, 0)
+    dw = dx1 - dx0
+    R.box(B, 'L2_TuerBlatt', (0, 0, dz1 / 2), (dw - 0.04, 0.07, dz1 - 0.02), WOOD, T, bevel=0.015)
+    for k, (z, h) in enumerate(((1.95, 1.05), (0.72, 1.0))):
+        R.box(B, f'L2_TuerFeld{k}', (0, -0.045, z), (dw - 0.36, 0.03, h), WOODD, T, bevel=0.02)
+    B.sphere('L2_Tuerknauf', (dw / 2 - 0.16, -0.09, 1.1), (0.05, 0.05, 0.05), BRASS, T)
+    for k, (cx_, cz_, sx_, sz_) in enumerate((((dx0 + dx1) / 2, dz1 + 0.09, dw + 0.42, 0.18), (dx0 - 0.1, dz1 / 2, 0.2, dz1), (dx1 + 0.1, dz1 / 2, 0.2, dz1))):
+        R.box(B, f'L2_Tuerrahmen{k}', (cx_, YW_ - 0.05, cz_), (sx_, 0.12, sz_), WOODD, bevel=0.015)
+    R.box(B, 'L2_TuerSchild', ((dx0 + dx1) / 2, YW_ + 0.05, 2.25), (0.62, 0.02, 0.2), YEL, bevel=0.01)
+    text(SC, 'L2_TuerSchildText', 'NUR MIT KITTEL!', 0.06, BLACK, ((dx0 + dx1) / 2, YW_ + 0.035, 2.245), font=BLACKF, extrude=0.003)
+
+    # --- Kreidetafel mit Holzrahmen und Kreideablage ---
+    t0, t1 = gp(146, 146, YW_ - 0.04), gp(308, 60, YW_ - 0.04)
+    quad(B, 'L2_Tafel', t1.x - t0.x, t1.z - t0.z, TAFEL, ((t0.x + t1.x) / 2, YW_ - 0.05, (t0.z + t1.z) / 2))
+    for k, (gx0, gy0, gx1, gy1) in enumerate(((136, 52, 318, 61), (136, 147, 318, 156), (136, 52, 145, 156), (309, 52, 318, 156))):
+        gbox(B, f'L2_Tafelrahmen{k}', gx0, gy0, gx1, gy1, YW_ - 0.09, 0.08, WOOD, bevel=0.01)
+    gbox(B, 'L2_Kreideablage', 150, 156, 304, 162, YW_ - 0.2, 0.18, WOODD, bevel=0.01)
+    for k, (gx, col) in enumerate(((180, '#f4f4ee'), (196, '#ffd23a'), (214, '#ff9ad0'))):
+        p = gp(gx, 157, YW_ - 0.12)
+        B.rod(f'L2_Kreide{k}', (p.x - 0.05, p.y, p.z + 0.02), (p.x + 0.05, p.y, p.z + 0.02), 0.013, toon(f'L2_Kreide{k}', col, hi=0.1), None, seg=8)
+    p = gp(270, 157, YW_ - 0.12)
+    R.box(B, 'L2_Schwamm', (p.x, p.y, p.z + 0.04), (0.2, 0.08, 0.07), toon('L2_Schwamm', '#d8b04a', hi=0.0), bevel=0.02)
+    # Lüftungsgitter mit Kabeln
+    gbox(B, 'L2_Lueftung', 336, 56, 384, 86, YW_ - 0.06, 0.06, toon('L2_Gitter', '#22343a', hi=0.2), bevel=0.01)
+    for i in range(4):
+        gbox(B, f'L2_Lamelle{i}', 340, 61 + i * 6, 380, 63 + i * 6, YW_ - 0.08, 0.02, toon('L2_Lamelle', '#3d5560', hi=0.3), bevel=0)
+
+    # --- Regal mit leuchtenden Kolben (Positionen wie gezeichnet: die Blasen im Spiel steigen aus ihnen auf) ---
+    for k, gy in enumerate((236, 296)):
+        gbox(B, f'L2_Regalbrett{k}', 132, gy, 322, gy + 8, YW_ - 0.42, 0.42, WOODD, bevel=0.01)
+        for gx in (142, 312):
+            a = gp(gx, gy + 8, YW_ - 0.1)
+            B.rod(f'L2_Konsole{k}{gx}', (a.x, YW_ - 0.04, a.z), (a.x, YW_ - 0.36, a.z), 0.025, METALD, None, seg=8)
+            B.rod(f'L2_Konsole{k}{gx}s', (a.x, YW_ - 0.04, a.z - 0.25), (a.x, YW_ - 0.34, a.z - 0.02), 0.02, METALD, None, seg=8)
+    for row, gy, items in ((0, 236, ((152, '#7dff7a', 0), (186, '#ff5fa8', 1), (214, '#ffd23a', 2), (246, '#5fd3ff', 0), (284, '#c07dff', 1))),
+                           (1, 296, ((160, '#ff8a3d', 2), (196, '#7dff7a', 1), (236, '#ff5fa8', 0), (276, '#e8e8e8', 2), (302, '#5fd3ff', 2)))):
+        zb = wz(gy, YW_ - 0.42)   # Oberkante des Bretts (Vorderkante liegt im Bild bei gy)
+        for i, (gx, col, art) in enumerate(items):
+            fx = wx(gx, YW_ - 0.24, zb)
+            kolben(B, f'L2_Kolben{row}{i}', fx, YW_ - 0.24, zb, art, col, GLAS)
+            lamp(SC, f'L2_LichtKolben{row}{i}', (fx, YW_ - 0.5, zb + 0.15), 6, tuple(min(1.0, c * 1.4) for c in hexlin(col)), 0.1, dist=0.7)
+
+    # --- Gut-O-Mat ---
+    yM = 12.3
+    GM = gbox(B, 'L2_GutOMat', 386, 166, 594, 322, yM, 1.25, CHROME, bevel=0.22)
+    for i in range(3):
+        gbox(B, f'L2_Rille{i}', 404, 235 + i * 9, 576, 237 + i * 9, yM - 0.015, 0.02, CHROMED, bevel=0)
+    for k, (gx0, gx1) in enumerate(((404, 422), (558, 576))):
+        gbox(B, f'L2_GMFuss{k}', gx0, 314, gx1, 342, yM + 0.15, 0.6, METALD, bevel=0.02)
+    # Toasterschlitze oben
+    top = gp(490, 166, yM).z
+    for k, (gx0, gx1) in enumerate(((418, 482), (498, 562))):
+        a, b = gp(gx0, 166, yM + 0.5), gp(gx1, 166, yM + 0.5)
+        R.box(B, f'L2_Schlitzgehaeuse{k}', ((a.x + b.x) / 2, yM + 0.55, top + 0.08), (b.x - a.x, 0.7, 0.2), toon('L2_Schlitz', '#2a2a30', hi=0.4), bevel=0.06)
+        R.box(B, f'L2_Schlitz{k}', ((a.x + b.x) / 2, yM + 0.55, top + 0.17), (b.x - a.x - 0.2, 0.12, 0.03), DARK, bevel=0)
+    # Schild „GUT-O-MAT“ auf einer Stange, mit Glühbirnen-Rand
+    s0, s1 = gp(412, 140, yM + 0.6), gp(568, 102, yM + 0.6)
+    pole = gp(490, 140, yM + 0.6)
+    B.rod('L2_Schildstange', (pole.x, yM + 0.6, top), (pole.x, yM + 0.6, s0.z), 0.05, METALD, None, seg=12)
+    R.box(B, 'L2_Schild', ((s0.x + s1.x) / 2, yM + 0.6, (s0.z + s1.z) / 2), (s1.x - s0.x, 0.14, s1.z - s0.z), toon('L2_Schildlila', '#7a2f9a', hi=0.05), bevel=0.06)
+    text(SC, 'L2_SchildText', 'GUT-O-MAT', 0.3, glow(toon('L2_SchildGelb', '#ffd23a', hi=0.5), 1.6), ((s0.x + s1.x) / 2, yM + 0.52, (s0.z + s1.z) / 2 - 0.02), font=BLACKF, extrude=0.02)
+    nb = 0
+    for i in range(14):
+        u = i / 13
+        for zz in (s0.z - 0.04, s1.z + 0.04):
+            ohne_kontur(B.sphere(f'L2_SchildBirne{nb}', (s0.x + (s1.x - s0.x) * u, yM + 0.52, zz), (0.035, 0.035, 0.035), BULB, None))
+            nb += 1
+    lamp(SC, 'L2_LichtSchild', ((s0.x + s1.x) / 2, yM, (s0.z + s1.z) / 2), 60, (1.0, 0.82, 0.5), 0.4, dist=2.5)
+    # Anzeige BÖSE/GUT mit Regler (Zeiger in der Grundfassung auf BÖSE, Variante „regler_gut“)
+    gbox(B, 'L2_Anzeige', 416, 260, 508, 312, yM - 0.04, 0.04, CREAM, bevel=0.03)
+    for name, body, gx, col in (('L2_Boese', 'BÖSE', 433, '#c02030'), ('L2_Gut', 'GUT', 493, '#208040')):
+        p = gp(gx, 273, yM - 0.06)
+        text(SC, name, body, 0.1, toon(name + 'Farbe', col, hi=0.2), (p.x, p.y, p.z), font=BLACKF, extrude=0.004)
+    rc = gp(462, 292, yM - 0.07)
+    u = upm(yM)
+    B.cone('L2_Regler', 0, 0.05, 15 / u, 15 / u, METALD, None, rot=(math.pi / 2, 0, 0), seg=32, bevel=0.01)
+    bpy.data.objects['L2_Regler'].location = (rc.x, rc.y - 0.02, rc.z)
+    B.cone('L2_ReglerInnen', 0, 0.03, 10 / u, 10 / u, toon('L2_ReglerInnen', '#6a707a', hi=0.6), None, rot=(math.pi / 2, 0, 0), seg=32, bevel=0.005)
+    bpy.data.objects['L2_ReglerInnen'].location = (rc.x, rc.y - 0.06, rc.z)
+
+    def zeiger(name, a, mat):
+        return B.rod(name, (rc.x, rc.y - 0.1, rc.z), (rc.x + math.cos(a) * 15 / u, rc.y - 0.1, rc.z - math.sin(a) * 15 / u), 0.03, mat, None, seg=8)
+    boese = zeiger('L2_ZeigerBoese', -2.4, glow(toon('L2_ZeigerRot', '#ff4050', hi=0.6), 1.3))
+    gut = zeiger('L2_ZeigerGut', -0.75, glow(toon('L2_ZeigerGruen', '#3cf07a', hi=0.6), 1.3))
+    # Feld mit vier Lämpchen (das Spiel lässt sie leuchten) und Ausgabeschlitz
+    gbox(B, 'L2_Lampenfeld', 520, 266, 580, 306, yM - 0.04, 0.04, toon('L2_Lampenfeld', '#4a4f58', hi=0.5), bevel=0.02)
+    for i in range(4):
+        p = gp(532 + i * 12, 278, yM - 0.07)
+        B.sphere(f'L2_Laempchen{i}', (p.x, p.y, p.z), (4 / u, 0.02, 4 / u), toon('L2_LampeAus', '#2a2a30', hi=0.5), None)
+    gbox(B, 'L2_Ausgabe', 536, 294, 564, 298, yM - 0.075, 0.02, DARK, bevel=0)
+    # Zellenschacht links (Variante „zelle“: grün leuchtende Zelle steckt drin)
+    gbox(B, 'L2_Zellschacht', 366, 208, 392, 268, yM + 0.1, 0.7, toon('L2_Schacht', '#4a4f58', hi=0.5), bevel=0.03)
+    gbox(B, 'L2_ZellLoch', 372, 216, 386, 260, yM + 0.08, 0.04, DARK, bevel=0.01)
+    c0, c1 = gp(373, 256, yM + 0.06), gp(385, 220, yM + 0.06)
+    zelle = [R.box(B, 'L2_Zelle', ((c0.x + c1.x) / 2, yM + 0.04, (c0.z + c1.z) / 2), (c1.x - c0.x, 0.1, c1.z - c0.z), glow(toon('L2_Zellgruen', '#7dff7a', hi=0.8), 2.0), bevel=0.02)]
+    zelle.append(R.box(B, 'L2_ZellKappe', ((c0.x + c1.x) / 2, yM + 0.04, c1.z - 0.02), (c1.x - c0.x + 0.03, 0.12, 0.06), BRASS, bevel=0.01))
+    # Hebelgehäuse rechts; der Hebel selbst ist ein Sprite (Drehpunkt 603/262, oben 624/190)
+    gbox(B, 'L2_Hebelkasten', 592, 236, 614, 290, yM + 0.1, 0.6, toon('L2_Hebelkasten', '#4a4f58', hi=0.5), bevel=0.03)
+    pv = gp(603, 262, yM + 0.02)
+    tip = gp(624, 190, yM + 0.02)
+    HB = B.empty('L2_Hebel')
+    HB.location = pv
+    B.rod('L2_HebelStange', (0, 0, 0), tuple(tip - pv), 7 / u / 2, toon('L2_HebelMetall', '#9aa3ad', hi=0.8), HB, seg=12)
+    B.sphere('L2_HebelKnauf', tuple(tip - pv), (11 / u, 11 / u, 11 / u), RED, HB)
+    B.sphere('L2_HebelAchse', (0, 0, 0), (6 / u, 6 / u, 6 / u), METALD, HB)
+    # Brot im linken Schlitz (Variante „brot“)
+    b0, b1 = gp(424, 160, yM + 0.55), gp(476, 140, yM + 0.55)
+    brot = [R.box(B, 'L2_Brot', ((b0.x + b1.x) / 2, yM + 0.55, top + 0.32), (b1.x - b0.x, 0.06, 0.34), toon('L2_Brotkruste', '#d8963e', hi=0.2), bevel=0.06)]
+    brot.append(R.box(B, 'L2_BrotKrume', ((b0.x + b1.x) / 2, yM + 0.515, top + 0.31), (b1.x - b0.x - 0.08, 0.01, 0.28), toon('L2_Krume', '#f2dca0', hi=0.1), bevel=0.04))
+    # Kabel: von der linken Seite zum Boden und an der Wand entlang, das Ende ist angekokelt (Funken im Spiel)
+    lk = gp(386, 250, yM + 0.4)
+    fun = Vector((wx(300, wy(345)), wy(345), 0.04))
+    tube('L2_Kabel', [(lk.x, yM + 0.4, lk.z), (lk.x - 0.3, yM + 0.3, 0.6), (lk.x - 0.6, yM + 0.2, 0.05), ((lk.x + fun.x) / 2, fun.y + 0.2, 0.05), (fun.x, fun.y, 0.05)], 0.05, BLACK, None)
+    B.cone('L2_KabelEnde', 0, 0.12, 0.06, 0.03, toon('L2_Kupfer', '#c87a3a', hi=0.6), None, rot=(0, -math.pi / 2, 0), seg=12, bevel=0)
+    bpy.data.objects['L2_KabelEnde'].location = (fun.x - 0.06, fun.y, 0.05)
+    # Lichtbogen-Kabel: hängt von der Decke, Klemme bei (392, 135), Pol oben links auf dem Gut-O-Mat bei (397, 167)
+    ke = gp(392, 135, yM + 0.15)
+    tube('L2_Haengekabel', [(ke.x - 0.4, yM + 0.6, ZC), (ke.x - 0.1, yM + 0.3, (ZC + ke.z) / 2 + 0.3), (ke.x, yM + 0.15, ke.z + 0.12)], 0.035, BLACK, None)
+    B.cone('L2_Klemme', ke.z - 0.02, ke.z + 0.12, 0.02, 0.06, toon('L2_Kupfer', '#c87a3a', hi=0.6), None, xy=(ke.x, yM + 0.15), seg=12, bevel=0)
+    kp = gp(397, 167, yM + 0.35)
+    B.cone('L2_Pol', top - 0.05, top + 0.1, 0.05, 0.05, BRASS, None, xy=(kp.x, yM + 0.35), seg=16, bevel=0)
+    POL = B.sphere('L2_PolKopf', (kp.x, yM + 0.35, top + 0.12), (0.06, 0.06, 0.05), BRASS, None)
+
+    # --- Chrono-Klo ---
+    yK = 12.15
+    k0, k1 = gp(730, 340, yK), gp(846, 340, yK)
+    kx, kw_ = (k0.x + k1.x) / 2, k1.x - k0.x
+    KL = B.empty('L2_Klo')
+    KL.location = (kx, yK, 0)
+    R.box(B, 'L2_KloKorpus', (0, 0.5, 1.3), (kw_, 1.0, 2.6), PURPLE, KL, bevel=0.1)
+    R.box(B, 'L2_KloKante', (-kw_ / 2 + 0.12, -0.01, 1.3), (0.1, 0.02, 2.3), toon('L2_LilaHell', '#9a6ad0', hi=0.5), KL, bevel=0.01)
+    R.box(B, 'L2_KloTuer', (0, -0.02, 1.25), (kw_ - 0.42, 0.04, 2.25), PURPLED, KL, bevel=0.05)
+    B.sphere('L2_KloKuppel', (0, 0.5, 2.6), (kw_ / 2 - 0.06, 0.5, 0.5), PURPLED, KL)
+    B.rod('L2_KloRohr', (0, 0.5, 3.0), (0, 0.5, 3.45), 0.06, toon('L2_KloRohr', '#9aa3ad', hi=0.7), KL, seg=12)
+    B.sphere('L2_KloBirne', (0, 0.5, 3.55), (0.1, 0.1, 0.1), toon('L2_Birnenrot', '#7a2020', hi=0.6), KL)
+    B.torus('L2_Bullauge', (0, -0.06, 1.95), 0.19, 0.04, toon('L2_Bullaugenring', '#ffe9a0', hi=0.6), KL, rot=(math.pi / 2, 0, 0), seg=32, sseg=8)
+    B.cone('L2_BullaugeGlas', 0, 0.02, 0.17, 0.17, glow(toon('L2_Zeitglas', '#3a1a6a', hi=0.8), 1.4), KL, rot=(math.pi / 2, 0, 0), seg=32, bevel=0)
+    bpy.data.objects['L2_BullaugeGlas'].location = (0, -0.05, 1.95)
+    R.box(B, 'L2_KloSchild', (0, -0.07, 1.5), (0.95, 0.03, 0.22), YEL, KL, bevel=0.02)
+    text(SC, 'L2_KloSchildText', 'CHRONO-KLO', 0.12, toon('L2_KloSchrift', '#4a1a6a', hi=0.2), (0, -0.09, 1.495), font=BLACKF, extrude=0.005, parent=KL)
+    R.box(B, 'L2_Besetzt', (0, -0.07, 2.35), (0.42, 0.03, 0.13), DARK, KL, bevel=0.01)
+    text(SC, 'L2_BesetztText', 'FREI', 0.09, glow(toon('L2_FreiGruen', '#5aff8a', hi=0.8), 2.2), (0, -0.09, 2.345), font=BLACKF, extrude=0.004, parent=KL)
+    B.sphere('L2_KloKnauf', (kw_ / 2 - 0.32, -0.09, 1.05), (0.05, 0.05, 0.05), BRASS, KL)
+    B.cone('L2_KloUhr', 0, 0.04, 0.13, 0.13, CREAM, KL, rot=(0, -math.pi / 2, 0), seg=24, bevel=0.01)   # linke Seite: die sieht man
+    bpy.data.objects['L2_KloUhr'].location = (-kw_ / 2 - 0.02, 0.25, 2.15)
+    B.rod('L2_KloUhrZeiger', (-kw_ / 2 - 0.07, 0.25, 2.15), (-kw_ / 2 - 0.07, 0.17, 2.24), 0.01, RED, KL, seg=6)
+    B.sphere('L2_KloLicht', (-kw_ / 2 - 0.03, 0.25, 1.75), (0.03, 0.08, 0.08), glow(toon('L2_Zyan', '#3cf0ff', hi=0.9), 2.4), KL)
+    tube('L2_KloKabel', [(k0.x + 0.1, yK + 0.4, 0.2), (k0.x - 0.4, yK + 0.2, 0.05), (k0.x - 1.0, yK + 0.3, 0.04)], 0.04, toon('L2_KabelGrau', '#2a2a30', hi=0.3), None)
+    # Klopapier am Halter, Spruch an der Seite
+    R.box(B, 'L2_PapierHalter', (-kw_ / 2 - 0.04, 0.6, 1.0), (0.06, 0.2, 0.06), METALD, KL, bevel=0.005)
+    B.cone('L2_Klopapier', -0.07, 0.07, 0.07, 0.07, CREAM, KL, rot=(math.pi / 2, 0, 0), seg=20, bevel=0.01)
+    bpy.data.objects['L2_Klopapier'].location = (-kw_ / 2 - 0.12, 0.6, 0.92)
+    lamp(SC, 'L2_LichtKlo', (kx, yK - 0.5, 2.0), 40, (0.75, 0.55, 1.0), 0.5, dist=2.0)
+
+    # --- Neonröhren an der Decke (eine über dem Klo: dort hat das Spiel seinen Lichtkegel) ---
+    for k, gx in enumerate((200, 789)):
+        yl = 11.4
+        p = gp(gx, 30, yl)
+        for sx in (-0.6, 0.6):
+            B.rod(f'L2_LampeSeil{k}{sx}', (p.x + sx, yl, ZC), (p.x + sx, yl, ZC - 0.5), 0.006, BLACK, None, seg=4)
+        R.box(B, f'L2_LampeGehaeuse{k}', (p.x, yl, ZC - 0.55), (1.6, 0.25, 0.1), METALD, bevel=0.02)
+        B.rod(f'L2_Neonroehre{k}', (p.x - 0.72, yl, ZC - 0.64), (p.x + 0.72, yl, ZC - 0.64), 0.04, NEON, None, seg=12)
+        lamp(SC, f'L2_LichtNeon{k}', (p.x, yl, ZC - 0.75), 320, (0.82, 1.0, 0.98), 0.6)
+    # Licht: kühles Grundlicht von vorn, Neon, Klo-Lila, Schild warm
+    R.sun(SC, (1.2, 0.0, 0.3), 0.9, (0.75, 0.95, 1.0))
+    R.sun(SC, (0.5, 0.0, -0.8), 0.6, (0.6, 1.0, 0.9))
+    spec = {
+        'anchors': {'Tuer': [bpy.data.objects[f'L2_Tuerrahmen{k}'] for k in range(3)], 'Tafel': [bpy.data.objects[f'L2_Tafelrahmen{k}'] for k in range(4)],
+                    'Regal': [o for o in SC.objects if o.name.startswith(('L2_Regalbrett', 'L2_Kolben'))], 'GutOMat': [GM, bpy.data.objects['L2_Schild']],
+                    'Regler': [bpy.data.objects['L2_Regler']], 'Hebel': [HB, bpy.data.objects['L2_Hebelkasten']], 'Klo': [KL]},
+        'points': {'kloBirne': bpy.data.objects['L2_KloBirne'], 'kloOben': (kx, yK, 3.0), 'kloUnten': (kx, yK, 0.0), 'funken': tuple(fun), 'neon': (gp(789, 30, 11.4).x, 11.4, ZC - 0.64),
+                   'klemme': (ke.x, yM + 0.15, ke.z - 0.02), 'pol': POL},
+        'sprites': {'hebel': (HB, [o for o in SC.objects if o.parent == HB])},
+        'variants': {'regler_gut': ([gut], [boese]), 'zelle': (zelle, []), 'brot': (brot, [])},
+    }
+    return spec
+
+
+ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c'))}
 
 
 # ------------------------------------------------------------------ Porträts für Gemälde (texturen.py: gemaelde())

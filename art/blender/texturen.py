@@ -384,6 +384,87 @@ def labor_glas(name, w=256, h=384, seed=93):
     save(np.asarray(d.filter(ImageFilter.GaussianBlur(2.2)), np.float32), name)
 
 
+def kacheln(name, base, fuge, n=8, w=512, seed=101, var=0.06):
+    """Quadratische Fliesen mit Fugen, jede Fliese leicht anders getönt, feiner Glanzstreifen (Labor-Wand)."""
+    r = random.Random(seed)
+    arr = np.zeros((w, w, 3), np.float32)
+    s = w // n
+    for j in range(n):
+        for i in range(n):
+            arr[j * s:(j + 1) * s, i * s:(i + 1) * s] = hexrgb(base) * r.uniform(1 - var, 1 + var)
+    yy, xx = np.mgrid[0:w, 0:w]
+    g = ((xx % s) < 3) | ((yy % s) < 3)
+    arr[g] = hexrgb(fuge)
+    hl = ((xx % s) > s * 0.15) & ((xx % s) < s * 0.28) & ((yy % s) > s * 0.12) & ((yy % s) < s * 0.8)
+    arr[hl] *= 1.06
+    arr *= (0.93 + 0.1 * noise(w, w, 4, 3, seed))[..., None]
+    save(np.asarray(Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.7)), np.float32), name)
+
+
+def schachbrett(name, a, b, n=4, w=512, seed=103):
+    """Schachbrett-Fliesen (Laborboden): kachelbar, mit dunklen Fugen und leichten Gebrauchsspuren."""
+    s = w // n
+    yy, xx = np.mgrid[0:w, 0:w]
+    k = ((xx // s + yy // s) % 2)[..., None]
+    arr = hexrgb(a) * k + hexrgb(b) * (1 - k)
+    arr[((xx % s) < 2) | ((yy % s) < 2)] *= 0.6
+    n_ = noise(w, w, 6, 4, seed)
+    n_ = (n_ + n_[:, ::-1] + n_[::-1, :] + n_[::-1, ::-1]) / 4
+    arr *= (0.9 + 0.18 * n_)[..., None]
+    save(arr, name)
+
+
+def warnstreifen(name, w=512, h=64):
+    """Gelb-schwarze Warnschraffur (Sockel der Laborwand)."""
+    yy, xx = np.mgrid[0:h, 0:w]
+    k = (((xx + yy) // 32) % 2)[..., None]
+    arr = hexrgb('#e2c040') * (1 - k) + hexrgb('#222028') * k
+    arr *= (0.9 + 0.15 * noise(w, h, 6, 3, 105))[..., None]
+    save(arr, name)
+
+
+def kreidetafel(name, w=1024, h=600, seed=107):
+    """Tafel im Labor: „E = mc²“, darunter durchgestrichen „E = mc Toast“, gelb „Brot kaufen!“, Kritzeleien (Toast, Tentakel, Formeln)."""
+    from PIL import ImageFont
+    arr = hexrgb('#1f3a2a') * np.ones((h, w, 1), np.float32)
+    arr *= (0.85 + 0.25 * noise(w, h, 4, 4, seed))[..., None]
+    d = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    dr = ImageDraw.Draw(d, 'RGBA')
+    r = random.Random(seed)
+    for _ in range(18):   # alte, schlecht weggewischte Kreide
+        x, y = r.randint(0, w), r.randint(0, h)
+        dr.ellipse([x - 90, y - 26, x + 90, y + 26], fill=(220, 235, 220, 14))
+    f1 = ImageFont.truetype('C:/Windows/Fonts/segoeprb.ttf', 96)
+    f2 = ImageFont.truetype('C:/Windows/Fonts/segoepr.ttf', 78)
+    f3 = ImageFont.truetype('C:/Windows/Fonts/segoeprb.ttf', 70)
+    f4 = ImageFont.truetype('C:/Windows/Fonts/segoepr.ttf', 40)
+    chalk = (232, 240, 224, 235)
+    dr.text((120, 60), 'E = mc²', font=f1, fill=chalk)
+    dr.text((300, 215), 'E = mc Toast', font=f2, fill=chalk)
+    dr.line([(300, 270), (770, 255)], fill=chalk, width=7)
+    dr.text((470, 385), 'Brot kaufen!', font=f3, fill=(255, 214, 70, 240))
+    dr.text((640, 90), '∫ Toast dt = ?', font=f4, fill=(232, 240, 224, 180))
+    dr.text((80, 420), 'Zeit + Klo = ☺', font=f4, fill=(232, 240, 224, 180))
+    # Toast-Kritzelei mit Pfeil
+    dr.rounded_rectangle([800, 300, 910, 410], radius=24, outline=chalk, width=6)
+    dr.arc([808, 280, 902, 330], 180, 360, fill=chalk, width=6)
+    dr.ellipse([830, 340, 842, 352], fill=chalk); dr.ellipse([866, 340, 878, 352], fill=chalk)
+    dr.arc([834, 352, 874, 384], 20, 160, fill=chalk, width=5)
+    dr.line([(730, 470), (795, 425)], fill=chalk, width=5)
+    dr.line([(795, 425), (770, 428)], fill=chalk, width=5)
+    dr.line([(795, 425), (787, 449)], fill=chalk, width=5)
+    # kleines lila Tentakel mit Saugnäpfen
+    lila = (200, 140, 255, 220)
+    pts = [(120 + math.sin(t / 7) * 22, 380 - t * 1.6) for t in range(0, 90)]
+    dr.line(pts, fill=lila, width=16, joint='curve')
+    for t in range(10, 80, 18):
+        x, y = 120 + math.sin(t / 7) * 22 + 10, 380 - t * 1.6
+        dr.ellipse([x - 4, y - 4, x + 4, y + 4], outline=(255, 220, 255, 230), width=2)
+    dr.ellipse([108, 228, 120, 240], fill=(255, 255, 255, 230))
+    d = d.filter(ImageFilter.GaussianBlur(0.8))
+    save(np.asarray(d, np.float32), name)
+
+
 JOBS = {
     'gras.png': lambda n: speckle(n, ['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21),
     'fels.png': lambda n: speckle(n, ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22),
@@ -409,6 +490,10 @@ JOBS = {
     'nachthimmel.png': nachthimmel,
     'gemaelde_gertrude.png': lambda n: gemaelde(n, 'art/render/portrait_gertrude.png'),
     'labor_glas.png': labor_glas,
+    'kacheln_tuerkis.png': lambda n: kacheln(n, '#2e6964', '#1e4a46'),
+    'schachboden.png': lambda n: schachbrett(n, '#465170', '#333b4f'),
+    'warnstreifen.png': warnstreifen,
+    'kreidetafel.png': kreidetafel,
 }
 
 if __name__ == '__main__':

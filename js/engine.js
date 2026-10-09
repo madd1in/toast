@@ -3645,16 +3645,17 @@ function updateLabArc() {
   const a = G.arc || (G.arc = { next: G.t + 6000 + Math.random() * 8000, t0: -1e9 });
   if (G.t >= a.next) { a.t0 = G.t; a.next = G.t + 14000 + Math.random() * 12000; Sound.sfx('crackle', panX(395)); }
 }
+const LAB_ARC = { x0: 392, y0: 135, x1: 397, y1: 167 };   // Kabelklemme -> Pol am Gut-O-Mat (die 3D-Fassung in js/altbau.js misst sie neu)
 function drawLabArc(room) {
   if (room.id !== 'labor' || !G.arc) return;
   const k = G.t - G.arc.t0; if (k < 0 || k > 480) return;
   const flick = (Math.floor(k / 45) % 3) !== 1; if (!flick) return;
-  const seed = Math.floor(k / 45), pts = [392, 135];
+  const A = LAB_ARC, seed = Math.floor(k / 45), pts = [A.x0, A.y0], dx = (A.x1 - A.x0) / 6, dy = (A.y1 - A.y0) / 6;
   const rn = i => { const r = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return r - Math.floor(r) - 0.5; };
-  for (let i = 1; i < 6; i++) pts.push(392 + i * 0.8 + rn(i) * 15, 135 + i * 5.6);
-  pts.push(397, 167);
+  for (let i = 1; i < 6; i++) pts.push(A.x0 + i * dx + rn(i) * 15, A.y0 + i * dy);
+  pts.push(A.x1, A.y1);
   const fork = [pts[6], pts[7], pts[6] + 7 + rn(9) * 6, pts[7] + 4, pts[6] + 12 + rn(11) * 6, pts[7] + 10];   // kleiner Seitenast
-  if (!cx.isPix) { glow(394, 150, 44, '#7ad8ff', 0.6); cx.save(); cx.globalAlpha = 0.08; cx.fillStyle = '#9ee4ff'; cx.fillRect(-200, -200, 2400, 900); cx.restore(); }
+  if (!cx.isPix) { glow((A.x0 + A.x1) / 2, (A.y0 + A.y1) / 2, 44, '#7ad8ff', 0.6); cx.save(); cx.globalAlpha = 0.08; cx.fillStyle = '#9ee4ff'; cx.fillRect(-200, -200, 2400, 900); cx.restore(); }
   L(cx, pts, 4.6, 'rgba(110,210,255,0.7)'); L(cx, fork, 2.6, 'rgba(110,210,255,0.6)');
   L(cx, pts, 1.6, '#ffffff'); L(cx, fork, 1, '#e8f8ff');
 }
