@@ -157,3 +157,57 @@ function drehDraw(data, name, winkel) {
     };
   }
 }
+
+// =================== 1776: GASTHAUS ===================
+// Kessel, Rost und Glut sind jetzt im 3D-Bild; das Spiel malt weiter Flammen, Feuerschein, Dampf und Sonnenstaub.
+{
+  const D = altbau3d('gasthaus', {
+    fill: '#4a2e18',
+    zustand: { apfel: () => flagOn('apfel') },
+    objs: {
+      fenster_1776: { rect: [473, 59, 135, 121] },
+      schild_1776: { rect: [648, 59, 134, 50] },
+      ofen: { rect: [29, 122, 233, 223], walk: [200, 362] },
+      uhr_1776: { rect: [288, 147, 60, 196], walk: [318, 362] },
+      tisch: { rect: [384, 282, 271, 65], walk: [520, 366] },
+      obstschale: { rect: [446, 250, 44, 38], walk: [470, 364], draw: null },
+      tuer_garten: { rect: [833, 110, 117, 225], walk: [884, 362] },
+      kessel: { rect: [108, 250, 63, 46], walk: [196, 366] },
+    },
+  });
+  if (D) {
+    const P = D.points;
+    ROOMS.gasthaus.objs.find(q => q.id === 'uhr_1776').draw = pendelDraw(D, 'pendel', 'Uhrfenster');
+    [EGGS.grail.x, EGGS.grail.y] = P.grail;
+    [EGGS.grog.x, EGGS.grog.y] = P.grog;
+    const [gx0, gy0] = P.fensterGlas0, [gx1, gy1] = P.fensterGlas1;
+    RAYS.gasthaus[0].win = [gx0, gy0, gx1, gy1];
+    const [fx, fy] = P.feuer, [kx, ky] = P.kessel, dx = fx - 141, dy = fy - 326;   // Flammen wie gezeichnet, auf den neuen Herd verschoben
+    ROOMS.gasthaus.dyn = (c, t) => {
+      const f = Math.sin(t * 0.02) * 4, g = Math.cos(t * 0.017) * 5;
+      if (!c.isPix) {   // Feuerschein auf dem Boden
+        const gl = c.createRadialGradient(fx, fy + 4, 10, fx, fy + 14, 230);
+        gl.addColorStop(0, `rgba(255,150,40,${0.24 + Math.sin(t * 0.013) * 0.06})`); gl.addColorStop(1, 'rgba(255,150,40,0)');
+        c.fillStyle = gl; c.fillRect(fx - 240, fy - 180, 480, 300);
+      }
+      for (let i = 0; i < 14; i++) {   // Staub tanzt im Sonnenstrahl
+        const k = ((t * 0.00004 * (1 + i % 3)) + i * 0.071) % 1, x = gx0 + 14 + i * 13 + k * 150 + Math.sin(t * 0.001 + i) * 8, y = gy1 + 18 + k * 140;
+        c.save(); c.globalAlpha = 0.5 * Math.sin(k * Math.PI); E(c, x, y, 1.6, 1.6, '#fff6d0', 0); c.restore();
+      }
+      c.save(); c.translate(dx, dy);
+      S(c, '#ff8a1f', 2, () => { c.moveTo(96, 326); c.quadraticCurveTo(104 + f, 282, 122, 300 + g * 0.4); c.quadraticCurveTo(132, 264 + f, 146, 296); c.quadraticCurveTo(160 + g, 272, 170, 300); c.quadraticCurveTo(178, 286 - f, 186, 326); c.closePath(); });
+      S(c, '#ffd23a', 0, () => { c.moveTo(112, 326); c.quadraticCurveTo(122, 300 + g, 134, 310); c.quadraticCurveTo(144, 290 - f, 154, 312); c.quadraticCurveTo(166, 300 + f, 172, 326); c.closePath(); });
+      for (let i = 0; i < 4; i++) {   // Funken steigen aus dem Feuer auf
+        const k = ((t * 0.0008) + i * 0.25) % 1;
+        c.save(); c.globalAlpha = (1 - k) * 0.9;
+        E(c, 118 + i * 16 + Math.sin(t * 0.004 + i * 2) * 6, 298 - k * 88, 1.4, 1.4, k < 0.3 ? '#ffd23a' : '#ff8a3d', 0);
+        c.restore();
+      }
+      c.restore();
+      for (let i = 0; i < 2; i++) {   // Dampf aus dem Kessel
+        const k = ((t * 0.0005) + i * 0.5) % 1;
+        c.save(); c.globalAlpha = (1 - k) * 0.7; E(c, kx - 6 + i * 14 + Math.sin(t * 0.003 + i) * 5, ky - 4 - k * 40, 6 + k * 8, 5 + k * 6, '#f4f0ea', 0); c.restore();
+      }
+    };
+  }
+}

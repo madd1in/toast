@@ -465,6 +465,56 @@ def kreidetafel(name, w=1024, h=600, seed=107):
     save(np.asarray(d, np.float32), name)
 
 
+def landschaft(name, w=1024, h=640, seed=111):
+    """Blick aus dem Gasthaus 1776: Sommerhimmel mit Wolken, grüne Hügel, Bäume, ein Weidezaun und zwei Pferde in der Ferne."""
+    yy = np.linspace(0, 1, h)[:, None, None]
+    arr = (hexrgb('#62bdf6') * (1 - yy) + hexrgb('#e6f6ff') * yy) * np.ones((1, w, 1), np.float32)
+    d = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    dr = ImageDraw.Draw(d)
+    r = random.Random(seed)
+    for cx_, cy_, s in ((180, 110, 1.0), (560, 70, 1.3), (860, 150, 0.9)):   # Wolken
+        for dx, dy, rx, ry in ((0, 0, 70, 34), (50, -18, 52, 34), (-52, 4, 44, 26), (26, 12, 56, 26)):
+            dr.ellipse([cx_ + dx * s - rx * s, cy_ + dy * s - ry * s, cx_ + dx * s + rx * s, cy_ + dy * s + ry * s], fill=(255, 255, 255))
+    d = d.filter(ImageFilter.GaussianBlur(1.5))
+    dr = ImageDraw.Draw(d)
+    for k, (col, y0, amp) in enumerate((('#9fd88a', 0.48, 40), ('#7cc95a', 0.58, 50), ('#5fae3e', 0.7, 34))):   # drei Hügelketten
+        pts = [(x, h * y0 + math.sin(x / w * (3 + k) * math.pi + k) * amp + math.sin(x / w * 11 + k * 2) * 10) for x in range(0, w + 8, 8)]
+        dr.polygon(pts + [(w, h), (0, h)], fill=col)
+    for x, y, s in ((140, 0.56, 1.0), (300, 0.6, 0.8), (720, 0.55, 1.1), (900, 0.62, 0.9)):   # Bäume
+        y = h * y
+        dr.rectangle([x - 5 * s, y - 10 * s, x + 5 * s, y + 30 * s], fill=(107, 68, 36))
+        dr.ellipse([x - 40 * s, y - 70 * s, x + 40 * s, y + 4 * s], fill=(79, 154, 58))
+        dr.ellipse([x - 26 * s, y - 84 * s, x + 30 * s, y - 30 * s], fill=(95, 176, 70))
+    fy = h * 0.8   # Weidezaun
+    dr.line([(0, fy), (w, fy - 12)], fill=(176, 122, 60), width=6)
+    for x in range(10, w, 60):
+        dr.rectangle([x, fy - 26 - x * 0.012, x + 7, fy + 18 - x * 0.012], fill=(198, 148, 88))
+    for x, y, fl_ in ((420, 0.66, 1), (560, 0.69, -1)):   # Pferde als Silhouetten
+        y = h * y
+        dr.ellipse([x - 26, y - 14, x + 26, y + 10], fill=(110, 70, 40))
+        dr.polygon([(x + fl_ * 20, y - 8), (x + fl_ * 40, y - 34), (x + fl_ * 50, y - 28), (x + fl_ * 30, y)], fill=(110, 70, 40))
+        for lx in (-18, -8, 10, 20):
+            dr.line([(x + lx, y + 6), (x + lx, y + 28)], fill=(90, 56, 32), width=5)
+    save(np.asarray(d.filter(ImageFilter.GaussianBlur(0.8)), np.float32), name)
+
+
+def unterschrift(name, w=512, h=360):
+    """Zettel auf Hancocks Tisch: vergilbtes Papier, ein paar Zeilen Schreibschrift und riesig „John Hancock“."""
+    from PIL import ImageFont
+    arr = hexrgb('#f4ecd6') * np.ones((h, w, 1), np.float32)
+    arr *= (0.9 + 0.12 * noise(w, h, 5, 3, 117))[..., None]
+    d = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    dr = ImageDraw.Draw(d)
+    ink = (40, 28, 50)
+    small = ImageFont.truetype('C:/Windows/Fonts/segoesc.ttf', 22)
+    for i, t in enumerate(('Wir halten diese Wahrheiten', 'für selbstverständlich, dass', 'jeder Toast gleich ist ...')):
+        dr.text((40, 30 + i * 34), t, font=small, fill=ink)
+    big = ImageFont.truetype('C:/Windows/Fonts/segoescb.ttf', 84)
+    dr.text((24, 170), 'John Hancock', font=big, fill=ink)
+    dr.arc([30, 250, 480, 330], 190, 350, fill=ink, width=5)   # Unterstreichungs-Schnörkel
+    save(np.asarray(d.filter(ImageFilter.GaussianBlur(0.5)), np.float32), name)
+
+
 JOBS = {
     'gras.png': lambda n: speckle(n, ['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21),
     'fels.png': lambda n: speckle(n, ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22),
@@ -494,6 +544,9 @@ JOBS = {
     'schachboden.png': lambda n: schachbrett(n, '#465170', '#333b4f'),
     'warnstreifen.png': warnstreifen,
     'kreidetafel.png': kreidetafel,
+    'dielen_dunkel.png': lambda n: planks(n, 1024, 1024, 9, ['#6e4626', '#5e3c20', '#7a4e2a', '#664024'], grain=0.2, seed=113),
+    'landschaft_1776.png': landschaft,
+    'hancock_zettel.png': unterschrift,
 }
 
 if __name__ == '__main__':

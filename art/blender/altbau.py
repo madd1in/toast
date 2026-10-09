@@ -866,7 +866,219 @@ def build_labor(SC):
     return spec
 
 
-ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c'))}
+# ------------------------------------------------------------------ Gasthaus (1776)
+def bogenzwickel(B, name, cx, zs, r, top, y, depth, mat):
+    """Wandstück über einer Rundbogen-Öffnung: Rechteck bis 'top' mit halbkreisförmigem Ausschnitt (Bogen, Kämpfer bei zs)."""
+    bm = bmesh.new()
+    pts = [(cx - r, zs), (cx - r, top), (cx + r, top), (cx + r, zs)]
+    pts += [(cx + math.cos(a) * r, zs + math.sin(a) * r) for a in (math.pi * i / 24 for i in range(1, 24))]
+    f = bm.faces.new([bm.verts.new((x, 0, z)) for x, z in pts])
+    if f.normal.y > 0:
+        f.normal_flip()
+    return B.obj(name, bm, mat, None, (0, y + depth / 2, 0), smooth=False, solid=depth)
+
+
+def build_gasthaus(SC):
+    """Gasthaus „Zum Krummen Kamin“ 1776: Fachwerk mit Putz, Holztäfelung, dunkle Dielen, riesiger Steinkamin mit Kessel am
+    Kesselhaken und Glut, Kaminsims, neue glänzende Standuhr, langer Tisch mit Hancocks Zetteln, Tintenfass und Obstschale,
+    Sprossenfenster ins Grüne, schief hängendes Schild, offene Hintertür zum Garten, Kräuterbündel unter den Balken.
+    Feuer, Dampf, Funken und Sonnenstaub malt das Spiel weiter an den gezeichneten Stellen."""
+    B = R.Builder(SC)
+    tube = R.tube_in(SC)
+    WALL, FLOOR = tex('G_Putz', 'putz.png', 0.3, hi=0.0), tex('G_Dielen', 'dielen_dunkel.png', 0.4, rot=math.pi / 2, hi=0.0)
+    BEAM, PANEL, PANELD = toon('G_Balken', '#4e3218', hi=0.1), tex('G_Taefel', 'holz_moebel.png', 0.9, hi=0.05), toon('G_TaefelDunkel', '#5a3a1e', hi=0.05)
+    STONE, SOOT, IRON = tex('G_Kaminstein', 'mauer.png', 0.55, hi=0.0), toon('G_Russ', '#1e120a', hi=0.0), toon('G_Eisen', '#2a2a30', hi=0.1)
+    WOOD, WOODL, BRASS = toon('G_Holz', '#8a5a2e', hi=0.2), toon('G_HolzHell', '#a35a24', hi=0.45), toon('L_Messing', '#d8a83c', hi=0.75)
+    CEIL, PAPER, PEWTER = toon('G_Decke', '#3e2712', hi=0.0), tex('G_Zettel', 'hancock_zettel.png', uv=True, hi=0.0), toon('G_Zinn', '#a8a8b4', hi=0.7)
+    EMBER, LOG = glow(toon('G_Glut', '#ff7a2a', hi=0.9), 2.6), toon('G_Scheit', '#4a2a14', hi=0.05)
+    VIEW = unlit('G_Landschaft', 'landschaft_1776.png', 1.0)
+    FACE = tex('L_Zifferblatt', 'zifferblatt.png', uv=True, hi=0.3)
+    SERIF = 'C:/Windows/Fonts/georgiab.ttf'
+    # Öffnungen: Fenster (474..606 × 60..184 mit Rahmen) und Hintertür (842..928 bis 330)
+    wx0, wx1, wz0, wz1 = wx(486, YW), wx(594, YW), wz(172, YW), wz(72, YW)
+    tx0, tx1, tz1 = wx(846, YW), wx(928, YW), wz(122, YW)
+    flaeche(B, 'G_Wand', 'xz', -9.5, 9.5, 0, ZC + 0.2, [(wx0, wx1, wz0, wz1), (tx0, tx1, 0, tz1)], WALL, (0, YW + 0.2, 0), 0.4)
+    for sx in (-1, 1):
+        R.box(B, f'G_Seitenwand{sx}', (sx * 8.4, 10.0, ZC / 2), (0.4, 7.0, ZC), WALL, bevel=0)
+    R.box(B, 'G_Boden', (0, 9.6, -0.06), (19, 8.4, 0.12), FLOOR, bevel=0)
+    R.box(B, 'G_Decke', (0, 9.5, ZC + 0.1), (19, 8.4, 0.2), CEIL, bevel=0)
+    for i in range(10):   # Deckenbalken (an einem hängt das Gummihuhn)
+        R.box(B, f'G_Deckenbalken{i}', (-8.1 + i * 1.8, 9.6, ZC - 0.14), (0.3, 8.0, 0.28), BEAM, bevel=0.02)
+    # Holztäfelung unten (Lücke an der Hintertür)
+    zt = 1.3
+    for k, (xa, xb) in enumerate(((-9.5, tx0 - 0.2), (tx1 + 0.2, 9.5))):
+        R.box(B, f'G_Taefelung{k}', ((xa + xb) / 2, YW - 0.04, zt / 2), (xb - xa, 0.08, zt), PANEL, bevel=0)
+        R.box(B, f'G_TaefelLeiste{k}', ((xa + xb) / 2, YW - 0.1, zt + 0.03), (xb - xa, 0.12, 0.08), PANELD, bevel=0.01)
+        n = int((xb - xa) / 0.5)
+        for i in range(1, n):
+            ohne_kontur(R.box(B, f'G_Brettfuge{k}_{i}', (xa + i * (xb - xa) / n, YW - 0.085, zt / 2), (0.025, 0.01, zt - 0.1), PANELD, bevel=0))
+    # Fachwerk: Pfosten, Riegel, Streben (wie gezeichnet)
+    zr = wz(128, YW)
+    R.box(B, 'G_Riegel', (0, YW - 0.08, zr), (19, 0.16, 0.26), BEAM, bevel=0.02)
+    for k, gx in enumerate((8, 150, 380, 612, 790, 950)):
+        x = wx(gx, YW)
+        if tx0 - 0.3 < x < tx1 + 0.3:
+            continue
+        R.box(B, f'G_Pfosten{k}', (x, YW - 0.08, (zt + ZC) / 2), (0.26, 0.16, ZC - zt), BEAM, bevel=0.02)
+    for k, (a, b) in enumerate((((170, 136), (372, 228)), ((790, 136), (640, 228)))):
+        pa, pb = gp(a[0], a[1], YW - 0.08), gp(b[0], b[1], YW - 0.08)
+        d = pb - pa
+        R.box(B, f'G_Strebe{k}', (pa + pb) / 2, (d.length, 0.14, 0.22), BEAM, rot=(0, -math.atan2(d.z, d.x), 0), bevel=0.02)
+
+    # --- Kamin: Steinbrust mit Rundbogen, Kaminsims, Glut, Holzscheite, Kesselhaken mit Kessel ---
+    yF = 12.25
+    fx0, fx1 = wx(34, yF), wx(246, yF)
+    ox0, ox1 = wx(80, yF), wx(200, yF)
+    zs, zr_ = 1.25, (ox1 - ox0) / 2
+    ocx = (ox0 + ox1) / 2
+    ktop = 3.3   # Kaminbrust bis hier, darüber der schmalere Schlot
+    flaeche(B, 'G_Kamin', 'xz', fx0, fx1, 0, ktop, [(ox0, ox1, 0, ktop)], STONE, (0, yF + 0.45, 0), 0.9)
+    bogenzwickel(B, 'G_KaminBogen', ocx, zs, zr_, ktop, yF, 0.9, STONE)
+    cx0, cx1 = wx(96, YW), wx(190, YW)
+    R.box(B, 'G_Schlot', ((cx0 + cx1) / 2, YW - 0.35, (3.3 + ZC) / 2), (cx1 - cx0, 0.7, ZC - 3.3), STONE, bevel=0)
+    R.box(B, 'G_Feuerraum', (ocx, yF + 0.85, zs), (ox1 - ox0, 0.1, 2.6), SOOT, bevel=0)
+    R.box(B, 'G_Herd', (ocx, yF + 0.45, 0.03), (ox1 - ox0, 0.9, 0.06), toon('G_Herdstein', '#5a4a3e', hi=0.0), bevel=0)
+    m0, m1 = gp(24, 186, yF - 0.12), gp(256, 202, yF - 0.12)
+    R.box(B, 'G_Kaminsims', ((m0.x + m1.x) / 2, yF + 0.05, (m0.z + m1.z) / 2), (m1.x - m0.x, 0.4, m0.z - m1.z), WOOD, bevel=0.02)
+    msz = m0.z   # Oberkante Sims (der Holzbecher steht bei x 226)
+    for k, (gx, kind) in enumerate(((52, 'leuchter'), (90, 'teller'), (150, 'krug'), (186, 'teller'))):
+        x = wx(gx, yF + 0.05, msz)
+        if kind == 'leuchter':
+            B.cone(f'G_Leuchter{k}', msz, msz + 0.04, 0.07, 0.07, BRASS, None, xy=(x, yF + 0.05), seg=16, bevel=0)
+            B.cone(f'G_LeuchterStiel{k}', msz + 0.04, msz + 0.2, 0.02, 0.02, BRASS, None, xy=(x, yF + 0.05), seg=10, bevel=0)
+            B.cone(f'G_Kerze{k}', msz + 0.2, msz + 0.36, 0.025, 0.025, toon('L_Kerze', '#fff4dc', hi=0.3), None, xy=(x, yF + 0.05), seg=10, bevel=0)
+            ohne_kontur(B.sphere(f'G_Flamme{k}', (x, yF + 0.05, msz + 0.4), (0.016, 0.016, 0.035), glow(toon('L_Flamme', '#ffd27a', hi=0.95), 3.0), None))
+        elif kind == 'teller':
+            B.cone(f'G_Teller{k}', 0, 0.02, 0.17, 0.17, PEWTER, None, rot=(math.pi / 2 - 0.25, 0, 0), seg=28, bevel=0.005)
+            bpy.data.objects[f'G_Teller{k}'].location = (x, yF + 0.18, msz + 0.17)
+        else:
+            B.cone(f'G_Krug{k}', msz, msz + 0.22, 0.08, 0.07, PEWTER, None, xy=(x, yF + 0.05), seg=20, bevel=0.01)
+            B.torus(f'G_KrugHenkel{k}', (x + 0.08, yF + 0.05, msz + 0.12), 0.05, 0.012, PEWTER, None, rot=(math.pi / 2, 0, 0), seg=16, sseg=6)
+    # Glut und Scheite im Feuerraum (die Flammen malt das Spiel), Kesselhaken mit Kessel (Dampf im Spiel bei 140/248)
+    for k, (dx, a) in enumerate(((-0.35, 0.3), (0.0, -0.2), (0.35, 0.15))):
+        B.rod(f'G_Scheit{k}', (ocx + dx - 0.35, yF + 0.55, 0.12), (ocx + dx + 0.35, yF + 0.45 + a * 0.2, 0.14), 0.07, LOG, None, seg=12)
+    for k in range(9):
+        rnd = random.Random(40 + k)
+        ohne_kontur(B.sphere(f'G_Glutstueck{k}', (ocx + rnd.uniform(-0.6, 0.6), yF + rnd.uniform(0.35, 0.7), 0.08), (0.08, 0.06, 0.04), EMBER, None))
+    R.box(B, 'G_Rost', (ocx, yF + 0.5, 0.06), (1.3, 0.5, 0.04), IRON, bevel=0.01)
+    lamp(SC, 'G_LichtFeuer', (ocx, yF + 0.2, 0.5), 420, (1.0, 0.55, 0.22), 0.4)
+    ke = gp(140, 256, yF + 0.5)
+    B.rod('G_Kesselhaken', (ox0 + 0.1, yF + 0.5, ke.z + 0.75), (ke.x, yF + 0.5, ke.z + 0.75), 0.025, IRON, None, seg=8)
+    B.rod('G_Kesselkette', (ke.x, yF + 0.5, ke.z + 0.75), (ke.x, yF + 0.5, ke.z + 0.05), 0.012, IRON, None, seg=6)
+    kz = wz(290, yF + 0.5)
+    B.sphere('G_Kessel', (ke.x, yF + 0.5, (ke.z + kz) / 2 - 0.02), (0.36, 0.3, (ke.z - kz) / 2 + 0.04), IRON, None)
+    B.cone('G_KesselRand', ke.z - 0.02, ke.z + 0.04, 0.3, 0.3, IRON, None, xy=(ke.x, yF + 0.5), seg=32, bevel=0.01)
+    B.torus('G_KesselBuegel', (ke.x, yF + 0.5, ke.z + 0.04), 0.3, 0.015, IRON, None, rot=(math.pi / 2, 0, 0), seg=32, sseg=6, scale=(1, 1, 1.4))
+    # Besen am Kamin
+    bx_ = wx(262, yF + 0.2)
+    B.rod('G_Besenstiel', (bx_, yF + 0.2, 0.32), (bx_ + 0.16, yF + 0.45, 1.75), 0.025, WOODL, None, seg=8)
+    B.cone('G_Besen', 0.0, 0.36, 0.17, 0.05, toon('G_Reisig', '#c8a050', hi=0.05), None, xy=(bx_, yF + 0.2), seg=12, bevel=0, scale=(1, 0.5, 1))
+    # Kräuterbündel unter dem Balken
+    for k, gx in enumerate((300, 340, 884)):
+        p = gp(gx, 40, 11.0)
+        B.rod(f'G_KrautSchnur{k}', (p.x, 11.0, ZC - 0.28), (p.x, 11.0, ZC - 0.6), 0.006, toon('G_Schnur', '#c8a870', hi=0.0), None, seg=4)
+        KR = toon(f'G_Kraut{k}', ['#5a8a3a', '#7a9a4a', '#8a6a9a'][k], hi=0.0)
+        B.cone(f'G_KrautBund{k}', ZC - 0.66, ZC - 0.58, 0.035, 0.03, toon('G_Schnur', '#c8a870', hi=0.0), None, xy=(p.x, 11.0), seg=8, bevel=0)
+        for j in range(7):   # Blätter hängen kopfüber, unten gespreizt
+            a = j * 0.9
+            B.sphere(f'G_Kraut{k}_{j}', (p.x + math.cos(a) * 0.06, 11.0 + math.sin(a) * 0.04, ZC - 0.8 - (j % 3) * 0.04), (0.035, 0.035, 0.16), KR, None, rot=(math.sin(a) * 0.3, -math.cos(a) * 0.3, 0))
+
+    # --- Standuhr 1776 (neu, gerade, glänzend; Pendel als Sprite) ---
+    uy = 12.75
+    uhr, uhr_fenster, pendel = standuhr(SC, B, 'G_Uhr', wx(320, uy), uy, False, (toon('G_UhrHolz', '#a35a24', hi=0.55), toon('G_UhrHolzDunkel', '#6a3a1c', hi=0.3), BRASS, toon('L_Dunkel', '#160c12', hi=0.05), FACE))
+
+    # --- Tisch mit Zetteln, Tintenfass, Feder und Obstschale ---
+    yT = 12.0
+    t0, t1 = wx(384, yT), wx(654, yT)
+    tz = wz(290, yT)
+    R.box(B, 'G_Tischplatte', ((t0 + t1) / 2, yT + 0.5, tz - 0.04), (t1 - t0, 1.0, 0.08), WOODL, bevel=0.02)
+    R.box(B, 'G_Zarge', ((t0 + t1) / 2, yT + 0.5, tz - 0.14), (t1 - t0 - 0.2, 0.86, 0.12), WOOD, bevel=0.01)
+    for k, (x, y) in enumerate(((t0 + 0.25, yT + 0.15), (t1 - 0.25, yT + 0.15), (t0 + 0.25, yT + 0.85), (t1 - 0.25, yT + 0.85))):
+        R.box(B, f'G_Tischbein{k}', (x, y, (tz - 0.08) / 2), (0.12, 0.12, tz - 0.08), WOOD, bevel=0.01)
+    for k, (gx, dy, rz, s) in enumerate(((574, 0.4, 0.12, 1.0), (622, 0.55, -0.2, 0.8), (520, 0.65, 0.35, 0.7))):
+        x = wx(gx, yT + dy, tz)
+        quad(B, f'G_Zettel{k}', 0.5 * s, 0.36 * s, PAPER, (x, yT + dy, tz + 0.003 + k * 0.002), rot=(-math.pi / 2, 0, rz))
+    ix = wx(530, yT + 0.3, tz)
+    B.cone('G_Tintenfass', tz, tz + 0.09, 0.07, 0.05, toon('G_Tinte', '#1d1d2a', hi=0.6), None, xy=(ix, yT + 0.3), seg=16, bevel=0.005)
+    tube('G_Gaensefeder', [(ix, yT + 0.3, tz + 0.06), (ix + 0.06, yT + 0.33, tz + 0.25), (ix + 0.14, yT + 0.38, tz + 0.42)], 0.018, toon('L_Weiss', '#f4efe6', hi=0.5), None, tip=0.2)
+    ox_ = wx(468, yT + 0.4, tz)
+    B.cone('G_Obstschale', tz, tz + 0.12, 0.13, 0.24, toon('G_Schale', '#c8a060', hi=0.3), None, xy=(ox_, yT + 0.4), seg=28, bevel=0.01)
+    APPLE = toon('G_Apfel', '#e0302a', hi=0.7)
+    aepfel = []
+    for k, (dx, dz) in enumerate(((-0.11, 0.14), (0.12, 0.15), (0.0, 0.27))):
+        a_ = B.sphere(f'G_Apfel{k}', (ox_ + dx, yT + 0.4, tz + dz), (0.1, 0.1, 0.095), APPLE, None)
+        ohne_kontur(B.rod(f'G_Apfelstiel{k}', (ox_ + dx, yT + 0.4, tz + dz + 0.08), (ox_ + dx + 0.02, yT + 0.4, tz + dz + 0.14), 0.008, toon('G_Stiel', '#5a3a1e', hi=0.0), None, seg=4))
+        aepfel.append(a_)
+        aepfel.append(bpy.data.objects[f'G_Apfelstiel{k}'])
+    # Leuchter auf dem Tisch
+    lx = wx(626, yT + 0.75, tz)
+    B.cone('G_TischLeuchter', tz, tz + 0.05, 0.08, 0.08, BRASS, None, xy=(lx, yT + 0.75), seg=16, bevel=0)
+    B.cone('G_TischKerze', tz + 0.05, tz + 0.3, 0.03, 0.03, toon('L_Kerze', '#fff4dc', hi=0.3), None, xy=(lx, yT + 0.75), seg=10, bevel=0)
+    ohne_kontur(B.sphere('G_TischFlamme', (lx, yT + 0.75, tz + 0.35), (0.02, 0.02, 0.04), glow(toon('L_Flamme', '#ffd27a', hi=0.95), 3.0), None))
+    lamp(SC, 'G_LichtKerze', (lx, yT + 0.6, tz + 0.4), 30, (1.0, 0.8, 0.5), 0.1, dist=2.0)
+
+    # --- Fenster ins Grüne: Sprossen 3 × 3, Rahmen, Fensterbank mit Geranie ---
+    quad(B, 'G_Aussicht', 5.0, 3.2, VIEW, ((wx0 + wx1) / 2, YW + 2.4, (wz0 + wz1) / 2 + 0.2))
+    bpy.data.objects['G_Aussicht'].visible_shadow = False
+    WF = toon('G_Fensterholz', '#5a3a1e', hi=0.2)
+    for i in (1, 2):
+        x = wx0 + (wx1 - wx0) * i / 3
+        R.box(B, f'G_SprosseV{i}', (x, YW + 0.2, (wz0 + wz1) / 2), (0.07, 0.07, wz1 - wz0), WF, bevel=0)
+        z = wz0 + (wz1 - wz0) * i / 3
+        R.box(B, f'G_SprosseH{i}', ((wx0 + wx1) / 2, YW + 0.2, z), (wx1 - wx0, 0.07, 0.07), WF, bevel=0)
+    for k, (cx_, cz_, sx_, sz_) in enumerate((((wx0 + wx1) / 2, wz1 + 0.09, wx1 - wx0 + 0.36, 0.18), ((wx0 + wx1) / 2, wz0 - 0.07, wx1 - wx0 + 0.4, 0.14),
+                                                (wx0 - 0.09, (wz0 + wz1) / 2, 0.18, wz1 - wz0), (wx1 + 0.09, (wz0 + wz1) / 2, 0.18, wz1 - wz0))):
+        R.box(B, f'G_Fensterrahmen{k}', (cx_, YW - 0.05, cz_), (sx_, 0.12, sz_), WF, bevel=0.015)
+    R.box(B, 'G_Fensterbank', ((wx0 + wx1) / 2, YW - 0.13, wz0 - 0.16), (wx1 - wx0 + 0.5, 0.32, 0.06), WF, bevel=0.01)
+    px_ = wx0 + 0.35
+    B.cone('G_Blumentopf', wz0 - 0.13, wz0 + 0.07, 0.08, 0.11, toon('G_Ton', '#c8643a', hi=0.1), None, xy=(px_, YW - 0.14), seg=16, bevel=0.01)
+    for k in range(5):
+        a = k * 1.25
+        B.sphere(f'G_Geranie{k}', (px_ + math.cos(a) * 0.08, YW - 0.16 + math.sin(a) * 0.04, wz0 + 0.16 + (k % 2) * 0.05), (0.06, 0.06, 0.06), toon('G_Bluete', '#e8304a', hi=0.3), None)
+    for k in range(4):
+        a = k * 1.6 + 0.5
+        B.sphere(f'G_Blatt{k}', (px_ + math.cos(a) * 0.1, YW - 0.16, wz0 + 0.1), (0.07, 0.04, 0.035), toon('G_Laub', '#3f8a3a', hi=0.1), None, rot=(0, 0, a))
+
+    # --- Schild „Zum Krummen Kamin“ (hängt schief, wie alles hier) ---
+    s0, s1 = gp(650, 104, YW - 0.08), gp(780, 64, YW - 0.08)
+    R.box(B, 'G_Schild', ((s0.x + s1.x) / 2, YW - 0.08, (s0.z + s1.z) / 2), (s1.x - s0.x, 0.07, s1.z - s0.z), WOOD, rot=(0, 0.07, 0), bevel=0.03)
+    text(SC, 'G_SchildText', 'Zum Krummen Kamin', 0.17, glow(toon('G_SchildSchrift', '#f2d48a', hi=0.3), 1.2), ((s0.x + s1.x) / 2, YW - 0.125, (s0.z + s1.z) / 2 - 0.03), font=SERIF, extrude=0.006, rot=(math.pi / 2, 0.07, 0))
+    for k, u in enumerate((0.15, 0.85)):
+        x = s0.x + (s1.x - s0.x) * u
+        B.rod(f'G_SchildKette{k}', (x, YW - 0.08, s1.z - 0.02 + (0.5 - u) * 0.05), (x, YW - 0.05, s1.z + 0.3), 0.008, IRON, None, seg=4)
+
+    # --- Hintertür (offen) mit Blick in den Garten ---
+    quad(B, 'G_Gartenblick', 3.0, 3.4, VIEW, ((tx0 + tx1) / 2 + 0.4, YW + 1.6, 1.6), su=0.6, sv=1.0)
+    bpy.data.objects['G_Gartenblick'].visible_shadow = False
+    for k, (cx_, cz_, sx_, sz_) in enumerate((((tx0 + tx1) / 2, tz1 + 0.09, tx1 - tx0 + 0.42, 0.18), (tx0 - 0.1, tz1 / 2, 0.2, tz1), (tx1 + 0.1, tz1 / 2, 0.2, tz1))):
+        R.box(B, f'G_Tuerrahmen{k}', (cx_, YW - 0.05, cz_), (sx_, 0.12, sz_), BEAM, bevel=0.015)
+    R.box(B, 'G_Schwelle', ((tx0 + tx1) / 2, YW + 0.15, 0.03), (tx1 - tx0, 0.4, 0.06), BEAM, bevel=0.01)
+    TD = B.empty('G_Tuerangel')   # Angel an der rechten Zarge: so verdeckt das offene Türblatt den Gartenblick nicht
+    TD.location, TD.rotation_euler = (tx1 - 0.04, YW + 0.05, 0), (0, 0, 1.3)
+    R.box(B, 'G_TuerBlatt', (-(tx1 - tx0) / 2 + 0.03, -0.04, tz1 / 2), (tx1 - tx0 - 0.06, 0.07, tz1 - 0.02), toon('G_Tuerholz', '#7a4a22', hi=0.2), TD, bevel=0.015)
+    for k, z in enumerate((0.5, 1.4, 2.3)):
+        R.box(B, f'G_TuerLeiste{k}', (-(tx1 - tx0) / 2 + 0.03, 0.005, z), (tx1 - tx0 - 0.16, 0.03, 0.12), BEAM, TD, bevel=0.01)
+    B.sphere('G_TuerRing', (-(tx1 - tx0) + 0.16, -0.09, 1.2), (0.05, 0.02, 0.05), IRON, TD)
+
+    # Licht: Nachmittagssonne durchs Fenster (Strahlen schräg nach rechts unten), Feuer, warmes Grundlicht von vorn
+    R.sun(SC, (-0.63, 0, 0.68), 4.5, (1.0, 0.9, 0.7))
+    R.sun(SC, (1.2, 0.0, -0.3), 0.9, (1.0, 0.85, 0.7))
+    lamp(SC, 'G_LichtTuer', ((tx0 + tx1) / 2, YW - 0.6, 1.6), 60, (1.0, 0.95, 0.8), 0.6, dist=2.5)
+    spec = {
+        'anchors': {'Fenster': [bpy.data.objects[f'G_Fensterrahmen{k}'] for k in range(4)], 'Schild': [bpy.data.objects['G_Schild']],
+                    'Kamin': [bpy.data.objects['G_Kamin'], bpy.data.objects['G_KaminBogen']],
+                    'Kessel': [bpy.data.objects['G_Kessel']], 'Uhr': [uhr], 'Uhrfenster': [uhr_fenster],
+                    'Tisch': [bpy.data.objects['G_Tischplatte']] + [bpy.data.objects[f'G_Tischbein{k}'] for k in range(4)],
+                    'Obstschale': [bpy.data.objects['G_Obstschale']] + aepfel, 'Tuer': [bpy.data.objects[f'G_Tuerrahmen{k}'] for k in range(3)]},
+        'points': {'grail': (wx(226, yF + 0.05, msz), yF + 0.05, msz), 'grog': (wx(404, yT + 0.2, tz), yT + 0.2, tz), 'kessel': (ke.x, yF + 0.5, ke.z + 0.06),
+                   'feuer': (ocx, yF + 0.3, 0.1), 'fensterGlas0': (wx0, YW, wz1), 'fensterGlas1': (wx1, YW, wz0)},
+        'sprites': {'pendel': (pendel, [o for o in SC.objects if o.parent == pendel])},
+        'variants': {'apfel': ([], aepfel[4:6])},
+    }
+    return spec
+
+
+ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c')), 'gasthaus': (build_gasthaus, ('#d8b88a', '#4a2e18'))}
 
 
 # ------------------------------------------------------------------ Porträts für Gemälde (texturen.py: gemaelde())
