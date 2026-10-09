@@ -64,13 +64,14 @@ function newState() {
 }
 const NPCS = ['drfred', 'green', 'gertrude', 'hancock', 'wache', 'lila'];
 // Meilensteine für die Fortschrittsanzeige und den "Rätsel gelöst"-Jingle
-const MILESTONES = ['kaffee', 'brot', 'tree', 'zelle', 'cellIn', 'breadIn', 'toast', 'guardGone'];
+const MILESTONES = ['kaffee', 'brot', 'tree', 'zelle', 'cellIn', 'breadIn', 'toast', 'fahne', 'kostuem', 'lachkiste', 'guardGone'];
 function milestoneDone(m) { const f = fl(); return !!(m === 'breadIn' ? (f.breadIn || f.toast) : f[m]); }
 function progress() { return MILESTONES.filter(milestoneDone).length; }
 // Kapitel-Titelkarten: erscheinen, sobald ein Meilenstein erreicht ist
 const CHAPTERS = {
   brot: 'Das Freundlichkeits-Brot', tree: 'Ein Baum für die Zukunft', zelle: 'Strom aus der Laterne', cellIn: 'Der Gut-O-Mat hat Saft',
-  breadIn: 'Brot im Schlitz', toast: 'Der Gut-Toast', kaffee: 'Koffein für die Wache', guardGone: 'Der Weg zum Thron',
+  breadIn: 'Brot im Schlitz', toast: 'Der Gut-Toast', kaffee: 'Ein Kaffee zum Mitnehmen', guardGone: 'Der Weg zum Thron',
+  fahne: 'Die Ur-Fahne von 1776', kostuem: 'Kostümprobe', lachkiste: 'Luft raus!',
 };
 // Dr. Fred kommentiert das Gut-O-Mat-Minispiel
 const TOAST_LINES = {
@@ -87,7 +88,10 @@ const NOTES = [
   ['breadIn', 'Das Brot liegt im Gut-O-Mat.'],
   ['toast', 'Der Gut-Toast ist fertig gebacken.'],
   ['kaffee', 'Bernard hat am KAFFEE-O-MAT einen Kaffee gezogen.'],
-  ['guardGone', 'Die müde Wache hat den Weg zum Thron freigegeben.'],
+  ['fahne', 'Gertrude hat im Kaffeerausch ein Tentakel-Kostüm genäht – Hancock hat es zur Nationalfahne erklärt.'],
+  ['kostuem', 'Laverne hat die Ur-Fahne im Zukunftsgarten eingeholt: Sie ist ein Tentakel-Kostüm.'],
+  ['lachkiste', 'Bernard hat den Clown im Konferenzsaal entlüftet und die Lach-Box geborgen.'],
+  ['guardGone', 'Die Wache hat Laverne im Kostüm für Seine Lilaheit gehalten und den Weg zum Thron freigegeben.'],
 ];
 // Nebenbei-Sprüche der NPCs (laufen nicht blockierend, wenn gerade nichts passiert)
 const BARKS = {
@@ -144,7 +148,9 @@ const ACH = [
   { id: 'post', name: 'Klo-Express', desc: 'Den ersten Gegenstand durch die Zeit geschickt.' },
   { id: 'apfel', name: 'Vitamin Kolonie', desc: 'Hoagie hat einen Apfel aus dem Jahr 1776 gegessen.' },
   { id: 'baum', name: 'Gärtner der Geschichte', desc: 'Einen Baum gepflanzt, der 200 Jahre lang wächst.' },
-  { id: 'kaffee', name: 'Koffein-Kurier', desc: 'Die Tentakel-Wache in die Pause geschickt.' },
+  { id: 'kaffee', name: 'Koffein-Kurier', desc: 'Oma Gertrude mit Kaffee zur Turbo-Näherin gemacht.' },
+  { id: 'kostuem', name: 'Kostümprobe', desc: 'Die Wache mit Kostüm und bösem Lachen hereingelegt.' },
+  { id: 'clown', name: 'Luft raus', desc: 'Lachi, den aufblasbaren Clown, entlüftet.' },
   { id: 'boese', name: 'Fast superböse', desc: 'Den Gut-O-Mat auf SUPERBÖSE starten wollen.' },
   { id: 'sticks', name: 'Archäologe', desc: 'Hoagies Drumsticks nach 250 Jahren gefunden.' },
   { id: 'rock', name: 'Tentakel-Rock', desc: 'Dem Grünen Tentakel zu seinem ersten Solo verholfen.' },
@@ -327,6 +333,10 @@ const ITEMS = {
   zelle: { name: 'Energiezelle', look: 'Eine Tentakel-Energiezelle. Sie summt, leuchtet und ist ein bisschen warm. Wie ein Haustier.' },
   lapfel: { name: 'Zukunfts-Apfel', alone: true, look: 'Ein Apfel von Hoagies Baum. 200 Jahre alt und trotzdem knackig.' },
   toast: { name: 'Gut-Toast', look: 'Der Gut-Toast. Warm, knusprig, und er sieht einen irgendwie freundlich an.' },
+  schnittmuster: { name: 'Kostüm-Schnittmuster', look: byChar({ laverne: 'Die Rückseite des Plakats: „Werde ein Tentakel! – Bürger-Kostüm zum Selbernähen, Größe M (Mensch)“. Ich kann nicht nähen. Ich kann nur auftrennen.', hoagie: 'Ein Schnittmuster für ein Tentakel-Kostüm. Aus der Zukunft. Riecht nach Schleim. Oma Gertrude kann bestimmt nähen.', bernard: 'Ein Bastelbogen: „Werde ein Tentakel!“ Mit Schnittlinien und Augenlöchern. Ich bin eher der Typ „Werde ein Taschenrechner“.' }) },
+  schere: { name: 'Schneiderschere', look: byChar({ hoagie: 'Oma Gertrudes Schneiderschere. Schwer, scharf und aus echtem Kolonial-Eisen.', bernard: 'Gertrudes Schneiderschere, Baujahr 1776. Scharf genug, um Geschichte zuzuschneiden. Oder Luftballons.', laverne: 'Eine Schere. Ich muss mich beherrschen, nichts aufzuschneiden.' }) },
+  lachkiste: { name: 'Lach-Box', look: 'Die Lach-Box aus Lachis Bauch. Schalter: KICHERN – LACHEN – BÖSES LACHEN. Er klemmt auf BÖSES LACHEN.' },
+  kostuem: { name: 'Tentakel-Kostüm', look: 'Gertrudes Tentakel-Kostüm aus Fahnenstoff: rot-weiß gestreift, oben blau mit Sternen, zwei Augenlöcher. Am Saum hat Hancock unterschrieben. Riesig.', nosend: 'Das Kostüm passt nur mir. Hoagie würde es sprengen, und Bernard würde darin verschwinden.' },
 };
 
 const KLO_NEEDED = {
@@ -346,6 +356,9 @@ const SEND_LINES = {
   zelle: () => 'Strom per Klo-Express. Die Zukunft ist eklig, aber praktisch.',
   toast: to => to === 'laverne' ? 'Flieg, kleiner Toast! Flieg zu Laverne!' : 'Hm. Ob das die richtige Adresse war?',
   muenze: () => 'Ein Vierteldollar quer durch die Zeit. Trinkgeld.',
+  schnittmuster: to => to === 'hoagie' ? 'Flieg, Schnittmuster! Hoagie, such jemanden mit Nadel und Faden.' : 'Ein Bastelbogen auf Zeitreise. Hoffentlich knickt er nicht.',
+  schere: to => to === 'bernard' ? 'Eine Schere für Bernard. Lauf damit bloß nicht, Mann.' : 'Schere durchs Klo. Hoffentlich schneidet sie kein Loch in die Zeit.',
+  lachkiste: to => to === 'laverne' ? 'Eine kichernde Kiste für Laverne. Sie wird sie lieben. Das macht mir Angst.' : 'Eine Lach-Box durch die Kanalisation der Zeit. Klingt nach einem Albtraum.',
 };
 const FALLBACK = {
   bernard: { pick: ['Das kann ich nicht nehmen.', 'Physikalisch unmöglich. Ich habe es durchgerechnet.'], open: ['Das lässt sich nicht öffnen.'], close: ['Das lässt sich nicht schließen.'], push: ['Es bewegt sich nicht. Die Hebelgesetze sind gegen mich.'], pull: ['Es rührt sich nicht.'], talk: ['Ich rede nicht mit Gegenständen. Zumindest nicht, wenn jemand zuschaut.'], use: ['Das funktioniert so nicht.', 'Das ergibt wissenschaftlich keinen Sinn.'], give: ['Das gebe ich lieber nicht her.'], look: ['Sieht ganz normal aus.'] },
@@ -470,6 +483,60 @@ async function BAKE() {
   await say('hoagie', 'Ich würde es ja essen. Aber die Welt geht vor. Knapp.');
 }
 RULES['give i:zucker a:gertrude'] = BAKE;
+// Gertrude näht das Kostüm aus dem Schnittmuster – aber nur mit Kaffee im Blut (beides in beliebiger Reihenfolge)
+async function GERTRUDE_NAEHT() {
+  const g = 'gertrude', h = 'hoagie', j = 'hancock';
+  await say(g, 'Na dann: Kaffee und Muster. Mehr braucht eine Frau nicht.');
+  Sound.sfx('slurp'); act(g, 'eat', 900); await wait(1000);
+  await say(g, 'Mmh. Bitter. Blubbernd. Und hier steht: „Wirkung garantiert in drei Sekunden“?');
+  await wait(300); Sound.sfx('zap'); shake(900, 4); G.kaffeeRausch = G.t;
+  await say(g, 'OH! OH! ICH SEHE GERÄUSCHE! ICH HÖRE FARBEN! WO IST MEINE NADEL?!');
+  ACT.gertrude.fixedDir = false;
+  await fadeTo(1, 250, 'black'); G.caption = 'Drei Sekunden später ...'; Sound.sfx('sew'); await wait(2300); G.caption = null;
+  fl().fahne = true; Object.assign(ACT.gertrude, { x: 640, y: 398, dir: 1 }); ACT.hancock.dir = 1;
+  await fadeTo(0, 300);
+  await say(g, 'FERTIG! Ein Tentakel zum Anziehen: rot und weiß gestreift, oben blau mit Sternen. Ich hab ihn auf den Besenstiel gesteckt, damit er nicht knittert.');
+  await say(g, 'Das war der Stoff, den ich für eine Fahne zurückgelegt hatte. Aber wer braucht schon eine Fahne?');
+  Sound.sfx('fanfare'); await wait(400);
+  await say(j, 'MADAM! Was ist DAS?!');
+  await say(g, 'Ein Tentakel, Mister Hancock. Für den Jungen.');
+  await say(j, 'Sterne! Streifen! Und diese stolze, aufrechte Form! Das ist sie: die Fahne unserer neuen Nation!');
+  await say(h, 'Äh. Das ist eigentlich ein Kostüm.');
+  await say(j, 'Und darauf setze ich meinen Namen. GROSS!');
+  Sound.sfx('quill'); await wait(1500);
+  await say(j, 'Diese Fahne wird auf ewig über diesem Land wehen! Oder wenigstens, bis jemand sie klaut.');
+  await say(h, 'Hm. In zweihundert Jahren hängt die bestimmt immer noch irgendwo. Laverne sollte mal nach Fahnen gucken.');
+  await say(g, 'Hier, mein Junge, nimm meine Schneiderschere mit. Sonst nähe ich in diesem Rausch noch die Vorhänge zu Fahnen.');
+  addItem('schere', 'hoagie'); unlock('kaffee');
+  // Zeitsprung: im Zukunftsgarten tauscht der Fahnenmast Lilas Wappen gegen die Ur-Fahne von 1776
+  await fadeTo(1, 300, 'black');
+  G.viewRoom = 'fgarten'; G.caption = 'Unterdessen, zweihundert Jahre später ...';
+  await fadeTo(0, 300); await wait(900);
+  Sound.sfx('reveal'); G.fahneBlitz = G.t; fl().urFahne = 1; await wait(1500);
+  if (ACT.laverne.room === 'fgarten') await say('laverne', 'Huch! Seit wann weht da ein gestreifter Tentakel am Fahnenmast?');
+  else await wait(800);
+  await fadeTo(1, 300, 'black'); G.viewRoom = null; G.caption = null; await fadeTo(0, 300);
+  walkTo('gertrude', 196, 398).then(() => { ACT.gertrude.dir = 1; });
+}
+RULES['give i:schnittmuster a:gertrude'] = async () => {
+  takeItem('schnittmuster', 'hoagie'); fl().musterBeiGertrude = 1;
+  await say('hoagie', 'Oma Gertrude, kannst du mir das hier nähen? Ist für eine Freundin. In der Zukunft.');
+  await say('gertrude', '„Werde ein Tentakel“? Was um alles in der Welt ist ein Tentakel?');
+  await say('hoagie', 'So eine Art … sehr selbstbewusster Gartenschlauch.');
+  if (fl().kaffeeBeiGertrude) return GERTRUDE_NAEHT();
+  await say('gertrude', 'Ich würde ja, mein Junge. Aber ich bin hundemüde. Ich habe die ganze Nacht Hancocks Unterschriften vom Tisch geschrubbt.');
+  await say('gertrude', 'Seit der Tee-Party trinken anständige Patrioten nur noch Kaffee – und deshalb gibt es in den ganzen Kolonien keine einzige Bohne mehr.');
+  await say('gertrude', 'Bring mir einen Kaffee, dann nähe ich dir, was du willst. Das Muster behalte ich solange hier.');
+};
+RULES['give i:kaffee a:gertrude'] = async () => {
+  takeItem('kaffee', 'hoagie'); fl().kaffeeBeiGertrude = 1;
+  await say('hoagie', 'Oma Gertrude, ich hab dir einen Kaffee mitgebracht. Aus der Zukunft. Er blubbert, das ist normal.');
+  if (fl().musterBeiGertrude) return GERTRUDE_NAEHT();
+  await say('gertrude', 'KAFFEE?! Echter Kaffee! Den hebe ich mir auf, bis es richtig was zu tun gibt.');
+  await say('gertrude', 'Wenn ich den jetzt trinke, putze ich vor lauter Schwung das ganze Haus. Zweimal. Und danach Mister Hancock.');
+};
+RULES['look o:fahne1776'] = line('Die neue Nationalfahne der Kolonien. Sie hat Augenlöcher. Hancock sagt, das macht sie „wachsam“.');
+multi(['pick', 'pull', 'push', 'use'], 'o:fahne1776', async () => { await say('hancock', 'Finger weg von der Fahne, Bürger! Die gehört jetzt der Geschichte. Und ein bisschen mir.'); });
 RULES['give i:apfel a:gertrude'] = async () => {
   await say('gertrude', 'Den hast du doch aus meiner Schale! Iss ihn ruhig.');
   await say('gertrude', 'Die Kerne pflanze ich immer im Garten. Ein Baum für die Ur-Ur-Enkel!');
@@ -587,34 +654,107 @@ RULES['pick o:baum'] = async () => {
 };
 RULES['use i:lapfel'] = line('Ich esse doch keinen Apfel, den Hoagie gepflanzt hat. Wer weiß, was der vorher angefasst hat.');
 RULES['use o:baumplatz'] = line('Hier etwas pflanzen? Bis das groß ist, bin ich alt. Und das hier ist schon die Zukunft.');
+// Fahnenmast: erst Lilas Wappen, nach Gertrudes Näherei 1776 die „Ur-Fahne“ – in Wahrheit das Tentakel-Kostüm
+RULES['look o:fahnenmast'] = line(() => fl().kostuem ? 'Ein leerer Fahnenmast. Die Fahne habe ich. Lila wird toben. Ich freue mich schon.'
+  : fl().urFahne ? 'Die Ur-Fahne der Menschen von 1776! Ein Schild sagt: „Beutestück Seiner Lilaheit. Durfte hängen bleiben, weil sie aussieht wie ein Tentakel.“ Sie hat … Augenlöcher?'
+    : 'Ein Fahnenmast mit Lilas Wappen: ein Tentakel mit Krone in einem goldenen Kreis. Bescheidenheit ist nicht so sein Ding.');
+async function FAHNE_EINHOLEN() {
+  if (!fl().urFahne) return s('Lilas Fahne? Die will ich nicht. Die ist mir zu lila.');
+  if (fl().kostuem) return s('Da hängt nichts mehr. Außer dem Seil. Und meinem Ruf.');
+  await s('Dann hole ich die Fahne mal ein. Für die Menschheit!');
+  act('laverne', 'pull', 1500); Sound.sfx('climb'); await wait(1400);
+  fl().kostuem = 1; addItem('kostuem'); Sound.sfx('unfold');
+  await s('Moment. Das ist gar keine Fahne. Das ist ein Tentakel-Kostüm! Mit Augenlöchern!');
+  await s('Und am Saum steht in riesiger Schrift: „John Hancock“. Oma Gertrude hat ganze Arbeit geleistet.');
+}
+multi(['pull', 'pick', 'use', 'open'], 'o:fahnenmast', FAHNE_EINHOLEN);
+RULES['push o:fahnenmast'] = line('Der Mast steht bombenfest. Lila baut nichts, was umfallen könnte. Außer Ausreden.');
+RULES['use i:kostuem'] = async () => {
+  const f = fl();
+  if (curId() !== 'laverne') return s('Das passt mir nicht.');
+  f.kostuemAn = !f.kostuemAn; Sound.sfx('unfold');
+  if (!f.kostuemAn) return s('Und wieder raus. Da drin war es warm und roch nach 1776.');
+  if (f.kostuemProbe) return s('Wieder rein. Ich bin ein Tentakel. Ein stolzer, gestreifter Tentakel.');
+  f.kostuemProbe = 1;
+  await s('Passt wie angegossen. Ich sehe aus wie ein Tentakel, der sich als Fahne verkleidet hat. Oder umgekehrt.');
+  await s('Meine Nase guckt raus. Das gehört so. Das ist … Kunst.');
+};
 RULES['use i:steth o:statue'] = line('Kein Herzschlag. Wie beim Original, vermute ich.');
 RULES['use i:steth o:laterne'] = line('Sie summt in C-Dur. Faszinierend.');
 
 // ---------- Zukunft: Palast ----------
-multi(['walk', 'open', 'use'], 'o:thron_tuer', async () => {
-  if (!fl().guardGone) {
-    await say('wache', 'HALT! Niemand betritt den Thronsaal Seiner Lilaheit!');
+// Die Wache lässt nur Tentakel durch – und erkennt sie am bösen Lachen Seiner Lilaheit
+async function WACHE_PRUEFT() {
+  const f = fl();
+  if (!f.kostuemAn) {
+    await say('wache', 'HALT! Niemand betritt den Thronsaal Seiner Lilaheit! Schon gar kein Mensch!');
+    if (f.kostuem) await say('laverne', 'Vielleicht sollte ich mich etwas … tentakeliger anziehen.');
     return;
   }
+  await say('wache', 'HALT! Ah … ein Tentakel. Ein ziemlich gestreifter Tentakel. Mit Nase.');
+  await say('wache', 'Jeder kann sich ein Kostüm nähen. Beweis es! Lach wie Seine Lilaheit!');
+  await say('laverne', 'Hihi?');
+  await say('wache', 'Das war ein Kichern. Tentakel kichern nicht. Seine Lilaheit lacht BÖSE. Aus dem Bauch heraus. Mit Echo.');
+  f.lachTest = 1;
+  if (has('lachkiste', 'laverne')) await say('laverne', 'Mit Echo. Da hätte ich vielleicht was in der Tasche.');
+}
+multi(['walk', 'open', 'use'], 'o:thron_tuer', async () => {
+  if (!fl().guardGone) return WACHE_PRUEFT();
   Sound.sfx('door');
   return goRoom('laverne', 'thron', 130, 402, 1);
 });
-async function COFFEE_GUARD() {
-  takeItem('kaffee', 'laverne');
-  await say('laverne', 'Hier. Ein Kaffee aus dem 21. Jahrhundert. Er kam durch ein Klo, aber das muss dich nicht stören.');
-  await say('wache', 'KAFFEE?! Echter, verbotener Kaffee?! ...Na gut, nur ein Schlückchen.');
-  Sound.sfx('slurp'); await wait(900);
-  await say('wache', 'Mmmh. Aromatisch. Kräftig. Blubbernd.');
-  await wait(500);
-  await say('wache', 'Oh. Oh nein. "Wirkung garantiert in 3 Sekunden"? Das wirkt aber... DRINGEND!');
-  await say('wache', 'DIENSTPAUSE!!!');
+async function LACH_WACHE() {
+  const f = fl();
+  act('laverne', 'reach', 900); Sound.sfx('click2'); await wait(300);
+  Sound.sfx('evillaugh'); shake(1800, 4); G.boesLachT = G.t; await wait(2300);
+  if (!f.kostuemAn) {
+    await say('wache', 'Huch! … Ach, nur ein Mensch mit einem Lachkasten. Netter Versuch. Ein Tentakel bist du trotzdem nicht.');
+    await say('laverne', 'Das Lachen stimmt. Fehlt nur noch der Tentakel drumherum.');
+    return;
+  }
+  await say('wache', 'D-d-diese Lache! So lacht nur … SEINE LILAHEIT?!');
+  await say('wache', 'Eure Lilaheit! Inkognito! In einem Kostüm aus Menschenfahne! Wie raffiniert!');
+  await say('laverne', '… Genau. Inkognito. Und jetzt: Dienstpause. Sofort.');
+  await say('wache', 'JAWOHL, EURE LILAHEIT! Ich habe nichts gesehen! Ich war nie hier! DIENSTPAUSE!');
   Sound.sfx('run'); shake(700, 3); ACT.wache.speed = 460;
   await walkTo('wache', -90, 400, true);
   ACT.wache.visible = false; ACT.wache.room = 'nirgendwo'; ACT.wache.speed = ACT.wache.baseSpeed;
-  fl().guardGone = true; unlock('kaffee');
-  await say('laverne', 'Erst Klo, dann Kaffee, dann wieder Klo. Der Kreislauf des Lebens.');
+  f.guardGone = true; f.wacheGelacht = 1; unlock('kostuem');
+  await say('laverne', 'Ich bin also Lila. Das erklärt die Gänsehaut.');
 }
-RULES['give i:kaffee a:wache'] = COFFEE_GUARD;
+RULES['give i:lachkiste a:wache'] = LACH_WACHE;
+RULES['use i:lachkiste'] = async () => {
+  if (curId() === 'laverne' && ACT.laverne.room === 'vorraum' && !fl().guardGone) return LACH_WACHE();
+  act(curId(), 'reach', 700); Sound.sfx('click2'); await wait(250); Sound.sfx('evillaugh'); await wait(2100);
+  return s(byChar({
+    bernard: 'MUAHAHAHA! … Huch. Klingt wie Lila an einem guten Tag. Oder an einem schlechten. Bei Lila weiß man das nie.',
+    hoagie: 'Alter! Das klingt wie mein alter Bassist, wenn er die Gage nachzählt.',
+    laverne: 'Wunderschön. So lacht ein echter Schurke. Ich bekomme Gänsehaut. Und ein bisschen Neid.',
+  })());
+};
+// Kaffee ist im Palast verboten: die Wache traut sich nicht – in der Vergangenheit dagegen …
+RULES['give i:kaffee a:wache'] = async () => {
+  await say('laverne', 'Hier, ein Kaffee. Er kam durch ein Klo, aber das muss dich nicht stören.');
+  await say('wache', 'KAFFEE?! Bist du wahnsinnig? Seine Lilaheit hat überall Kameras!');
+  await say('wache', 'Wer im Dienst Kaffee trinkt, wird zum Fußhocker degradiert. Das ist ein sehr harter Job. Für die Füße.');
+  await say('laverne', 'Schade. Dann kriegt ihn eben jemand, der Kaffee noch zu schätzen weiß. Jemand von früher.');
+};
+// Plakat „LILA IST DEIN FREUND“: auf der Rückseite ist ein Bastelbogen für ein Tentakel-Kostüm
+async function PLAKAT_AB() {
+  if (fl().plakatWeg) return s('Da hängen nur noch Schleimspuren. Die Wand sieht jetzt sauberer aus als vorher.');
+  await s('Igitt, Tentakelschleim. Aber für die Wissenschaft ziehe ich.');
+  act('laverne', 'pull', 900); Sound.sfx('rip'); await wait(700);
+  fl().plakatWeg = 1; addItem('schnittmuster');
+  if (!fl().guardGone) {
+    await say('wache', 'HEY! Das ist Staatseigentum!');
+    await say('wache', '… Ach, nimm es mit. Wir haben noch viertausend davon im Keller. Seine Lilaheit druckt gern.');
+  }
+  await s('Auf der Rückseite ist ein Bastelbogen: „Werde ein Tentakel! – Bürger-Kostüm zum Selbernähen.“');
+  await s('Ich kann nicht nähen. Ich kann nur auftrennen. Aber Hoagie kennt da jemanden mit Nadel und Faden.');
+}
+multi(['pick', 'pull', 'open', 'use'], 'o:plakat', PLAKAT_AB);
+RULES['look o:plakat'] = line(() => fl().plakatWeg ? 'Nur noch Schleimspuren und vier abgerissene Ecken. Moderne Kunst, würde ich sagen.'
+  : '"LILA IST DEIN FREUND". Darunter, ganz klein: "Widerspruch ist zwecklos und außerdem unhöflich." Und ganz unten: "Bastelbogen auf der Rückseite!"');
 RULES['give i:lapfel a:wache'] = () => say('wache', 'Ein Apfel? Ich habe Saugnäpfe, keine Zähne.');
 RULES['use i:steth a:wache'] = async () => { await s('Ich horche mal...'); await s('Sein Herz schlägt ganz langsam. Der Typ braucht dringend Koffein.'); };
 multi(['push', 'pull'], 'a:wache', line('Ich schubse keine bewaffneten Tentakel. Das ist so eine Regel von mir.'));
@@ -743,6 +883,7 @@ ACT.gertrude.talk = async () => {
       { id: 'who', text: 'Sind Sie Gertrude Edison?' },
       !fl().brot && { id: 'brot', text: 'Ich brauche Ihr berühmtes Freundlichkeits-Brot!' },
       !fl().brot && fl().knowsSugar && { id: 'zucker', text: 'Warum gibt es keinen Zucker?' },
+      fl().musterBeiGertrude && !fl().fahne && { id: 'naehen', text: 'Wie läuft es mit dem Nähen?' },
       { id: 'hancock', text: 'Wer ist der Typ mit der Feder?' },
       { id: 'bye', text: 'Bis später, Oma Gertrude.' },
     ]);
@@ -768,6 +909,11 @@ ACT.gertrude.talk = async () => {
       await say(g, 'Die Briten haben eine Zuckersteuer erhoben. Dann eine Steuer auf die Zuckersteuer.');
       await say(g, 'Jetzt gibt es im ganzen Land keinen Krümel mehr. Nur noch Steuerbescheide.');
       await say(h, 'Hmm. Ich kenne da wen in der Gegenwart. Mit Zucker.');
+    }
+    if (c === 'naehen') {
+      await say(h, 'Wie läuft es mit dem Nähen?');
+      await say(g, 'Ohne Kaffee keine Naht, mein Junge. Meine Augen fallen schon beim Einfädeln zu.');
+      await say(g, 'Seit der Tee-Party gibt es keine Bohne mehr. Wenn du irgendwo einen Kaffee auftreibst – dann fliegen hier die Nadeln!');
     }
     if (c === 'hancock') {
       await say(h, 'Wer ist der Typ mit der Feder?');
@@ -811,6 +957,7 @@ ACT.wache.talk = async () => {
     const c = await choose([
       { id: 'zu', text: 'Ich muss zu Lila Tentakel.' },
       { id: 'muede', text: 'Du siehst müde aus.' },
+      { id: 'wer', text: 'Wen lässt du denn überhaupt rein?' },
       { id: 'pause', text: 'Machst du nie Pause?' },
       { id: 'bye', text: 'Bis dann.' },
     ]);
@@ -823,12 +970,21 @@ ACT.wache.talk = async () => {
     if (c === 'muede') {
       await say(l, 'Du siehst müde aus.');
       await say(w, 'Dreifachschicht. Seit vierzig Jahren.');
-      await say(w, 'Wenn ich nur einen Kaffee hätte... Aber Kaffee ist verboten. Seine Lilaheit sagt, Kaffee macht Menschen aufmüpfig.');
+      await say(w, 'Und Kaffee ist verboten. Seine Lilaheit sagt, Kaffee macht Menschen aufmüpfig. Und Wachen auch.');
+      await say(l, 'Und wenn ich dir einen bringe?');
+      await say(w, 'Dann müsste ich dich melden. Mit zitternden Saugnäpfen. Aber ich würde es tun.');
+    }
+    if (c === 'wer') {
+      await say(l, 'Wen lässt du denn überhaupt rein?');
+      await say(w, 'Nur Tentakel. Echte Tentakel! Die erkenne ich sofort: an der Form, an der Farbe – und am Lachen.');
+      await say(w, 'Seine Lilaheit lacht so: MUAHAHA… ha. Hm. Bei ihm klingt das böser. Mit Echo. Ich kann das nicht.');
+      await say(w, 'Wer nicht lacht wie Seine Lilaheit, kommt nicht rein. Deshalb stehe ich auch hier draußen.');
+      fl().lachTest = 1;
     }
     if (c === 'pause') {
       await say(l, 'Machst du nie Pause?');
-      await say(w, 'Pause gibt es nur, wenn mich etwas DRINGEND wegruft. Ist in vierzig Jahren nicht passiert.');
-      await say(l, 'Dringend. Merke ich mir.');
+      await say(w, 'Pause gibt es nur, wenn Seine Lilaheit es befiehlt. Persönlich. Ist in vierzig Jahren nicht passiert.');
+      await say(l, 'Persönlich. Merke ich mir.');
     }
   }
 };
@@ -869,8 +1025,18 @@ ROOMS.vorraum.onEnter = async () => {
 ROOMS.thron.onEnter = async () => {
   if (fl().seenLila) return;
   fl().seenLila = true;
-  await say('lila', 'Ein Mensch in meinem Thronsaal? Wie bist du an der Wache vorbei... Ach. Kaffee, was?');
-  await say('lila', 'Ich habe es immer gesagt: Kaffee ist der Untergang der Disziplin!');
+  if (!fl().wacheGelacht) {   // alte Spielstände: die Wache ist noch mit Kaffee weggelockt worden
+    await say('lila', 'Ein Mensch in meinem Thronsaal? Wie bist du an der Wache vorbei... Ach. Kaffee, was?');
+    await say('lila', 'Ich habe es immer gesagt: Kaffee ist der Untergang der Disziplin!');
+    return;
+  }
+  await say('lila', 'Ein Tentakel in Flaggenstoff? … Moment. Da guckt eine NASE raus! Ein Mensch im Kostüm!');
+  await say('lila', 'Wie bist du an meiner Wache vorbeigekommen?');
+  await say('laverne', 'Ich habe gelacht wie du.');
+  await say('lila', 'MUAHAHAHA?');
+  Sound.sfx('evillaugh'); await wait(2100);
+  await say('laverne', 'Ungefähr so.');
+  await say('lila', '… Deins ist besser. Das ist unverzeihlich.');
 };
 const ARRIVALS = {
   hoagie: async () => {
@@ -884,6 +1050,7 @@ const ARRIVALS = {
 };
 async function INTRO() {
   G.inIntro = true;
+  fl().kloH = fl().kloL = 1;   // im Labor stehen drei Chrono-Klos (js/kostuem.js)
   await fadeTo(0, 700);
   G.caption = 'Fünf Jahre nach dem großen Tentakel-Tag ...'; await wait(2800); G.caption = null;
   await say('drfred', 'ENDLICH! Mein Gut-O-Mat ist fertig!');
@@ -897,20 +1064,36 @@ async function INTRO() {
   await say('laverne', 'Also: Strom aus der Zukunft, Brot aus der Vergangenheit. Und ich darf den Tentakel füttern?');
   await say('drfred', 'Exakt! Hoagie reist ins Jahr 1776, Laverne in die Zukunft. Bernard bleibt hier am Gut-O-Mat.');
   await say('bernard', 'Warum muss ICH immer hierbleiben?');
-  await say('drfred', 'Weil du als Einziger die Gebrauchsanweisung lesen kannst. Los, los, ab ins Klo!');
-  await walkTo('hoagie', 788, 354); ACT.hoagie.dir = 1;
+  await say('drfred', 'Weil du als Einziger die Gebrauchsanweisung lesen kannst.');
+  await say('drfred', 'Und damit keiner drängelt: Für jeden ein eigenes Chrono-Klo! Drei Stück, im Großhandel. Mit Mengenrabatt!');
+  await say('hoagie', 'Dixi-Klos mit Antenne. Das ist so ziemlich das Coolste, was ich je gesehen habe.');
+  await say('bernard', 'Sie haben drei Zeitmaschinen aus Baustellenklos gebaut.');
+  await say('drfred', 'Aus den BESTEN Baustellenklos! Los, los, ab ins Klo!');
+  // jeder in sein Klo: die Reise-Klos fliegen mit in ihre Zeit (dort stehen sie als Plumpsklo und als Klo 3000)
+  const reise = async (who, klo, flag, x) => {
+    G.camFokus = x;   // Kamera schwenkt mit zum Klo (breite Bildschirme zeigen nur einen Teil des Labors)
+    await walkTo(who, x, 362);
+    ACT[who].visible = false; Sound.sfx('door'); await wait(450);
+    Sound.sfx('flush'); G.kloAnim = { obj: klo, t: G.t }; await wait(700);
+    fl()[flag] = 0; Sound.sfx('warp'); shake(500, 3); await wait(900);
+    G.camFokus = null;
+  };
   await say('hoagie', 'Bis gleich, Leute! Oder bis vor 250 Jahren.');
-  ACT.hoagie.visible = false; Sound.sfx('flush'); G.kloAnim = { obj: 'klo_heute', t: G.t }; await wait(1600);
+  await reise('hoagie', 'reiseklo_h', 'kloH', 905);
   Object.assign(ACT.hoagie, { room: 'garten1776', x: 750, y: 394, dir: -1, visible: true });
-  await walkTo('laverne', 788, 356); ACT.laverne.dir = 1;
+  await say('drfred', 'Das Klo reist natürlich mit. Im Jahr 1776 tarnt es sich als Plumpsklo. Niemand wird etwas merken!');
   await say('laverne', 'Ich nehme mein Stethoskop mit. Falls die Zukunft einen Herzschlag hat.');
-  ACT.laverne.visible = false; Sound.sfx('flush'); G.kloAnim = { obj: 'klo_heute', t: G.t }; await wait(1600);
+  await reise('laverne', 'reiseklo_l', 'kloL', 669);
   Object.assign(ACT.laverne, { room: 'fgarten', x: 220, y: 394, dir: 1, visible: true });
-  await say('drfred', 'Hervorragend! Ach, übrigens: Die Klos sind jetzt nur noch für Gegenstände kalibriert.');
+  await say('drfred', 'Und Lavernes Klo landet im Zukunftsgarten. Dort heißt es Klo 3000. Mit Sitzheizung!');
+  await say('bernard', 'Und mein Klo?');
+  await say('drfred', 'Deins bleibt hier, Junge. Es ist die Poststelle!');
+  await say('drfred', 'Ach, übrigens: Die Klos sind jetzt nur noch für Gegenstände kalibriert.');
   await say('bernard', 'Das heißt?');
   await say('drfred', 'Ihr könnt euch Sachen hin- und herschicken. Selbst zurückkommen geht erst, wenn Lila geheilt ist.');
   await say('bernard', 'Das hätten Sie vielleicht VORHER sagen können.');
   await say('drfred', 'Hätte, hätte, Zeitmaschinenkette!');
+  fl().kloH = fl().kloL = 0; G.camFokus = null;
   G.inIntro = false;
 }
 async function INTRO_TIP() {
@@ -956,10 +1139,34 @@ function hintText() {
   if (!f.toast && f.regler !== 'good') return 'Bernard: Der Regler am Gut-O-Mat steht auf SUPERBÖSE. Dreh ihn um!';
   if (!f.toast) return 'Bernard: Zieh den Hebel am Gut-O-Mat.';
   if (!f.guardGone) {
-    if (!f.muenze) return 'Die Wache in der Zukunft ist hundemüde. Bernard: In Sofaritzen findet man oft Kleingeld.';
-    if (!f.kaffee) return 'Bernard: Kauf mit der Münze einen Kaffee am KAFFEE-O-MAT in der Lobby.';
-    if (w('kaffee') !== 'laverne') return 'Schick den Kaffee an Laverne. Die Wache würde für Kaffee alles tun.';
-    return 'Laverne: Gib der Wache im Palast-Vorraum den Kaffee.';
+    // Kostüm: Schnittmuster vom Plakat, Gertrude näht es mit Kaffee, es wird zur Ur-Fahne und weht in der Zukunft
+    if (!f.fahne) {
+      if (!f.musterBeiGertrude) {
+        if (!f.plakatWeg) return f.lachTest ? 'Laverne: Die Wache lässt nur Tentakel durch. Lies das Plakat im Palast-Vorraum genau – ganz unten steht etwas Kleingedrucktes.'
+          : 'Die Wache im Palast lässt nur Tentakel durch. Laverne: Lies das Plakat im Palast-Vorraum ganz genau.';
+        const m = w('schnittmuster');
+        if (m === 'hoagie') return 'Hoagie: Gib Oma Gertrude im Gasthaus das Schnittmuster. Sie kann nähen.';
+        return `${m === 'bernard' ? 'Bernard' : 'Laverne'}: Schick das Schnittmuster durchs Klo an Hoagie. Oma Gertrude im Jahr 1776 kann nähen.`;
+      }
+      if (!f.muenze) return 'Oma Gertrude ist zu müde zum Nähen – sie braucht Kaffee. Bernard: In Sofaritzen findet man oft Kleingeld.';
+      if (!f.kaffee) return 'Bernard: Kauf mit der Münze einen Kaffee am KAFFEE-O-MAT in der Lobby.';
+      if (w('kaffee') !== 'hoagie') return 'Schick den Kaffee an Hoagie. Oma Gertrude näht nur mit Koffein.';
+      return 'Hoagie: Gib Oma Gertrude den Kaffee.';
+    }
+    if (!f.kostuem) return 'Laverne: Am Fahnenmast im Zukunftsgarten weht jetzt die Ur-Fahne von 1776. Hol sie ein – sie sieht sehr nach Kostüm aus.';
+    if (!f.lachkiste) {
+      if (!f.clownPlatt) {
+        const sc = w('schere');
+        if (sc === 'hoagie') return 'Hoagie: Schick Gertrudes Schneiderschere an Bernard.';
+        if (sc === 'laverne') return 'Laverne: Schick die Schneiderschere an Bernard.';
+        if (!f.lachHinweis) return 'Die Wache will ein böses Lachen hören. Bernard: Im Konferenzsaal neben der Lobby steht ein aufblasbarer Clown, der lacht. Drück mal auf seine Nase.';
+        return 'Bernard: Die Lach-Box steckt im Bauch des aufblasbaren Clowns. Stich ihn mit Gertrudes Schneiderschere an.';
+      }
+      return 'Bernard: Nimm die Lach-Box aus dem platten Clown im Konferenzsaal.';
+    }
+    if (w('lachkiste') !== 'laverne') return 'Schick die Lach-Box an Laverne. Ihr Schalter steht auf BÖSES LACHEN.';
+    if (!f.kostuemAn) return 'Laverne: Zieh das Tentakel-Kostüm an (Benutze Kostüm).';
+    return 'Laverne: Spiel der Wache im Palast-Vorraum die Lach-Box vor.';
   }
   if (w('toast') !== 'laverne') return 'Schick den Gut-Toast an Laverne!';
   return 'Laverne: Ab in den Thronsaal und gib Lila den Toast!';

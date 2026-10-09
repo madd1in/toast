@@ -123,7 +123,8 @@ function drehDraw(data, name, winkel) {
 {
   const D = altbau3d('labor', {
     fill: '#12302e',
-    zustand: { regler_gut: () => !!(G.state && G.state.flags && G.state.flags.regler === 'good'), zelle: () => flagOn('cellIn'), brot: () => flagOn('breadIn') && !flagOn('toast') },
+    zustand: { regler_gut: () => !!(G.state && G.state.flags && G.state.flags.regler === 'good'), zelle: () => flagOn('cellIn'), brot: () => flagOn('breadIn') && !flagOn('toast'),
+      klo_hoagie: () => flagOn('kloH'), klo_laverne: () => flagOn('kloL') },   // die Reise-Klos stehen nur im Intro (js/kostuem.js)
     objs: {
       tuer_lobby: { rect: [7, 150, 110, 185], walk: [72, 362] },
       tafel: { rect: [134, 52, 186, 104] },
@@ -167,7 +168,7 @@ function drehDraw(data, name, winkel) {
 {
   const D = altbau3d('gasthaus', {
     fill: '#4a2e18',
-    zustand: { apfel: () => flagOn('apfel') },
+    zustand: { apfel: () => flagOn('apfel'), fahne: () => flagOn('fahne') },
     objs: {
       fenster_1776: { rect: [473, 59, 135, 121] },
       schild_1776: { rect: [648, 59, 134, 50] },
@@ -244,7 +245,7 @@ function drehDraw(data, name, winkel) {
 {
   const D = altbau3d('fgarten', {
     fill: '#3a1a5a',
-    zustand: { zelle_weg: () => flagOn('zelle') },
+    zustand: { zelle_weg: () => flagOn('zelle'), fahne_ur: () => flagOn('urFahne') && !flagOn('kostuem'), fahne_weg: () => flagOn('kostuem') },
     objs: {
       klo_zukunft: { rect: [52, 114, 165, 228], walk: [150, 362] },
       statue: { rect: [291, 98, 114, 241], walk: [350, 362] },
@@ -305,6 +306,7 @@ function drehDraw(data, name, winkel) {
 {
   altbau3d('vorraum', {
     fill: '#2e0f45',
+    zustand: { plakat_weg: () => flagOn('plakatWeg') },
     objs: {
       zum_garten: { rect: [0, 137, 100, 198], walk: [52, 362] },
       plakat: { rect: [148, 92, 134, 146] },

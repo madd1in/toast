@@ -6,7 +6,8 @@ import numpy as np
 from PIL import Image
 
 out = {}
-for name in ('ted', 'pflanze'):
+import sys
+for name in sys.argv[1:] or ('ted', 'pflanze'):
     meta = json.load(open(f'art/render/{name}/meta.json'))
     upp = 104 / meta['ppm']
     crops = []

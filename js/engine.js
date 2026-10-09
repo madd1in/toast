@@ -95,6 +95,8 @@ function nameOf(key) {
   if (k === 'e') return EGGS[id].name;
   return '';
 }
+// Notizbuch und Erfolge: bei vielen Einträgen rücken die Zeilen enger zusammen, damit „Zurück“ im Bild bleibt
+const noteRow = () => NOTES.length > 14 ? 23 : 28, achRow = () => ACH.length > 26 ? 31 : 36;
 function isVisible(o) { return !o.visible || o.visible(); }
 function hotspotCenter(o) { const [x, y, w, h] = o.rect; return [x + w / 2, y + Math.min(h / 2, 90)]; }
 
@@ -2238,7 +2240,7 @@ function drawMenu() {
   cx.fillStyle = 'rgba(10,5,18,0.72)'; cx.fillRect(0, 0, W, H);
   const items = menuItems();
   const jb = G.menu === 'jukebox';
-  const extra = G.menu === 'eggs' ? Object.keys(EGGS).length * 30 + 34 : G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'gaeste' ? gbRows() * 128 + 48 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? Math.ceil(ACH.length / 2) * 36 + 14 : G.menu === 'notes' ? NOTES.length * 28 + 50 : G.menu === 'confirm' ? 24 : 0;
+  const extra = G.menu === 'eggs' ? Object.keys(EGGS).length * 30 + 34 : G.menu === 'bios' ? 3 * 140 + 8 : G.menu === 'gaeste' ? gbRows() * 128 + 48 : G.menu === 'album' ? 3 * 92 + 34 : G.menu === 'help' ? HELP.length * 23 + 10 : G.menu === 'ach' ? Math.ceil(ACH.length / 2) * achRow() + 14 : G.menu === 'notes' ? NOTES.length * noteRow() + 50 : G.menu === 'confirm' ? 24 : 0;
   const bw = jb ? 820 : G.menu === 'eggs' ? 620 : G.menu === 'bios' ? 780 : G.menu === 'gaeste' ? 824 : G.menu === 'ach' ? 860 : G.menu === 'album' ? 640 : G.menu === 'help' || G.menu === 'notes' ? 560 : 420, mst = items.length > 11 ? 40 : items.length > 10 ? 43 : 46, bh = jb ? 566 : 100 + extra + items.length * mst, bx = W / 2 - bw / 2, by = Math.max(12, 300 - bh / 2);
   R(cx, bx, by, bw, bh, '#1f1432', 3, 16, '#5a4290');
   const title = { confirm: 'Wirklich von vorn?', help: 'Steuerung', ach: `Erfolge ${achCount()}/${ACH.length}`, notes: 'Notizbuch', save: 'Spiel speichern', load: 'Spiel laden', settings: 'Einstellungen', jukebox: 'Musikbox', extras: 'Extras', album: 'Fotoalbum', bios: 'Figuren-Steckbriefe', eggs: 'Fundstücke', gaeste: 'Gästebuch' }[G.menu] || 'Pause';
@@ -2270,11 +2272,11 @@ function drawMenu() {
   }
   if (G.menu === 'notes' && G.state) {
     NOTES.forEach(([m, text], i) => {
-      const done = milestoneDone(m), yy = y + 16 + i * 28;
+      const done = milestoneDone(m), yy = y + 16 + i * noteRow();
       if (done) L(cx, [bx + 40, yy - 5, bx + 46, yy + 1, bx + 58, yy - 11], 3, '#7dff7a'); else E(cx, bx + 49, yy - 5, 6, 6, null, 2, 0, '#6a5a88');
       txt(cx, done ? text : '???', bx + 72, yy, '600 15px "Baloo 2", sans-serif', done ? '#e6dcff' : '#6a5a88', 'left');
     });
-    y += NOTES.length * 28 + 8;
+    y += NOTES.length * noteRow() + 8;
     const st = G.state.stats;
     txt(cx, `Spielzeit ${fmtTime(st.ms)} · Sendungen: ${st.sent} · Schritte: ${(st.steps || 0).toLocaleString('de-DE')} · Kristalle: ${crystalCount()}/${CRYSTAL_ROOMS.length}`, W / 2, y + 10, '700 14px "Baloo 2", sans-serif', '#ffd23a');
     txt(cx, 'Feststecken? Der Tipp-Knopf verrät den nächsten Schritt.', W / 2, y + 30, '600 13px "Baloo 2", sans-serif', '#a99ad0');
@@ -2283,13 +2285,13 @@ function drawMenu() {
   if (G.menu === 'ach') {
     const cw = (bw - 40) / 2;
     ACH.forEach((a, i) => {
-      const got = !!G.ach[a.id], x = bx + 20 + (i % 2) * cw, yy = y + 14 + Math.floor(i / 2) * 36;
+      const got = !!G.ach[a.id], x = bx + 20 + (i % 2) * cw, yy = y + 14 + Math.floor(i / 2) * achRow();
       cx.globalAlpha = got ? 1 : 0.4; trophy(cx, x + 16, yy, 0.8); cx.globalAlpha = 1;
       txt(cx, !got && a.secret ? 'Geheimer Erfolg' : a.name, x + 36, yy + 1, '800 15px "Baloo 2", sans-serif', got ? '#ffd23a' : '#8a7aa8', 'left');
       cx.font = '600 12px "Baloo 2", sans-serif';
       txt(cx, got ? (wrap(a.desc, cw - 46)[0] || '') : '???', x + 36, yy + 16, '600 12px "Baloo 2", sans-serif', got ? '#e6dcff' : '#6a5a88', 'left');
     });
-    y += Math.ceil(ACH.length / 2) * 36 + 14;
+    y += Math.ceil(ACH.length / 2) * achRow() + 14;
   }
   const btnW = G.menu === 'save' || G.menu === 'load' ? 360 : 300;
   G.menuBtns = photoBtns.concat(items.map((it, i) => jb ? { id: it.id, off: it.off, label: it.label, x: bx + 30, y: by + 76 + i * Math.min(43, (bh - 90) / items.length), w: 340, h: Math.min(35, (bh - 90) / items.length - 5) } : { id: it.id, off: it.off, label: it.label, x: W / 2 - btnW / 2, y: y + 6 + i * mst, w: btnW, h: Math.min(38, mst - 4) }));

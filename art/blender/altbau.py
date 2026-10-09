@@ -4,7 +4,7 @@
 # stehen die Möbel ungefähr dort, wo sie gezeichnet waren: wx()/wz()/wy() rechnen Spiel-Koordinaten in Welt-Koordinaten um.
 # Zustände (Zuckerdose leer, Falltür offen, Automat mit Strom …) werden als Ausschnitte gerendert („Varianten“), bewegte Teile
 # (Pendel) als eigene Bilder („Sprites“); altbau_post.py schneidet sie zu und schreibt js/altbau-daten.js.
-import bpy, bmesh, json, math, os, random
+import bpy, bmesh, importlib, json, math, os, random
 from mathutils import Vector
 from figur_lib import hexlin
 from bpy_extras.object_utils import world_to_camera_view
@@ -311,6 +311,43 @@ def standuhr(SC, B, name, x, y, alt, mats, lean=0.0):
     return U, fen, P
 
 
+def fahnentuch(B, name, w, h, mat, parent, wellen=2.0, tief=0.08, haengen=0.0, seg=24):
+    """Fahne, die am Mast (x = 0) beginnt und nach −x weht: wellig in y, frei hängendes Ende sinkt um haengen; UV 0..1."""
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new('UVMap')
+    rows = []
+    for j in range(5):
+        v = j / 4
+        row = []
+        for i in range(seg + 1):
+            u = i / seg
+            x = -u * w
+            y = math.sin(u * wellen * 2 * math.pi) * tief * u
+            z = (v - 0.5) * h - haengen * u * u
+            row.append((bm.verts.new((x, y, z)), (u, v)))
+        rows.append(row)
+    for j in range(4):
+        for i in range(seg):
+            q = (rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i])
+            f = bm.faces.new([a for a, _ in q])
+            for l, (_, c) in zip(f.loops, q):
+                l[uv].uv = (1 - c[0], c[1])
+    return B.obj(name, bm, mat, parent, (0, 0, 0), smooth=True, solid=0.01)
+
+
+def kostuem(SC, name, loc, scale, rot, mode='XYZ'):
+    """Das Tentakel-Kostüm aus Fahnenstoff (kostuem_lib.py) als Wurzel-Empty mit allen Teilen."""
+    import kostuem_lib
+    importlib.reload(kostuem_lib)
+    W = bpy.data.objects.new(name, None)
+    SC.collection.objects.link(W)
+    W.location, W.scale = loc, (scale,) * 3
+    W.rotation_mode = mode
+    W.rotation_euler = rot
+    kostuem_lib.build(SC, name + '_', W)
+    return W
+
+
 # ------------------------------------------------------------------ Lobby (Gegenwart)
 YW = 13.2     # Vorderseite der Rückwand
 ZC = 4.7      # Decke
@@ -344,8 +381,9 @@ def build_lobby(SC):
     win_z0, win_z1 = 2.62, 4.02
     door_x0, door_x1 = wx(845, YW), wx(928, YW)
     door_z1 = 2.75
-    # Rückwand mit Fenster- und Türöffnung, Seitenwände knapp außerhalb des Bildes
-    flaeche(B, 'L_Wand', 'xz', -9.5, 9.5, 0, ZC + 0.2, [(win_x0, win_x1, win_z0, win_z1), (door_x0, door_x1, 0, door_z1)], WALLP, (0, YW + 0.2, 0), 0.4)
+    kon_x0, kon_x1, kon_z1 = wx(360, YW), wx(424, YW), 2.04   # Tür zum Konferenzsaal (niedriger: darüber hängt das Gemälde)
+    # Rückwand mit Fenster- und Türöffnungen, Seitenwände knapp außerhalb des Bildes
+    flaeche(B, 'L_Wand', 'xz', -9.5, 9.5, 0, ZC + 0.2, [(win_x0, win_x1, win_z0, win_z1), (door_x0, door_x1, 0, door_z1), (kon_x0, kon_x1, 0, kon_z1)], WALLP, (0, YW + 0.2, 0), 0.4)
     for sx in (-1, 1):
         R.box(B, f'L_Seitenwand{sx}', (sx * 8.4, 10.0, ZC / 2), (0.4, 7.0, ZC), WALLP, bevel=0)
     # Boden mit verdeckter Falltür-Öffnung unter dem Teppich (die Öffnung braucht die Variante „falltuer“)
@@ -360,14 +398,14 @@ def build_lobby(SC):
     R.box(B, 'L_Kranz', (0, YW - 0.08, ZC - 0.12), (19, 0.2, 0.24), PANELD, bevel=0.02)
     R.box(B, 'L_KranzGold', (0, YW - 0.19, ZC - 0.27), (19, 0.06, 0.06), GOLD, bevel=0.01)
     # Täfelung unten, Goldleiste, Sockelleiste – mit Lücke für die Labortür
-    for k, (xa, xb) in enumerate(((-9.5, door_x0 - 0.22), (door_x1 + 0.22, 9.5))):
+    for k, (xa, xb) in enumerate(((-9.5, kon_x0 - 0.2), (kon_x1 + 0.2, door_x0 - 0.22), (door_x1 + 0.22, 9.5))):
         cxk, wk = (xa + xb) / 2, xb - xa
         R.box(B, f'L_Taefelung{k}', (cxk, YW - 0.03, 0.6), (wk, 0.06, 1.2), PANEL, bevel=0)
         R.box(B, f'L_Brustleiste{k}', (cxk, YW - 0.08, 1.22), (wk, 0.1, 0.07), GOLD, bevel=0.01)
         R.box(B, f'L_Sockelleiste{k}', (cxk, YW - 0.08, 0.08), (wk, 0.08, 0.16), WOODD, bevel=0.01)
     for i in range(-6, 7):
         px = i * 1.45
-        if door_x0 - 0.7 < px < door_x1 + 0.7:
+        if door_x0 - 0.7 < px < door_x1 + 0.7 or kon_x0 - 0.75 < px < kon_x1 + 0.75:
             continue
         R.box(B, f'L_Paneel{i}', (px, YW - 0.075, 0.68), (1.1, 0.04, 0.72), PANELD, bevel=0.015)
 
@@ -566,6 +604,22 @@ def build_lobby(SC):
              text(SC, 'L_PreisLicht', '5000', 0.15, glow(toon('L_PreisGlut', '#ffe25a', hi=0.95), 2.4), (-0.18, -0.358, 1.08), font=BLACKF, extrude=0.008, parent=K),
              B.sphere('L_Bereit', (0.32, -0.355, 1.3), (0.03, 0.02, 0.03), glow(toon('L_LED', '#5aff8a', hi=0.95), 3.0), K)]   # keine Lampe: ihr Schein reichte über den Ausschnitt hinaus
 
+    # --- Tür zum Konferenzsaal: Messingschild, Plakat der Scherzartikel-Messe von 1987 ---
+    kcx_, kdw = (kon_x0 + kon_x1) / 2, kon_x1 - kon_x0
+    KT = B.empty('L_KonfTuer')
+    KT.location = (kcx_, YW + 0.12, 0)
+    R.box(B, 'L_KonfTuerBlatt', (0, 0, kon_z1 / 2), (kdw - 0.04, 0.07, kon_z1 - 0.02), toon('L_Tuerholz', '#7a4a22', hi=0.25), KT, bevel=0.015)
+    for k, (z, h) in enumerate(((1.5, 0.78), (0.52, 0.72))):
+        R.box(B, f'L_KonfTuerFeld{k}', (0, -0.045, z), (kdw - 0.34, 0.03, h), toon('L_TuerholzDunkel', '#5a3416', hi=0.15), KT, bevel=0.02)
+    B.sphere('L_KonfKnauf', (kdw / 2 - 0.15, -0.09, 1.0), (0.05, 0.05, 0.05), BRASS, KT)
+    for k, (cx_, cz_, sx_, sz_) in enumerate(((kcx_, kon_z1 + 0.08, kdw + 0.36, 0.16), (kon_x0 - 0.09, kon_z1 / 2, 0.18, kon_z1), (kon_x1 + 0.09, kon_z1 / 2, 0.18, kon_z1))):
+        R.box(B, f'L_KonfRahmen{k}', (cx_, YW - 0.05, cz_), (sx_, 0.12, sz_), WOODD, bevel=0.015)
+    R.box(B, 'L_KonfSchild', (0, -0.08, 1.86), (kdw - 0.3, 0.025, 0.2), BRASS, KT, bevel=0.01)
+    text(SC, 'L_KonfSchildText', 'KONFERENZ', 0.085, toon('L_Schrift', '#4a2a10'), (0, -0.095, 1.855), font=BLACKF, extrude=0.004, parent=KT)
+    quad(B, 'L_KonfPlakat', 0.62, 0.82, tex('L_MessePlakat', 'plakat_messe.png', uv=True, hi=0.1), (0.02, -0.075, 1.18), KT, rot=(0, 0.04, 0))
+    for k, (dx, dz) in enumerate(((-0.29, 1.58), (0.31, 1.6))):   # Klebestreifen an den Ecken
+        R.box(B, f'L_KonfTesa{k}', (dx, -0.08, dz), (0.12, 0.008, 0.04), toon('L_Tesa', '#e6dcb4', hi=0.1), KT, rot=(0, 0.5 if k else -0.5, 0), bevel=0)
+
     # --- Tür zum Labor ---
     dcx_, dw_ = (door_x0 + door_x1) / 2, door_x1 - door_x0
     T = B.empty('L_Tuer')
@@ -607,7 +661,8 @@ def build_lobby(SC):
                     'Zucker': [bpy.data.objects['L_Zuckerdose']] + cubes, 'Uhr': [uhr], 'Uhrfenster': [uhr_fenster],
                     'Sofa': [o for o in SC.objects if o.name.startswith(('L_Sofa', 'L_Armlehne', 'L_ArmRolle', 'L_Rueckenkissen'))],
                     'Automat': [K], 'Zettel': zettel[:1], 'Tuer': [bpy.data.objects[f'L_Tuerrahmen{k}'] for k in range(3)], 'Teppich': rug[:1],
-                    'Falltuer': [HP] + [o for o in fall if o.name.startswith('L_Schacht')], 'Glas': [bpy.data.objects['L_TuerGlas']]},
+                    'Falltuer': [HP] + [o for o in fall if o.name.startswith('L_Schacht')], 'Glas': [bpy.data.objects['L_TuerGlas']],
+                    'KonfTuer': [bpy.data.objects[f'L_KonfRahmen{k}'] for k in range(3)]},
         'points': {'chuck': E, 'pendel': pendel, 'ed': (door_x1, YW, 0.0), 'fensterGlas0': (win_x0, YW, win_z1), 'fensterGlas1': (win_x1, YW, win_z0),
                    'teppich': (rx, ry, 0.0), 'mond': (wcx + 0.3 + 4.6 * (0.66 - 0.5), YW + 2.2, wcz + 0.3 + 3.2 * (0.5 - 0.26))},
         'sprites': {'pendel': (pendel, [o for o in SC.objects if o.parent == pendel])},
@@ -633,6 +688,82 @@ def kolben(B, name, x, y, z, art, col, glas, parent=None):
         B.cone(name, z, z + 0.42, 0.075, 0.075, glas, parent, xy=(x, y), seg=20, bevel=0.005)
         B.cone(name + 'Inhalt', z + 0.03, z + 0.27, 0.079, 0.079, FL, parent, xy=(x, y), seg=20, bevel=0)
         B.cone(name + 'Fuss', z, z + 0.03, 0.1, 0.1, glas, parent, xy=(x, y), seg=20, bevel=0)
+
+
+def chrono_klo(SC, B, tube, pre, gx0, gx1, yK, mats, kabel=True):
+    """Chrono-Klo wie im Original: ein Dixi-Klo (geriffelte Kunststoffwände, helles Dach mit Lüftungsrohr, Tür mit Halbmond
+    und Riegelanzeige FREI) mit angebastelter Technik – Antennenmast mit Warnbirne, Schüssel, Fluxspule, Messuhr und
+    Kontrolllicht an der linken Seite, Bullauge, Kabelbündel. Füllt im Bild gx0..gx1 (Unterkante in Tiefe yK).
+    Gibt (Wurzel, Welt-x der Mitte) zurück; die Warnbirne heißt <pre>KloBirne (dort blinkt das Spiel)."""
+    PURPLE, PURPLED, YEL, DARK, BRASS, CREAM, RED, METALD, BLACKF = mats
+    k0, k1 = gp(gx0, 340, yK), gp(gx1, 340, yK)
+    kx, kw_ = (k0.x + k1.x) / 2, k1.x - k0.x
+    BODY, BODYD = toon('L2_DixiWand', '#6e52c8', hi=0.08), toon('L2_DixiKante', '#4c3592', hi=0.08)
+    DOOR, ROOF = toon('L2_DixiTuer', '#7d60d8', hi=0.08), toon('L2_DixiDach', '#ece6f8', hi=0.1)
+    STEEL, PIPE = toon('L2_KloRohr', '#9aa3ad', hi=0.7), toon('L2_DixiRohr', '#3a3448', hi=0.4)
+    CABLE = toon('L2_KabelGrau', '#2a2a30', hi=0.3)
+    KL = B.empty(pre + 'Klo')
+    KL.location = (kx, yK, 0)
+    hw, H = kw_ / 2, 2.32
+    R.box(B, pre + 'KloSockel', (0, 0.5, 0.06), (kw_ + 0.06, 1.06, 0.12), BODYD, KL, bevel=0.02)
+    R.box(B, pre + 'KloKorpus', (0, 0.5, 0.12 + H / 2), (kw_ - 0.08, 0.96, H), BODY, KL, bevel=0.04)
+    for i, sx in enumerate((-1, 1)):   # Eckpfosten
+        for j, sy in enumerate((0.02, 0.98)):
+            R.box(B, f'{pre}KloEcke{i}{j}', (sx * (hw - 0.05), sy, 0.12 + H / 2), (0.12, 0.12, H + 0.02), BODYD, KL, bevel=0.03)
+    for i in range(5):   # Rippen an der linken Seitenwand (die sieht man)
+        R.box(B, f'{pre}KloRippe{i}', (-hw + 0.02, 0.18 + i * 0.16, 0.12 + H / 2), (0.05, 0.05, H - 0.2), BODYD, KL, bevel=0.015)
+    # Dach: hell, mit Überstand und Firstkappe; Lüftungsrohr hinten rechts
+    R.box(B, pre + 'KloDach', (0, 0.5, H + 0.2), (kw_ + 0.16, 1.16, 0.12), ROOF, KL, rot=(0.06, 0, 0), bevel=0.04)
+    R.box(B, pre + 'KloFirst', (0, 0.5, H + 0.3), (kw_ - 0.2, 0.7, 0.1), ROOF, KL, bevel=0.04)
+    B.rod(pre + 'KloLuefter', (hw - 0.3, 0.75, H + 0.25), (hw - 0.3, 0.75, H + 0.75), 0.07, PIPE, KL, seg=12)
+    B.cone(pre + 'KloLuefterKappe', H + 0.75, H + 0.85, 0.13, 0.04, PIPE, KL, xy=(hw - 0.3, 0.75), seg=16, bevel=0)
+    # Tür mit senkrechten Rippen, Halbmond, Griffbügel und Riegelanzeige
+    dw = kw_ - 0.42
+    R.box(B, pre + 'KloTuer', (0, -0.02, 1.16), (dw, 0.04, 2.02), DOOR, KL, bevel=0.03)
+    for i in range(4):
+        R.box(B, f'{pre}KloTuerRippe{i}', (-dw / 2 + 0.16 + i * (dw - 0.32) / 3, -0.05, 0.75), (0.05, 0.03, 1.0), BODYD, KL, bevel=0.01)
+    mond = B.cone(pre + 'KloMond', 0, 0.02, 0.14, 0.14, DARK, KL, rot=(math.pi / 2, 0, 0), seg=32, bevel=0)
+    mond.location = (0, -0.045, 1.98)
+    deckel = B.cone(pre + 'KloMondDeckel', 0, 0.02, 0.13, 0.13, DOOR, KL, rot=(math.pi / 2, 0, 0), seg=32, bevel=0)
+    deckel.location = (0.07, -0.055, 2.02)
+    ohne_kontur(mond, deckel)
+    B.rod(pre + 'KloGriff', (hw - 0.36, -0.1, 1.0), (hw - 0.36, -0.1, 1.35), 0.025, STEEL, KL, seg=8)
+    for i, z in enumerate((1.0, 1.35)):
+        B.rod(f'{pre}KloGriffHalter{i}', (hw - 0.36, -0.03, z), (hw - 0.36, -0.1, z), 0.018, STEEL, KL, seg=6)
+    R.box(B, pre + 'Besetzt', (hw - 0.36, -0.06, 1.55), (0.3, 0.03, 0.11), DARK, KL, bevel=0.01)
+    text(SC, pre + 'BesetztText', 'FREI', 0.075, glow(toon('L2_FreiGruen', '#5aff8a', hi=0.8), 2.2), (hw - 0.36, -0.08, 1.545), font=BLACKF, extrude=0.004, parent=KL)
+    R.box(B, pre + 'KloSchild', (0, -0.06, 2.3), (0.95, 0.03, 0.2), YEL, KL, bevel=0.02)
+    text(SC, pre + 'KloSchildText', 'CHRONO-KLO', 0.11, toon('L2_KloSchrift', '#4a1a6a', hi=0.2), (0, -0.08, 2.295), font=BLACKF, extrude=0.005, parent=KL)
+    # Technik: Antennenmast mit Warnbirne (z 3,55 wie früher: dort blinkt das Spiel), Spiralfeder, kleine Schüssel
+    B.rod(pre + 'KloRohr', (0, 0.5, H + 0.3), (0, 0.5, 3.45), 0.05, STEEL, KL, seg=12)
+    for i in range(5):
+        B.torus(f'{pre}KloSpirale{i}', (0, 0.5, H + 0.5 + i * 0.1), 0.09, 0.015, BRASS, KL, seg=20, sseg=6)
+    B.sphere(pre + 'KloBirne', (0, 0.5, 3.55), (0.1, 0.1, 0.1), toon('L2_Birnenrot', '#7a2020', hi=0.6), KL)
+    sch = B.cone(pre + 'KloSchuessel', 0, 0.12, 0.05, 0.26, toon('L2_Schuessel', '#d8dce4', hi=0.6), KL, rot=(0.5, -0.6, 0), seg=24, bevel=0.005)
+    sch.location = (-hw + 0.3, 0.6, H + 0.45)
+    B.rod(pre + 'KloSchuesselStiel', (-hw + 0.3, 0.6, H + 0.26), (-hw + 0.3, 0.6, H + 0.48), 0.025, STEEL, KL, seg=8)
+    # linke Seite: Bullauge, Messuhr, Kontrolllicht, Schaltkasten mit Fluxspule, Klopapier
+    B.torus(pre + 'Bullauge', (-hw - 0.03, 0.42, 1.75), 0.17, 0.035, toon('L2_Bullaugenring', '#ffe9a0', hi=0.6), KL, rot=(0, math.pi / 2, 0), seg=32, sseg=8)
+    gl = B.cone(pre + 'BullaugeGlas', 0, 0.02, 0.15, 0.15, glow(toon('L2_Zeitglas', '#3a1a6a', hi=0.8), 1.4), KL, rot=(0, -math.pi / 2, 0), seg=32, bevel=0)
+    gl.location = (-hw - 0.02, 0.42, 1.75)
+    uhr = B.cone(pre + 'KloUhr', 0, 0.04, 0.12, 0.12, CREAM, KL, rot=(0, -math.pi / 2, 0), seg=24, bevel=0.01)
+    uhr.location = (-hw - 0.04, 0.2, 2.2)
+    B.rod(pre + 'KloUhrZeiger', (-hw - 0.09, 0.2, 2.2), (-hw - 0.09, 0.13, 2.28), 0.01, RED, KL, seg=6)
+    B.sphere(pre + 'KloLicht', (-hw - 0.05, 0.75, 2.2), (0.03, 0.07, 0.07), glow(toon('L2_Zyan', '#3cf0ff', hi=0.9), 2.4), KL)
+    R.box(B, pre + 'KloKasten', (-hw - 0.1, 0.45, 1.08), (0.16, 0.5, 0.42), METALD, KL, bevel=0.02)
+    for i in range(3):
+        B.sphere(f'{pre}KloKnopf{i}', (-hw - 0.19, 0.3 + i * 0.15, 1.18), (0.02, 0.035, 0.035), toon(f'L2_KloKnopf{i}', ('#ff4050', '#ffd23a', '#3cf07a')[i], hi=0.6), KL)
+    for i in range(6):
+        B.torus(f'{pre}KloFlux{i}', (-hw - 0.12, 0.45, 0.62 + i * 0.05), 0.11, 0.02, toon('L2_Kupferspule', '#c87a3a', hi=0.6), KL, seg=20, sseg=6)
+    R.box(B, pre + 'PapierHalter', (-hw - 0.04, 0.85, 0.95), (0.06, 0.16, 0.06), METALD, KL, bevel=0.005)
+    pap = B.cone(pre + 'Klopapier', -0.07, 0.07, 0.07, 0.07, CREAM, KL, rot=(math.pi / 2, 0, 0), seg=20, bevel=0.01)
+    pap.location = (-hw - 0.12, 0.85, 0.88)
+    # Kabelbündel vom Dach an der Seite herunter (und beim Labor-Klo weiter zur Wand)
+    tube(pre + 'KloKabelDach', [(-hw + 0.15, 0.3, H + 0.3), (-hw - 0.12, 0.3, H + 0.1), (-hw - 0.14, 0.32, 1.6), (-hw - 0.12, 0.4, 1.3)], 0.03, CABLE, KL)
+    tube(pre + 'KloKabelRot', [(-hw + 0.25, 0.4, H + 0.3), (-hw - 0.08, 0.4, H + 0.05), (-hw - 0.1, 0.5, 1.6), (-hw - 0.1, 0.55, 1.3)], 0.022, toon('L2_KabelRot', '#c8262e', hi=0.3), KL)
+    if kabel:
+        tube(pre + 'KloKabel', [(k0.x + 0.1, yK + 0.4, 0.2), (k0.x - 0.4, yK + 0.2, 0.05), (k0.x - 1.0, yK + 0.3, 0.04)], 0.04, CABLE, None)
+    return KL, kx
 
 
 def build_labor(SC):
@@ -811,37 +942,18 @@ def build_labor(SC):
     B.cone('L2_Pol', top - 0.05, top + 0.1, 0.05, 0.05, BRASS, None, xy=(kp.x, yM + 0.35), seg=16, bevel=0)
     POL = B.sphere('L2_PolKopf', (kp.x, yM + 0.35, top + 0.12), (0.06, 0.06, 0.05), BRASS, None)
 
-    # --- Chrono-Klo ---
+    # --- Chrono-Klo (Bernards) und die beiden Reise-Klos fürs Intro (Varianten „klo_hoagie“, „klo_laverne“) ---
     yK = 12.15
-    k0, k1 = gp(730, 340, yK), gp(846, 340, yK)
-    kx, kw_ = (k0.x + k1.x) / 2, k1.x - k0.x
-    KL = B.empty('L2_Klo')
-    KL.location = (kx, yK, 0)
-    R.box(B, 'L2_KloKorpus', (0, 0.5, 1.3), (kw_, 1.0, 2.6), PURPLE, KL, bevel=0.1)
-    R.box(B, 'L2_KloKante', (-kw_ / 2 + 0.12, -0.01, 1.3), (0.1, 0.02, 2.3), toon('L2_LilaHell', '#9a6ad0', hi=0.5), KL, bevel=0.01)
-    R.box(B, 'L2_KloTuer', (0, -0.02, 1.25), (kw_ - 0.42, 0.04, 2.25), PURPLED, KL, bevel=0.05)
-    B.sphere('L2_KloKuppel', (0, 0.5, 2.6), (kw_ / 2 - 0.06, 0.5, 0.5), PURPLED, KL)
-    B.rod('L2_KloRohr', (0, 0.5, 3.0), (0, 0.5, 3.45), 0.06, toon('L2_KloRohr', '#9aa3ad', hi=0.7), KL, seg=12)
-    B.sphere('L2_KloBirne', (0, 0.5, 3.55), (0.1, 0.1, 0.1), toon('L2_Birnenrot', '#7a2020', hi=0.6), KL)
-    B.torus('L2_Bullauge', (0, -0.06, 1.95), 0.19, 0.04, toon('L2_Bullaugenring', '#ffe9a0', hi=0.6), KL, rot=(math.pi / 2, 0, 0), seg=32, sseg=8)
-    B.cone('L2_BullaugeGlas', 0, 0.02, 0.17, 0.17, glow(toon('L2_Zeitglas', '#3a1a6a', hi=0.8), 1.4), KL, rot=(math.pi / 2, 0, 0), seg=32, bevel=0)
-    bpy.data.objects['L2_BullaugeGlas'].location = (0, -0.05, 1.95)
-    R.box(B, 'L2_KloSchild', (0, -0.07, 1.5), (0.95, 0.03, 0.22), YEL, KL, bevel=0.02)
-    text(SC, 'L2_KloSchildText', 'CHRONO-KLO', 0.12, toon('L2_KloSchrift', '#4a1a6a', hi=0.2), (0, -0.09, 1.495), font=BLACKF, extrude=0.005, parent=KL)
-    R.box(B, 'L2_Besetzt', (0, -0.07, 2.35), (0.42, 0.03, 0.13), DARK, KL, bevel=0.01)
-    text(SC, 'L2_BesetztText', 'FREI', 0.09, glow(toon('L2_FreiGruen', '#5aff8a', hi=0.8), 2.2), (0, -0.09, 2.345), font=BLACKF, extrude=0.004, parent=KL)
-    B.sphere('L2_KloKnauf', (kw_ / 2 - 0.32, -0.09, 1.05), (0.05, 0.05, 0.05), BRASS, KL)
-    B.cone('L2_KloUhr', 0, 0.04, 0.13, 0.13, CREAM, KL, rot=(0, -math.pi / 2, 0), seg=24, bevel=0.01)   # linke Seite: die sieht man
-    bpy.data.objects['L2_KloUhr'].location = (-kw_ / 2 - 0.02, 0.25, 2.15)
-    B.rod('L2_KloUhrZeiger', (-kw_ / 2 - 0.07, 0.25, 2.15), (-kw_ / 2 - 0.07, 0.17, 2.24), 0.01, RED, KL, seg=6)
-    B.sphere('L2_KloLicht', (-kw_ / 2 - 0.03, 0.25, 1.75), (0.03, 0.08, 0.08), glow(toon('L2_Zyan', '#3cf0ff', hi=0.9), 2.4), KL)
-    tube('L2_KloKabel', [(k0.x + 0.1, yK + 0.4, 0.2), (k0.x - 0.4, yK + 0.2, 0.05), (k0.x - 1.0, yK + 0.3, 0.04)], 0.04, toon('L2_KabelGrau', '#2a2a30', hi=0.3), None)
-    # Klopapier am Halter, Spruch an der Seite
-    R.box(B, 'L2_PapierHalter', (-kw_ / 2 - 0.04, 0.6, 1.0), (0.06, 0.2, 0.06), METALD, KL, bevel=0.005)
-    B.cone('L2_Klopapier', -0.07, 0.07, 0.07, 0.07, CREAM, KL, rot=(math.pi / 2, 0, 0), seg=20, bevel=0.01)
-    bpy.data.objects['L2_Klopapier'].location = (-kw_ / 2 - 0.12, 0.6, 0.92)
+    KL, kx = chrono_klo(SC, B, tube, 'L2_', 730, 846, yK, (PURPLE, PURPLED, YEL, DARK, BRASS, CREAM, RED, METALD, BLACKF))
     lamp(SC, 'L2_LichtKlo', (kx, yK - 0.5, 2.0), 40, (0.75, 0.55, 1.0), 0.5, dist=2.0)
-
+    reise = {}
+    for key, pre, gx0, gx1, ziel in (('klo_laverne', 'L2L_', 616, 722, 'ZUKUNFT'), ('klo_hoagie', 'L2H_', 853, 959, '1776')):
+        yR = 11.85
+        K2, kx2 = chrono_klo(SC, B, tube, pre, gx0, gx1, yR, (PURPLE, PURPLED, YEL, DARK, BRASS, CREAM, RED, METALD, BLACKF), kabel=False)
+        # Zettel mit Ziel über dem Bullauge: Dr. Fred hat beschriftet
+        R.box(B, pre + 'Zettel', (-0.12, -0.08, 1.7), (0.62, 0.012, 0.2), toon('L2_Zettel', '#fff6d8', hi=0.1), K2, rot=(0, 0.06, 0), bevel=0.002)
+        text(SC, pre + 'ZettelText', '→ ' + ziel, 0.1, toon('L2_Filzstift', '#c8262e', hi=0.1), (-0.12, -0.092, 1.695), font=BLACKF, extrude=0.003, parent=K2, rot=(math.pi / 2, 0.06, 0))
+        reise[key] = (K2, kx2, yR)
     # --- Neonröhren an der Decke (eine über dem Klo: dort hat das Spiel seinen Lichtkegel) ---
     for k, gx in enumerate((200, 789)):
         yl = 11.4
@@ -859,9 +971,10 @@ def build_labor(SC):
                     'Regal': [o for o in SC.objects if o.name.startswith(('L2_Regalbrett', 'L2_Kolben'))], 'GutOMat': [GM, bpy.data.objects['L2_Schild']],
                     'Regler': [bpy.data.objects['L2_Regler']], 'Hebel': [HB, bpy.data.objects['L2_Hebelkasten']], 'Klo': [KL]},
         'points': {'kloBirne': bpy.data.objects['L2_KloBirne'], 'kloOben': (kx, yK, 3.0), 'kloUnten': (kx, yK, 0.0), 'funken': tuple(fun), 'neon': (gp(789, 30, 11.4).x, 11.4, ZC - 0.64),
-                   'klemme': (ke.x, yM + 0.15, ke.z - 0.02), 'pol': POL},
+                   'klemme': (ke.x, yM + 0.15, ke.z - 0.02), 'pol': POL,
+                   **{f'{k}_{n}': v for k, (K2, x2, y2) in reise.items() for n, v in (('birne', bpy.data.objects[K2.name[:-3] + 'KloBirne']), ('oben', (x2, y2, 3.0)), ('unten', (x2, y2, 0.0)))}},
         'sprites': {'hebel': (HB, [o for o in SC.objects if o.parent == HB])},
-        'variants': {'regler_gut': ([gut], [boese]), 'zelle': (zelle, []), 'brot': (brot, [])},
+        'variants': {'regler_gut': ([gut], [boese]), 'zelle': (zelle, []), 'brot': (brot, []), **{k: ([K2], []) for k, (K2, x2, y2) in reise.items()}},
     }
     return spec
 
@@ -1060,6 +1173,20 @@ def build_gasthaus(SC):
         R.box(B, f'G_TuerLeiste{k}', (-(tx1 - tx0) / 2 + 0.03, 0.005, z), (tx1 - tx0 - 0.16, 0.03, 0.12), BEAM, TD, bevel=0.01)
     B.sphere('G_TuerRing', (-(tx1 - tx0) + 0.16, -0.09, 1.2), (0.05, 0.02, 0.05), IRON, TD)
 
+    # Variante „fahne“: Gertrudes Kostüm, von Hancock zur Nationalfahne erklärt, steckt auf einem Fahnenständer –
+    # der Stab reicht von unten in den Saum, die „Fahne“ steht stolz aufrecht
+    yFa = 12.7
+    fx = wx(782, yFa)
+    FS = B.empty('G_Fahnenstaender')
+    FS.location = (fx, yFa, 0)
+    B.cone('G_FahnenFuss', 0.0, 0.08, 0.32, 0.26, WOOD, FS, seg=24, bevel=0.01)
+    B.cone('G_FahnenFuss2', 0.08, 0.16, 0.16, 0.1, WOODL, FS, seg=24, bevel=0.01)
+    B.rod('G_FahnenStab', (0, 0, 0.1), (0, 0, 1.3), 0.035, WOODL, FS, seg=12)
+    R.box(B, 'G_FahnenSchild', (0, -0.06, 0.62), (0.34, 0.02, 0.12), toon('G_SchildPapier', '#efe2bc', hi=0.1), FS, rot=(0, 0.08, 0), bevel=0.003)
+    text(SC, 'G_FahnenSchildText', 'J. Hancock', 0.055, toon('G_Tinte', '#1d1d2a', hi=0.6), (0, -0.075, 0.615), font='C:/Windows/Fonts/georgiai.ttf', extrude=0.002, parent=FS, rot=(math.pi / 2, 0.08, 0))
+    KG = kostuem(SC, 'G_Kostuem', (fx, yFa, 1.02), 0.34, (0, 0, 2.43))
+    fahne = [FS, KG]
+
     # Licht: Nachmittagssonne durchs Fenster (Strahlen schräg nach rechts unten), Feuer, warmes Grundlicht von vorn
     R.sun(SC, (-0.63, 0, 0.68), 4.5, (1.0, 0.9, 0.7))
     R.sun(SC, (1.2, 0.0, -0.3), 0.9, (1.0, 0.85, 0.7))
@@ -1073,7 +1200,7 @@ def build_gasthaus(SC):
         'points': {'grail': (wx(226, yF + 0.05, msz), yF + 0.05, msz), 'grog': (wx(404, yT + 0.2, tz), yT + 0.2, tz), 'kessel': (ke.x, yF + 0.5, ke.z + 0.06),
                    'feuer': (ocx, yF + 0.3, 0.1), 'fensterGlas0': (wx0, YW, wz1), 'fensterGlas1': (wx1, YW, wz0)},
         'sprites': {'pendel': (pendel, [o for o in SC.objects if o.parent == pendel])},
-        'variants': {'apfel': ([], aepfel[4:6])},
+        'variants': {'apfel': ([], aepfel[4:6]), 'fahne': (fahne, [])},
     }
     return spec
 
@@ -1456,6 +1583,22 @@ def build_fgarten(SC):
     B.obj('FG_WegBrett', bm, glow(toon('FG_WegNeon', '#7fe8ff', hi=0.6), 1.2), WS, (0, 0, 0), smooth=False, solid=0.05)
     text(SC, 'FG_WegText', 'Landeplatz', 0.115, toon('FG_WegSchrift', '#140828', hi=0.1), (-0.02, -0.035, -0.005), font=BLACKF, extrude=0.004, parent=WS)
 
+    # --- Fahnenmast (zwischen Statue und Laterne): oben Lilas Fahne, nach dem Nähen 1776 die Ur-Fahne (Kostüm) ---
+    yM_ = 12.75
+    mb = Vector((wx(462, yM_), yM_, 0))
+    mz = wz(30, yM_)
+    B.cone('FG_MastFuss', 0, 0.18, 0.28, 0.2, GOLD, None, xy=(mb.x, yM_), seg=24, bevel=0.01)
+    B.rod('FG_Mast', (mb.x, yM_, 0.1), (mb.x, yM_, mz), 0.05, SILVER, None, seg=16)
+    B.sphere('FG_MastKnauf', (mb.x, yM_, mz + 0.08), (0.1, 0.1, 0.1), GOLD, None)
+    R.box(B, 'FG_MastKlampe', (mb.x + 0.07, yM_ - 0.02, 1.1), (0.04, 0.04, 0.2), GOLD, bevel=0.005)
+    FL = B.empty('FG_LilaFahne')
+    FL.location = (mb.x - 0.05, yM_, mz - 0.45)
+    fahnentuch(B, 'FG_LilaFahneTuch', 1.25, 0.8, tex('FG_LilaFahne', 'flagge_lila.png', uv=True, hi=0.1), FL, wellen=1.6, tief=0.07, haengen=0.06)
+    seil = [tube('FG_MastSeil', [(mb.x + 0.06, yM_ - 0.04, 1.2), (mb.x + 0.07, yM_ - 0.05, (mz + 1.2) / 2), (mb.x + 0.06, yM_ - 0.04, mz - 0.05)], 0.008, toon('FG_Seil', '#e8e0d0', hi=0.1), None)]
+    KF = kostuem(SC, 'FG_UrFahne', (mb.x - 0.06, yM_, mz - 0.42), 0.46, (0, -math.pi / 2 - 0.3, 1.87), mode='ZYX')
+    lose = [tube('FG_SeilLose', [(mb.x + 0.06, yM_ - 0.04, mz - 0.05), (mb.x + 0.12, yM_ - 0.08, mz - 0.6), (mb.x + 0.09, yM_ - 0.06, mz - 1.0)], 0.008, toon('FG_Seil', '#e8e0d0', hi=0.1), None)]
+    fahne_ur, fahne_weg = ([KF], [FL]), (lose, [FL])
+
     # --- Apfelbaum (Sprite: wächst im Spiel aus dem kahlen Fleck) ---
     BT = B.empty('FG_Baum')
     BT.location = (wx(700, yb), yb, 0)
@@ -1468,11 +1611,325 @@ def build_fgarten(SC):
     spec = {
         'anchors': {'Klo': [KZ], 'Statue': [ST, bpy.data.objects['FG_Sockel']], 'Baumplatz': [bpy.data.objects['FG_Baumplatz']], 'Baum': [BT],
                     'Laterne': [bpy.data.objects['FG_Laternenpfahl'], bpy.data.objects['FG_LampenDach']], 'Palast': [bpy.data.objects['FG_Palastmauer'], bpy.data.objects['FG_PalastSchild']],
-                    'Wegweiser': [WS, bpy.data.objects['FG_WegPfahl']]},
+                    'Wegweiser': [WS, bpy.data.objects['FG_WegPfahl']], 'Mast': [bpy.data.objects['FG_Mast'], bpy.data.objects['FG_MastFuss'], FL]},
         'points': {'kloBirne': bpy.data.objects['FG_KloBirne'], 'kloOben': (kx, yK, 3.0), 'kloUnten': (kx, yK - 0.8, 0.0), 'lampe': tuple(lh), 'lampeFuss': (lb.x, yL, 0.0),
                    'baum': (wx(700, yb), yb, 0.0)},
         'sprites': {'baum': (BT, [o for o in SC.objects if o.parent == BT])},
-        'variants': {'zelle_weg': ([glas_aus], zelle)},
+        'variants': {'zelle_weg': ([glas_aus], zelle), 'fahne_ur': fahne_ur, 'fahne_weg': fahne_weg},
+    }
+    return spec
+
+
+# ------------------------------------------------------------------ Konferenzsaal (Gegenwart, neben der Lobby)
+def drehkoerper(B, name, profil, mat, parent, loc=(0, 0, 0), seg=40):
+    """Rotationskörper aus einem Profil [(r, z), …] (unten nach oben), oben und unten geschlossen."""
+    bm = bmesh.new()
+    ringe = []
+    for r, z in profil:
+        ringe.append([bm.verts.new((math.cos(2 * math.pi * i / seg) * r, math.sin(2 * math.pi * i / seg) * r, z)) for i in range(seg)])
+    for a, b in zip(ringe, ringe[1:]):
+        for i in range(seg):
+            bm.faces.new((a[i], a[(i + 1) % seg], b[(i + 1) % seg], b[i]))
+    for ring, flip in ((ringe[0], True), (ringe[-1], False)):
+        f = bm.faces.new(ring[::-1] if flip else ring)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return B.obj(name, bm, mat, parent, loc, smooth=True)
+
+
+def punkte(name, grund, punkt, scale=6.0, r=0.22):
+    """Toon-Material mit Tupfen (Voronoi in Objekt-Koordinaten), z. B. für den aufblasbaren Clown."""
+    import kostuem_lib as K
+    m = K._toon_kopie(name)
+
+    def bau(nt):
+        tc = K._node(nt, 'ShaderNodeTexCoord', 'tc')
+        vor = K._node(nt, 'ShaderNodeTexVoronoi', 'vor', voronoi_dimensions='3D')
+        vor.inputs['Scale'].default_value = scale
+        vor.inputs['Randomness'].default_value = 0.4
+        nt.links.new(tc.outputs['Object'], vor.inputs['Vector'])
+        t = K._math(nt, 'pt', 'LESS_THAN', vor.outputs['Distance'], r)
+        return K._mix(nt, 'mix', t, (*hexlin(grund), 1), (*hexlin(punkt), 1))
+    m = K._prozedural(m, bau)
+    hi = m.node_tree.nodes.get('ToonHi')
+    if hi:   # Vinyl glänzt ein bisschen
+        hi.color_ramp.elements[1].color = (0.35, 0.35, 0.35, 1)
+    return m
+
+
+def clown(SC, B, tube, pre, parent, platt=False):
+    """Lachi, das aufblasbare Messe-Maskottchen (Stehauf-Clown, gut 2,6 m): blauer Standfuß, gelber Tupfen-Bauch mit
+    Fliege, winkende Arme mit weißen Handschuhen, weißer Kopf mit roter Nase, Grinsen, orangen Haarbüscheln und Partyhut.
+    platt=True: die Luft ist raus – ein Haufen Vinyl am Boden, der Kopf mit X-Augen obenauf."""
+    BASE, BODY = toon('K_ClownFuss', '#3a6ad8', hi=0.5), punkte('K_ClownBauch', '#ffd23a', '#e8303a')
+    WHITE, RED, HAIR = toon('K_ClownWeiss', '#fbf6ee', hi=0.5), toon('K_ClownRot', '#e0262e', hi=0.6), toon('K_ClownHaar', '#ff8c1e', hi=0.2)
+    BLACK, BLUE, HAT, PINK = toon('N_Schwarz', '#16121e', hi=0.15), toon('K_ClownBlau', '#2a4ab8', hi=0.4), toon('K_ClownHut', '#3cc070', hi=0.4), toon('K_ClownWange', '#ff9ab0', hi=0.1)
+    if platt:
+        B.sphere(pre + 'Haufen', (0.05, 0.05, 0.12), (0.92, 0.7, 0.2), BODY, parent)
+        B.sphere(pre + 'Falte0', (-0.32, -0.15, 0.17), (0.34, 0.24, 0.1), BODY, parent, rot=(0, 0.2, 0.5))
+        B.sphere(pre + 'Falte1', (0.38, 0.1, 0.16), (0.3, 0.26, 0.09), BODY, parent, rot=(0.1, 0, -0.4))
+        B.torus(pre + 'FussRing', (0, 0.05, 0.05), 0.6, 0.07, BASE, parent, scale=(1.1, 0.9, 0.5), seg=40, sseg=8)
+        K = B.empty(pre + 'Kopf')
+        K.parent = parent
+        K.location, K.rotation_euler = (-0.3, -0.22, 0.24), (1.25, 0, 0.25)
+        B.sphere(pre + 'KopfHaut', (0, 0, 0), (0.42, 0.42, 0.14), WHITE, K)
+        for sx in (-1, 1):
+            for k, a in enumerate((0.7, -0.7)):
+                B.rod(f'{pre}XAuge{sx}{k}', (sx * 0.15 - 0.07, 0.07 * math.copysign(1, a), 0.13), (sx * 0.15 + 0.07, -0.07 * math.copysign(1, a), 0.13), 0.018, BLACK, K, seg=6)
+            B.sphere(f'{pre}Haar{sx}', (sx * 0.42, 0.05, 0.02), (0.18, 0.22, 0.1), HAIR, K)
+        B.sphere(pre + 'Nase', (0, -0.05, 0.16), (0.1, 0.1, 0.08), RED, K)
+        tube(pre + 'Mund', [(-0.2, -0.18, 0.13), (0, -0.27, 0.14), (0.2, -0.18, 0.13)], 0.025, RED, K)
+        B.cone(pre + 'Hut', 0, 0.42, 0.2, 0.0, HAT, parent, xy=(0.75, -0.3), seg=24, bevel=0, rot=(0.0, 1.35, 0.4))
+        bpy.data.objects[pre + 'Hut'].location = (0.78, -0.32, 0.12)
+        return
+    drehkoerper(B, pre + 'Fuss', [(0.0, 0.0), (0.5, 0.01), (0.6, 0.1), (0.64, 0.24), (0.6, 0.4), (0.5, 0.52), (0.0, 0.56)], BASE, parent)
+    drehkoerper(B, pre + 'Bauch', [(0.0, 0.45), (0.5, 0.5), (0.56, 0.75), (0.54, 1.05), (0.47, 1.35), (0.38, 1.6), (0.26, 1.78), (0.0, 1.84)], BODY, parent)
+    # Fliege
+    for sx in (-1, 1):
+        B.cone(f'{pre}Fliege{sx}', 0, 0.2, 0.1, 0.02, BLUE, parent, rot=(0, sx * math.pi / 2, 0), seg=16, bevel=0.01)
+        bpy.data.objects[f'{pre}Fliege{sx}'].location = (sx * 0.12, -0.27, 1.72)
+    B.sphere(pre + 'FliegeKnoten', (0, -0.29, 1.72), (0.06, 0.05, 0.06), BLUE, parent)
+    # Arme: der linke winkt, der rechte stützt sich in die Hüfte
+    for sx, (p0, p1, p2) in ((-1, ((-0.4, 0, 1.45), (-0.78, -0.05, 1.7), (-0.92, -0.08, 2.1))), (1, ((0.42, 0, 1.4), (0.78, -0.08, 1.2), (0.6, -0.2, 0.95)))):
+        tube(f'{pre}Arm{sx}', [p0, p1, p2], 0.12, BODY, parent)
+        B.sphere(f'{pre}Hand{sx}', p2, (0.15, 0.13, 0.15), WHITE, parent)
+        for k in range(3):   # Wurstfinger
+            B.sphere(f'{pre}Finger{sx}{k}', (p2[0] + (k - 1) * 0.07, p2[1] - 0.04, p2[2] + 0.13), (0.045, 0.045, 0.08), WHITE, parent)
+    # Kopf
+    hz = 2.2
+    B.sphere(pre + 'Kopf', (0, 0, hz), (0.44, 0.42, 0.42), WHITE, parent)
+    for sx in (-1, 1):
+        B.sphere(f'{pre}Auge{sx}', (sx * 0.15, -0.35, hz + 0.12), (0.1, 0.06, 0.13), WHITE, parent)
+        B.sphere(f'{pre}Pupille{sx}', (sx * 0.15 + 0.02, -0.4, hz + 0.1), (0.05, 0.03, 0.06), BLACK, parent)
+        tube(f'{pre}Braue{sx}', [(sx * 0.07, -0.37, hz + 0.27), (sx * 0.15, -0.39, hz + 0.32), (sx * 0.24, -0.35, hz + 0.27)], 0.018, BLACK, parent)
+        ohne_kontur(B.sphere(f'{pre}Wange{sx}', (sx * 0.27, -0.31, hz - 0.08), (0.08, 0.03, 0.06), PINK, parent))
+        for k in range(4):   # Haarbüschel
+            a = 0.6 + k * 0.45
+            B.sphere(f'{pre}Haar{sx}{k}', (sx * (0.36 + 0.08 * math.sin(a)), 0.05 - 0.1 * k, hz + 0.05 + 0.16 * math.cos(a)), (0.15, 0.15, 0.14), HAIR, parent)
+    B.sphere(pre + 'Nase', (0, -0.47, hz - 0.02), (0.11, 0.1, 0.1), RED, parent)
+    tube(pre + 'Mund', [(-0.26, -0.33, hz - 0.1), (-0.12, -0.4, hz - 0.22), (0.12, -0.4, hz - 0.22), (0.26, -0.33, hz - 0.1)], 0.035, RED, parent)
+    # Partyhut, schief
+    H = B.empty(pre + 'HutWurzel')
+    H.parent = parent
+    H.location, H.rotation_euler = (0.1, 0.0, hz + 0.36), (0, 0.3, 0)
+    B.cone(pre + 'Hut', 0, 0.55, 0.2, 0.02, HAT, H, seg=24, bevel=0)
+    for k in range(3):
+        B.torus(f'{pre}HutStreifen{k}', (0, 0, 0.12 + k * 0.14), 0.2 - k * 0.05 - 0.02, 0.015, toon('K_ClownHutGelb', '#ffd23a', hi=0.4), H, seg=24, sseg=6)
+    B.sphere(pre + 'Bommel', (0, 0, 0.6), (0.07, 0.07, 0.07), toon('K_ClownHutGelb', '#ffd23a', hi=0.4), H)
+
+
+def lachkiste(SC, B, pre, parent, loc, rot=(0, 0, 0)):
+    """Die Lach-Box: schwarzer Kasten mit Lautsprechergitter, roter Taste und Schalter KICHERN – LACHEN – BÖSE."""
+    L = B.empty(pre + 'Lachkiste')
+    L.parent = parent
+    L.location, L.rotation_euler = loc, rot
+    R.box(B, pre + 'LKKasten', (0, 0, 0.07), (0.26, 0.18, 0.14), toon('K_LKSchwarz', '#22202a', hi=0.4), L, bevel=0.015)
+    for i in range(4):
+        R.box(B, f'{pre}LKGitter{i}', (-0.04, -0.092, 0.035 + i * 0.024), (0.12, 0.006, 0.01), toon('K_LKGitter', '#6a6a78', hi=0.4), L, bevel=0)
+    B.sphere(pre + 'LKTaste', (0.08, 0, 0.145), (0.035, 0.035, 0.02), toon('K_ClownRot', '#e0262e', hi=0.6), L)
+    R.box(B, pre + 'LKSchalter', (0.08, -0.092, 0.06), (0.06, 0.012, 0.03), toon('K_LKSchalter', '#ffd23a', hi=0.4), L, bevel=0.003)
+    return L
+
+
+def build_konferenz(SC):
+    """Konferenzsaal des Edison-Motels: Holzpaneele, Rasterdecke mit Neonfeld, 80er-Teppich voller Konfetti. Übrig von der
+    „1. Internationalen Scherzartikel-Messe 1987“: Stoffbanner, Leinwand mit dem Dia „Umsatz 1987 – HA. HA. HA.“,
+    Diaprojektor, Konferenztisch mit Namensschildern (Dr. Fred als Ehrengast), Klappergebiss, Pappbecher, Luftschlangen,
+    halb schlappe Luftballons, ein Stuhl mit Furzkissen, Gummi-Erbrochenes auf dem Boden, der Ausverkaufs-Stand mit
+    Juckpulver und Scherzbrillen – und Lachi, der aufblasbare Clown (Sprite; platt als Variante, mit/ohne Lach-Box)."""
+    B = R.Builder(SC)
+    tube = R.tube_in(SC)
+    WALL, FLOOR = tex('K_Paneel', 'paneel_80er.png', 0.32, hi=0.0), tex('K_Teppich', 'teppich_80er.png', 0.35, hi=0.0)
+    CEIL, TRIM, METAL = tex('K_Decke', 'deckenplatten.png', 0.6, hi=0.0), toon('K_Leiste', '#5a3418', hi=0.1), toon('K_Metall', '#9aa3ad', hi=0.6)
+    TABLE, CHAIR, CHAIRD = toon('K_Tisch', '#b98a54', hi=0.2), toon('K_Stuhl', '#d8783a', hi=0.1), toon('K_StuhlDunkel', '#8a4a24', hi=0.1)
+    WHITE, PAPER, BLACK = toon('L_Weiss', '#f4efe6', hi=0.5), toon('K_Papier', '#fffaf0', hi=0.1), toon('N_Schwarz', '#16121e', hi=0.15)
+    NEON = glow(toon('L2_Neon', '#e8fbff', hi=0.95), 2.6)
+    BLACKF, COMIC = 'C:/Windows/Fonts/ariblk.ttf', 'C:/Windows/Fonts/comicbd.ttf'
+    # Wand mit Tür links (zur Lobby), Boden, Decke mit Raster
+    dx0, dx1, dz1 = wx(24, YW), wx(102, YW), 2.3
+    flaeche(B, 'K_Wand', 'xz', -9.5, 9.5, 0, ZC + 0.2, [(dx0, dx1, 0, dz1)], WALL, (0, YW + 0.2, 0), 0.4)
+    for sx in (-1, 1):
+        R.box(B, f'K_Seitenwand{sx}', (sx * 8.4, 10.0, ZC / 2), (0.4, 7.0, ZC), WALL, bevel=0)
+    R.box(B, 'K_Boden', (0, 9.6, -0.06), (19, 8.4, 0.12), FLOOR, bevel=0)
+    R.box(B, 'K_Decke', (0, 9.5, ZC + 0.1), (19, 8.4, 0.2), CEIL, bevel=0)
+    for i in range(10):
+        R.box(B, f'K_Raster{i}', (-9 + i * 2.0, 9.6, ZC - 0.02), (0.06, 8.0, 0.05), METAL, bevel=0)
+    R.box(B, 'K_Sockel', (0, YW - 0.05, 0.08), (19, 0.1, 0.16), TRIM, bevel=0.01)
+    R.box(B, 'K_Brustleiste', (0, YW - 0.06, 1.05), (19, 0.08, 0.06), TRIM, bevel=0.01)
+    R.box(B, 'K_Kranz', (0, YW - 0.08, ZC - 0.12), (19, 0.16, 0.24), TRIM, bevel=0.02)
+    for k, gx in enumerate((300, 700)):   # Neonfelder in der Rasterdecke
+        p = gp(gx, 10, 11.0)
+        R.box(B, f'K_Neonfeld{k}', (p.x, 11.0, ZC - 0.02), (1.6, 0.8, 0.04), NEON, bevel=0)
+        lamp(SC, f'K_LichtNeon{k}', (p.x, 11.0, ZC - 0.3), 260, (0.9, 1.0, 0.95), 0.8)
+    # --- Tür links mit „← LOBBY“-Leuchtschild ---
+    T = B.empty('K_Tuer')
+    T.location = ((dx0 + dx1) / 2, YW + 0.12, 0)
+    dw = dx1 - dx0
+    R.box(B, 'K_TuerBlatt', (0, 0, dz1 / 2), (dw - 0.04, 0.07, dz1 - 0.02), toon('L_Tuerholz', '#7a4a22', hi=0.25), T, bevel=0.015)
+    for k, (z, h) in enumerate(((1.65, 0.8), (0.6, 0.8))):
+        R.box(B, f'K_TuerFeld{k}', (0, -0.045, z), (dw - 0.34, 0.03, h), toon('L_TuerholzDunkel', '#5a3416', hi=0.15), T, bevel=0.02)
+    B.sphere('K_Tuerknauf', (dw / 2 - 0.16, -0.09, 1.05), (0.05, 0.05, 0.05), toon('L_Messing', '#d8a83c', hi=0.75), T)
+    for k, (cx_, cz_, sx_, sz_) in enumerate((((dx0 + dx1) / 2, dz1 + 0.08, dw + 0.36, 0.16), (dx0 - 0.09, dz1 / 2, 0.18, dz1), (dx1 + 0.09, dz1 / 2, 0.18, dz1))):
+        R.box(B, f'K_Tuerrahmen{k}', (cx_, YW - 0.05, cz_), (sx_, 0.12, sz_), TRIM, bevel=0.015)
+    R.box(B, 'K_Ausgang', ((dx0 + dx1) / 2, YW - 0.1, dz1 + 0.42), (0.9, 0.08, 0.28), glow(toon('K_AusgangGruen', '#1fa85a', hi=0.6), 1.4), bevel=0.02)
+    text(SC, 'K_AusgangText', '← LOBBY', 0.15, glow(toon('K_AusgangWeiss', '#ffffff', hi=0.5), 1.6), ((dx0 + dx1) / 2, YW - 0.145, dz1 + 0.41), font=BLACKF, extrude=0.005)
+    # --- Stoffbanner quer über die Wand (hängt in der Mitte durch) ---
+    b0, b1 = gp(150, 62, YW - 0.1), gp(830, 62, YW - 0.1)
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new('UVMap')
+    rows = []
+    for j in range(2):
+        row = []
+        for i in range(33):
+            u = i / 32
+            x = b0.x + (b1.x - b0.x) * u
+            z = b0.z - 0.22 * math.sin(u * math.pi) + (j - 0.5) * 0.62
+            row.append((bm.verts.new((x, YW - 0.12 - 0.05 * math.sin(u * math.pi), z)), (u, j)))
+        rows.append(row)
+    for i in range(32):
+        q = (rows[0][i], rows[0][i + 1], rows[1][i + 1], rows[1][i])
+        f = bm.faces.new([a for a, _ in q])
+        for l, (_, c) in zip(f.loops, q):
+            l[uv].uv = c
+    BAN = B.obj('K_Banner', bm, tex('K_BannerStoff', 'banner_messe.png', uv=True, hi=0.0), None, (0, 0, 0), smooth=True, solid=0.01)
+    for k, x in enumerate((b0.x, b1.x)):
+        tube(f'K_BannerSchnur{k}', [(x, YW - 0.12, b0.z + 0.31), (x + (0.15 if k == 0 else -0.15), YW - 0.05, b0.z + 0.6), (x + (0.3 if k == 0 else -0.3), YW - 0.03, b0.z + 0.66)], 0.012, toon('K_Schnur', '#e8e0d0', hi=0.1), None)
+    # --- Leinwand mit Dia und Diaprojektor ---
+    l0, l1 = gp(420, 228, YW - 0.12), gp(640, 98, YW - 0.12)
+    R.box(B, 'K_LeinwandKasten', ((l0.x + l1.x) / 2, YW - 0.15, l1.z + 0.1), (l1.x - l0.x + 0.3, 0.16, 0.16), toon('K_Kasten', '#2a2a32', hi=0.4), bevel=0.03)
+    R.box(B, 'K_LeinwandRand', ((l0.x + l1.x) / 2, YW - 0.11, (l0.z + l1.z) / 2), (l1.x - l0.x + 0.1, 0.02, l1.z - l0.z + 0.1), BLACK, bevel=0)
+    quad(B, 'K_Leinwand', l1.x - l0.x - 0.06, l1.z - l0.z - 0.06, unlit('K_Dia', 'dia_umsatz.png', 1.05), ((l0.x + l1.x) / 2, YW - 0.125, (l0.z + l1.z) / 2))
+    R.box(B, 'K_LeinwandLeiste', ((l0.x + l1.x) / 2, YW - 0.13, l0.z - 0.05), (l1.x - l0.x + 0.04, 0.04, 0.05), toon('K_Kasten', '#2a2a32', hi=0.4), bevel=0.01)
+    # --- Konferenztisch (Vorderkante hinter der Lauffläche), Stühle dahinter ---
+    yT0, yT1, tz = 11.95, 12.85, 0.76
+    t0, t1 = wx(176, yT0), wx(560, yT0)
+    tcx = (t0 + t1) / 2
+    R.box(B, 'K_Tischplatte', (tcx, (yT0 + yT1) / 2, tz - 0.03), (t1 - t0, yT1 - yT0, 0.06), TABLE, bevel=0.02)
+    R.box(B, 'K_TischBlende', (tcx, yT0 + 0.08, tz - 0.25), (t1 - t0 - 0.3, 0.04, 0.36), toon('K_TischBlende', '#8a5a32', hi=0.1), bevel=0.01)
+    for k, (x, y) in enumerate(((t0 + 0.12, yT0 + 0.12), (t1 - 0.12, yT0 + 0.12), (t0 + 0.12, yT1 - 0.12), (t1 - 0.12, yT1 - 0.12))):
+        B.rod(f'K_Tischbein{k}', (x, y, 0), (x, y, tz - 0.06), 0.04, METAL, None, seg=10)
+    for k in range(4):   # Stühle hinter dem Tisch: Lehnen ragen über die Platte
+        cx_ = t0 + (t1 - t0) * (k + 0.5) / 4
+        R.box(B, f'K_Stuhllehne{k}', (cx_, yT1 + 0.12, tz + 0.32), (0.52, 0.08, 0.58), CHAIR, rot=(0.12, 0, 0), bevel=0.06)
+        R.box(B, f'K_StuhlRahmen{k}', (cx_, yT1 + 0.16, tz + 0.02), (0.06, 0.06, 0.4), CHAIRD, bevel=0.01)
+    # Namensschilder (Dr. Fred als Ehrengast), Pappbecher, Klappergebiss, Luftschlangen
+    for k, (gx, name_) in enumerate(((216, 'KICHER-KG'), (300, 'DR. FRED EDISON\nEHRENGAST'), (390, 'PUPS & SÖHNE'), (470, 'JUCK AG'))):
+        x = wx(gx, yT0 + 0.25, tz)
+        R.box(B, f'K_Namensschild{k}', (x, yT0 + 0.25, tz + 0.08), (0.42 if k == 1 else 0.34, 0.1, 0.15), PAPER, rot=(0.25, 0, 0), bevel=0.003)
+        text(SC, f'K_NameText{k}', name_, 0.045 if k == 1 else 0.05, toon('K_Filz', '#1d2a6a', hi=0.1), (x, yT0 + 0.2, tz + 0.085), font=BLACKF, extrude=0.002, rot=(math.pi / 2 - 0.25, 0, 0))
+    for k, (gx, dy) in enumerate(((246, 0.5), (346, 0.6), (430, 0.45), (520, 0.55))):
+        x = wx(gx, yT0 + dy, tz)
+        B.cone(f'K_Becher{k}', tz, tz + 0.12, 0.035, 0.045, WHITE, None, xy=(x, yT0 + dy), seg=16, bevel=0.003)
+    gb = wx(330, yT0 + 0.45, tz)
+    GB = B.empty('K_Gebiss')
+    GB.location = (gb, yT0 + 0.45, tz)
+    GUM, TOOTH = toon('K_Gaumen', '#ff7a8a', hi=0.4), toon('K_Zahn', '#fffdf4', hi=0.6)
+    for sx, z in ((0, 0.04), (1, 0.1)):
+        B.torus(f'K_GebissKiefer{sx}', (0, 0, z), 0.09, 0.03, GUM, GB, scale=(1, 0.75, 1), seg=24, sseg=8)
+        for i in range(7):
+            a = math.pi * (0.15 + 0.7 * i / 6)
+            ohne_kontur(R.box(B, f'K_Zahn{sx}{i}', (math.cos(a) * 0.09, -math.sin(a) * 0.07, z + (0.025 if sx == 0 else -0.025)), (0.03, 0.02, 0.035), TOOTH, GB, rot=(0, 0, -a + math.pi / 2), bevel=0.004))
+    for sx in (-1, 1):
+        B.sphere(f'K_GebissFuss{sx}', (sx * 0.05, 0.02, 0.01), (0.03, 0.04, 0.012), toon('K_ClownHaar', '#ff8c1e', hi=0.2), GB)
+    for k, (gx, col) in enumerate(((200, '#ff5fa8'), (420, '#5fd3ff'), (510, '#7dff7a'))):   # Luftschlangen
+        x = wx(gx, yT0 + 0.4, tz)
+        tube(f'K_Luftschlange{k}', [(x + 0.04 * math.cos(i * 1.7), yT0 + 0.4 + 0.04 * math.sin(i * 1.7) + i * 0.03, tz + 0.01 + 0.012 * i) for i in range(8)], 0.008, toon(f'K_Schlange{k}', col, hi=0.2), None)
+    # Diaprojektor (Rundmagazin) am rechten Tischende, Linse zur Leinwand
+    px_ = wx(540, yT0 + 0.45, tz)
+    PJ = B.empty('K_Projektor')
+    PJ.location, PJ.rotation_euler = (px_, yT0 + 0.45, tz), (0, 0, math.pi - 0.35)
+    R.box(B, 'K_ProjektorKoerper', (0, 0, 0.1), (0.36, 0.3, 0.18), toon('K_ProjGrau', '#c8c4b8', hi=0.4), PJ, bevel=0.03)
+    B.cone('K_Magazin', 0.19, 0.25, 0.17, 0.17, toon('K_ProjBlau', '#2a4ab8', hi=0.4), PJ, seg=32, bevel=0.01)
+    B.rod('K_Linse', (0, -0.14, 0.12), (0, -0.26, 0.15), 0.05, BLACK, PJ, seg=16)
+    lense = B.sphere('K_LinseGlas', (0, -0.27, 0.15), (0.04, 0.01, 0.04), glow(toon('K_LinseLicht', '#fff4c8', hi=0.9), 3.0), PJ)
+    # --- Stuhl mit Furzkissen am linken Tischende, halb schlappe Luftballons ---
+    sx0 = wx(150, 12.2)
+    ST = B.empty('K_Stuhl')
+    ST.location, ST.rotation_euler = (sx0, 12.25, 0), (0, 0, 0.4)
+    R.box(B, 'K_StuhlSitz', (0, 0, 0.46), (0.48, 0.46, 0.08), CHAIR, ST, bevel=0.03)
+    R.box(B, 'K_StuhlLehne', (0, 0.22, 0.8), (0.48, 0.07, 0.56), CHAIR, ST, rot=(-0.1, 0, 0), bevel=0.05)
+    B.rod('K_StuhlSaeule', (0, 0, 0.08), (0, 0, 0.42), 0.035, METAL, ST, seg=10)
+    for i in range(5):
+        a = 2 * math.pi * i / 5
+        B.rod(f'K_StuhlFuss{i}', (0, 0, 0.08), (math.cos(a) * 0.3, math.sin(a) * 0.3, 0.04), 0.025, BLACK, ST, seg=8)
+    KI = B.empty('K_Furzkissen')
+    KI.parent = ST
+    KI.location = (0, -0.02, 0.52)
+    B.sphere('K_KissenBlase', (0, 0, 0.02), (0.17, 0.16, 0.035), toon('K_Kissen', '#ff6fa8', hi=0.5), KI)
+    B.cone('K_KissenVentil', -0.02, 0.02, 0.025, 0.035, toon('K_Kissen', '#ff6fa8', hi=0.5), KI, rot=(math.pi / 2, 0, 0), seg=12, bevel=0)
+    bpy.data.objects['K_KissenVentil'].location = (0, -0.19, 0.02)
+    for k, (dx, h, col, sc) in enumerate(((-0.25, 1.15, '#e8303a', 0.85), (0.05, 1.35, '#ffd23a', 0.7), (0.3, 1.0, '#5fd3ff', 0.6), (-0.05, 0.75, '#7dff7a', 0.5))):   # schlappe Ballons
+        bx, by = sx0 + dx, 12.45 + 0.1 * k
+        B.sphere(f'K_Ballon{k}', (bx, by, h), (0.2 * sc + 0.05, 0.2 * sc + 0.05, 0.24 * sc + 0.05), toon(f'K_Ballon{k}', col, hi=0.6), None, rot=(0.3 * (k % 2), 0.2, 0))
+        tube(f'K_BallonSchnur{k}', [(bx, by, h - 0.24 * sc - 0.05), (bx + 0.05, by - 0.05, h * 0.6), (sx0, 12.3, 0.85)], 0.006, toon('K_Schnur', '#e8e0d0', hi=0.1), None)
+    # --- Ausverkaufs-Stand: Tresen mit Volant, Kartons (Juckpulver, Niespulver), Scherzbrillen, Springteufel, „-87 %“ ---
+    yS = 12.45
+    s0, s1 = wx(654, yS), wx(780, yS)
+    scx = (s0 + s1) / 2
+    R.box(B, 'K_Stand', (scx, yS + 0.3, 0.5), (s1 - s0, 0.6, 1.0), toon('K_StandWeiss', '#f2ece0', hi=0.2), bevel=0.02)
+    for i in range(9):   # rot-weiße Volants
+        x = s0 + (s1 - s0) * (i + 0.5) / 9
+        R.box(B, f'K_Volant{i}', (x, yS - 0.01, 0.72), ((s1 - s0) / 9 - 0.01, 0.02, 0.5), toon('K_Volant' + ('R' if i % 2 else 'W'), '#e0262e' if i % 2 else '#fbf6ee', hi=0.1), bevel=0.005)
+    R.box(B, 'K_StandPlatte', (scx, yS + 0.3, 1.02), (s1 - s0 + 0.1, 0.66, 0.05), toon('K_Tisch', '#b98a54', hi=0.2), bevel=0.01)
+    for k, (dx, w_, h_, col, lab) in enumerate(((-0.42, 0.34, 0.26, '#ffd23a', 'JUCK-\nPULVER'), (-0.06, 0.3, 0.22, '#e0262e', 'NIES-\nPULVER'), (-0.28, 0.26, 0.18, '#5fd3ff', 'SCHOCK-\nKAUGUMMI'))):
+        z0 = 1.045 + (0.26 if k == 2 else 0)
+        R.box(B, f'K_Karton{k}', (scx + dx, yS + 0.32, z0 + h_ / 2), (w_, 0.24, h_), toon(f'K_Karton{k}', col, hi=0.2), bevel=0.01)
+        text(SC, f'K_KartonText{k}', lab, 0.045, toon('K_Filz', '#1d2a6a', hi=0.1), (scx + dx, yS + 0.195, z0 + h_ / 2), font=BLACKF, extrude=0.002)
+    for k in range(3):   # Scherzbrillen mit Nase und Schnurrbart
+        x = scx + 0.25 + (k - 1) * 0.0 + 0.0
+        g = B.empty(f'K_Brille{k}')
+        g.location, g.rotation_euler = (scx + 0.2 + k * 0.03, yS + 0.18 + k * 0.12, 1.06 + k * 0.004), (0.2, 0, 0.1 * k)
+        for sx in (-1, 1):
+            B.torus(f'K_BrilleGlas{k}{sx}', (sx * 0.06, 0, 0.05), 0.045, 0.01, BLACK, g, rot=(math.pi / 2, 0, 0), seg=16, sseg=4)
+        B.sphere(f'K_BrilleNase{k}', (0, -0.03, 0.0), (0.035, 0.05, 0.05), toon('K_Haut', '#f2b48c', hi=0.2), g)
+        B.sphere(f'K_BrilleBart{k}', (0, -0.04, -0.05), (0.08, 0.02, 0.02), BLACK, g)
+    SP = B.empty('K_Springteufel')
+    SP.location = (scx - 0.5, yS + 0.3, 1.045)
+    R.box(B, 'K_TeufelKiste', (0, 0, 0.1), (0.2, 0.2, 0.2), toon('K_ClownBlau', '#2a4ab8', hi=0.4), SP, bevel=0.01)
+    for i in range(6):
+        B.torus(f'K_TeufelFeder{i}', (0.02 * math.sin(i), 0, 0.22 + i * 0.05), 0.05, 0.012, METAL, SP, seg=16, sseg=4)
+    B.sphere('K_TeufelKopf', (0.04, 0, 0.58), (0.09, 0.09, 0.09), toon('K_ClownWeiss', '#fbf6ee', hi=0.5), SP)
+    B.sphere('K_TeufelNase', (0.04, -0.09, 0.57), (0.03, 0.03, 0.03), toon('K_ClownRot', '#e0262e', hi=0.6), SP)
+    R.box(B, 'K_Preisschild', (scx + 0.3, yS - 0.04, 0.82), (0.36, 0.02, 0.2), toon('K_Gelb', '#ffd23a', hi=0.3), rot=(0, 0.1, 0), bevel=0.01)
+    text(SC, 'K_PreisText', '-87 %', 0.11, toon('K_ClownRot', '#e0262e', hi=0.6), (scx + 0.3, yS - 0.055, 0.815), font=BLACKF, extrude=0.003, rot=(math.pi / 2, 0.1, 0))
+    # --- Gummi-Erbrochenes auf dem Teppich (vorn, in der Lauffläche) ---
+    ke = Vector((wx(598, wy(398)), wy(398), 0.0))
+    KO = B.empty('K_Kotze')
+    KO.location = ke
+    VOM, VOMD = toon('K_Kotze', '#d8b04a', hi=0.6), toon('K_KotzeDunkel', '#9a7a2a', hi=0.5)
+    B.sphere('K_KotzeFlaeche', (0, 0, 0.005), (0.42, 0.26, 0.012), VOM, KO)
+    for k, (dx, dy, r, col) in enumerate(((-0.25, 0.1, 0.12, VOM), (0.28, -0.05, 0.1, VOM), (0.05, -0.18, 0.09, VOM), (-0.1, 0.0, 0.04, VOMD), (0.12, 0.06, 0.035, VOMD), (0.2, -0.12, 0.03, toon('K_Erbse', '#7ac04a', hi=0.4)))):
+        B.sphere(f'K_Brocken{k}', (dx, dy, 0.012), (r, r * 0.8, 0.018), col, KO)
+    # --- Konfetti auf dem Teppich ---
+    rnd = random.Random(1987)
+    cols = [toon(f'K_Konfetti{c}', h, hi=0.3) for c, h in enumerate(('#ff5fa8', '#ffd23a', '#5fd3ff', '#7dff7a', '#ff8c1e'))]
+    for i in range(90):
+        gx, gy = rnd.uniform(20, 940), rnd.uniform(352, 432)
+        y = wy(gy)
+        ohne_kontur(R.box(B, f'K_Konfetti{i}', (wx(gx, y), y, 0.004), (0.05, 0.035, 0.004), cols[i % 5], rot=(0, 0, rnd.uniform(0, 3.14)), bevel=0))
+    # --- Lachi, der aufblasbare Clown (Sprite), platt als Variante ---
+    yC = 12.35
+    cxw = wx(862, yC)
+    CL = B.empty('K_Clown')
+    CL.location, CL.rotation_euler = (cxw, yC, 0), (0, 0, -0.18)
+    clown(SC, B, tube, 'K_Cl', CL)
+    PL = B.empty('K_ClownPlatt')
+    PL.location, PL.rotation_euler = (cxw, yC, 0), (0, 0, -0.18)
+    clown(SC, B, tube, 'K_Pl', PL, platt=True)
+    LK = lachkiste(SC, B, 'K_', PL, (0.36, -0.55, 0.02), rot=(0.0, 0.0, -0.35))
+    platt = [o for o in SC.objects if o.parent == PL and o != LK]
+    # Licht: Neon (oben), warmes Füll-Licht von vorn, Projektor-Kegel auf die Leinwand
+    R.sun(SC, (1.15, 0.0, 0.3), 1.0, (1.0, 0.92, 0.8))
+    R.sun(SC, (0.55, 0.0, -0.75), 0.5, (0.85, 0.9, 1.0))
+    lamp(SC, 'K_LichtProjektor', (px_ - 0.1, yT0 + 0.1, tz + 0.3), 120, (1.0, 0.95, 0.8), 0.05, kind='SPOT', rot=(2.21, 0, 0))
+    spec = {
+        'anchors': {'Tuer': [bpy.data.objects[f'K_Tuerrahmen{k}'] for k in range(3)], 'Banner': [BAN], 'Leinwand': [bpy.data.objects['K_LeinwandRand'], bpy.data.objects['K_LeinwandKasten']],
+                    'Tisch': [bpy.data.objects['K_Tischplatte'], bpy.data.objects['K_TischBlende']] + [bpy.data.objects[f'K_Stuhllehne{k}'] for k in range(4)],
+                    'Namensschild': [bpy.data.objects['K_Namensschild1']], 'Gebiss': [GB], 'Projektor': [PJ], 'Stuhl': [ST], 'Kissen': [KI],
+                    'Ballons': [bpy.data.objects[f'K_Ballon{k}'] for k in range(4)], 'Stand': [bpy.data.objects['K_Stand'], bpy.data.objects['K_Karton2'], SP],
+                    'Kotze': [KO], 'Clown': [CL], 'Platt': [PL], 'Lachkiste': [LK]},
+        'points': {'linse': lense, 'leinwand': ((l0.x + l1.x) / 2, YW - 0.12, (l0.z + l1.z) / 2), 'clownFuss': (cxw, yC, 0.0)},
+        'sprites': {'clown': (CL, [o for o in SC.objects if o.parent == CL] + [o for o in SC.objects if o.parent and o.parent.parent == CL])},
+        'variants': {'clown_platt': (platt + [LK], []), 'clown_leer': (platt, [])},
     }
     return spec
 
@@ -1546,6 +2003,17 @@ def build_vorraum(SC):
     quad(B, 'PV_Plakat', p1.x - p0.x, p1.z - p0.z, POSTER, ((p0.x + p1.x) / 2, YW - 0.04, (p0.z + p1.z) / 2))
     for k, (cx_, cz_, sx_, sz_) in enumerate((((p0.x + p1.x) / 2, p1.z, p1.x - p0.x + 0.08, 0.05), ((p0.x + p1.x) / 2, p0.z, p1.x - p0.x + 0.08, 0.05), (p0.x, (p0.z + p1.z) / 2, 0.05, p1.z - p0.z), (p1.x, (p0.z + p1.z) / 2, 0.05, p1.z - p0.z))):
         R.box(B, f'PV_PlakatRand{k}', (cx_, YW - 0.05, cz_), (sx_, 0.03, sz_), GOLD, bevel=0)
+    SLIME = toon('PV_Schleim', '#86e04e', hi=0.8)
+    SCRAP = toon('PV_Fetzen', '#ffd23a', hi=0.1)
+    plakat_weg = []
+    for k, (gx, gy, sx_, sz_) in enumerate(((176, 112, 0.2, 0.14), (254, 116, 0.18, 0.12), (184, 216, 0.16, 0.12), (250, 214, 0.2, 0.13), (215, 160, 0.12, 0.1))):
+        q = gp(gx, gy, YW - 0.035)
+        plakat_weg.append(B.sphere(f'PV_Schleim{k}', (q.x, YW - 0.035, q.z), (sx_, 0.02, sz_), SLIME, None))
+        plakat_weg.append(B.sphere(f'PV_Tropfen{k}', (q.x + 0.03, YW - 0.04, q.z - sz_ - 0.08), (0.035, 0.02, 0.1 + 0.04 * (k % 3)), SLIME, None))
+    for k, (gx, gy, r) in enumerate(((153, 95, 0.6), (277, 95, -0.5), (153, 235, -0.4), (277, 235, 0.7))):   # abgerissene Ecken
+        q = gp(gx, gy, YW - 0.03)
+        plakat_weg.append(R.box(B, f'PV_Fetzen{k}', (q.x + (0.06 if gx < 200 else -0.06), YW - 0.03, q.z + (-0.05 if gy < 150 else 0.05)), (0.16, 0.01, 0.1), SCRAP, rot=(0, r, 0), bevel=0))
+    plakat = [bpy.data.objects['PV_Plakat']]
     # Banner mit Wappen (Tentakel umarmt kleineren Tentakel)
     for k, gx in enumerate((296, 640)):
         b0, b1 = gp(gx, 232, YW - 0.08), gp(gx + 44, 40, YW - 0.08)
@@ -1617,7 +2085,7 @@ def build_vorraum(SC):
                     'Verbot': [bpy.data.objects['PV_Verbot']], 'Tuer': [bpy.data.objects['PV_Torbogen'], bpy.data.objects['PV_Torpfosten0'], bpy.data.objects['PV_Torpfosten1']],
                     'Aufzug': [bpy.data.objects[f'PV_AufzugRahmen{k}'] for k in range(3)] + [bpy.data.objects['PV_Anzeige']]},
         'points': {'regen0': (ax0, YW, 2.6), 'regen1': (ax1, YW, 0.0)},
-        'sprites': {}, 'variants': {},
+        'sprites': {}, 'variants': {'plakat_weg': (plakat_weg, plakat)},
     }
     return spec
 
@@ -1741,7 +2209,7 @@ def build_thron(SC):
     return spec
 
 
-ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c')), 'gasthaus': (build_gasthaus, ('#d8b88a', '#4a2e18')),
+ROOMS = {'konferenz': (build_konferenz, ('#3a2a1e', '#140c08')), 'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c')), 'gasthaus': (build_gasthaus, ('#d8b88a', '#4a2e18')),
          'garten1776': (build_garten1776, ('#d6f1ff', '#62bdf6')), 'fgarten': (build_fgarten, ('#c85a8e', '#1c0838')),
          'vorraum': (build_vorraum, ('#3a1a5a', '#140828')), 'thron': (build_thron, ('#3a1a5a', '#140828'))}
 

@@ -693,6 +693,22 @@ const Sound = (() => {
     psst: t => { nz(t, 0.35, 0.05, sfxBus, { type: 'highpass', f: 3500, attack: 0.05 }); },
     specs: t => { osc('sine', 2500, t + 0.45, 0.08, 0.014, sfxBus, { f2: 3300, decay: true }); nz(t + 0.42, 0.05, 0.02, sfxBus, { type: 'bandpass', f: 3000, q: 2 }); },
     hmm: t => { osc('sawtooth', 205, t + 0.35, 1.0, 0.05, sfxBus, { f2: 180, lp: 430, q: 2, attack: 0.1, vib: 3 }); osc('sawtooth', 236, t + 1.45, 0.4, 0.04, sfxBus, { f2: 262, lp: 520, q: 2, attack: 0.05 }); },
+    // Kostüm-Kette: Lachi verliert die Luft, die Lach-Box (böses Lachen, Kichern), Gertrudes Turbo-Nähen, Plakat reißen, Furzkissen
+    deflate: t => { osc('sawtooth', 820, t, 1.7, 0.045, sfxBus, { f2: 110, lp: 2200, q: 6, vib: 28 }); nz(t, 1.7, 0.09, sfxBus, { type: 'bandpass', f: 2400, f2: 350, q: 1.4 }); osc('square', 95, t + 1.55, 0.35, 0.05, sfxBus, { f2: 60, lp: 500, vib: 30, decay: true }); },
+    evillaugh: t => {
+      vowel(t, 0.42, 120, 150, [[320, 760], [700, 1150]], 0.17);   // „MUA…“
+      for (let i = 0; i < 5; i++) {   // „…HA HA HA HA HA“, jedes Ha tiefer, mit Hauch davor
+        const at = t + 0.48 + i * 0.27, f = 185 - i * 13;
+        nz(at, 0.05, 0.05, sfxBus, { type: 'highpass', f: 2000 });
+        vowel(at + 0.03, 0.19, f, f * 0.9, [[820, 1250], [760, 1180]], 0.16);
+      }
+      for (let i = 0; i < 3; i++) vowel(t + 1.95 + i * 0.32, 0.2, 140 - i * 10, 128 - i * 10, [[800, 1200], [740, 1100]], 0.05 / (i + 1));   // Echo
+      osc('sine', 55, t + 0.4, 2.2, 0.08, sfxBus, { attack: 0.3, release: 0.8 });
+    },
+    giggle: t => { for (let i = 0; i < 7; i++) vowel(t + i * 0.1, 0.075, 520 + (i % 2) * 40, 470, [[340, 2300], [320, 2200]], 0.06); },
+    sew: t => { for (let i = 0; i < 34; i++) { osc('square', 1700 + (i % 3) * 140, t + i * 0.06, 0.02, 0.018, sfxBus, { decay: true }); if (i % 2) nz(t + i * 0.06, 0.03, 0.05, sfxBus, { type: 'bandpass', f: 3200, q: 2 }); } osc('sawtooth', 70, t, 2.1, 0.02, sfxBus, { lp: 400, vib: 12 }); },
+    rip: t => { nz(t, 0.45, 0.24, sfxBus, { type: 'bandpass', f: 1600, f2: 3600, q: 0.9, attack: 0.02 }); for (let i = 0; i < 10; i++) nz(t + i * 0.04, 0.02, 0.08, sfxBus, { type: 'highpass', f: 3000 + Math.random() * 2000 }); },
+    fart: t => { osc('sawtooth', 92, t, 0.85, 0.11, sfxBus, { f2: 58, lp: 520, q: 7, vib: 34, attack: 0.02 }); nz(t, 0.8, 0.06, sfxBus, { type: 'lowpass', f: 400 }); },
   };
   // gesungener Vokal: Sägezahn durch zwei wandernde Formant-Filter (Gähnen)
   function vowel(t, dur, fa, fb, fmts, vol) {

@@ -589,6 +589,135 @@ def palastwand(name, w=512, h=512):
     save(arr, name)
 
 
+def _clown(dr, cx, cy, r):
+    """Clownsgesicht (Messe-Maskottchen „Lachi“): weißes Gesicht, orange Haarbüschel, rote Nase, breites Grinsen."""
+    for k in range(7):
+        a = math.pi * (0.75 + k * 0.25)
+        dr.ellipse([cx + math.cos(a) * r * 1.0 - r * 0.42, cy + math.sin(a) * r * 0.9 - r * 0.42, cx + math.cos(a) * r * 1.0 + r * 0.42, cy + math.sin(a) * r * 0.9 + r * 0.42], fill=(255, 140, 30), outline=(60, 20, 40), width=4)
+    dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(252, 248, 240), outline=(60, 20, 40), width=5)
+    for sx in (-1, 1):
+        ex = cx + sx * r * 0.38
+        dr.line([ex - r * 0.13, cy - r * 0.42, ex + r * 0.13, cy - r * 0.16], fill=(40, 60, 160), width=7)
+        dr.line([ex - r * 0.13, cy - r * 0.16, ex + r * 0.13, cy - r * 0.42], fill=(40, 60, 160), width=7)
+    dr.chord([cx - r * 0.66, cy - r * 0.2, cx + r * 0.66, cy + r * 0.78], 10, 170, fill=(200, 30, 50), outline=(60, 20, 40), width=4)
+    dr.ellipse([cx - r * 0.2, cy - r * 0.18, cx + r * 0.2, cy + r * 0.2], fill=(235, 30, 40), outline=(60, 20, 40), width=4)
+    dr.ellipse([cx - r * 0.1, cy - r * 0.12, cx - r * 0.02, cy - r * 0.04], fill=(255, 200, 200))
+
+
+def plakat_messe(name, w=440, h=580):
+    """Plakat an der Konferenztür: „1. Internationale Scherzartikel-Messe 1987“ mit Clownsgesicht."""
+    from PIL import ImageFont
+    d = Image.new('RGB', (w, h), (255, 222, 70))
+    dr = ImageDraw.Draw(d)
+    for i in range(16):   # Strahlen
+        a0, a1 = 2 * math.pi * i / 16, 2 * math.pi * (i + 0.5) / 16
+        dr.polygon([(w / 2, h * 0.52), (w / 2 + math.cos(a0) * w, h * 0.52 + math.sin(a0) * w), (w / 2 + math.cos(a1) * w, h * 0.52 + math.sin(a1) * w)], fill=(255, 238, 140))
+    f1 = ImageFont.truetype('C:/Windows/Fonts/comicbd.ttf', 40)
+    f2 = ImageFont.truetype('C:/Windows/Fonts/ariblk.ttf', 44)
+    f3 = ImageFont.truetype('C:/Windows/Fonts/comicbd.ttf', 34)
+    red, blue = (200, 30, 50), (40, 60, 160)
+    dr.text((w / 2, 46), '1. INTERNATIONALE', font=f1, fill=blue, anchor='mm')
+    dr.text((w / 2, 100), 'SCHERZARTIKEL-', font=f2, fill=red, anchor='mm')
+    dr.text((w / 2, 150), 'MESSE', font=f2, fill=red, anchor='mm')
+    _clown(dr, w / 2, h * 0.58, 112)
+    dr.text((w / 2, h - 40), 'HEUTE: 1987!', font=f3, fill=blue, anchor='mm')
+    dr.rectangle([5, 5, w - 6, h - 6], outline=red, width=9)
+    save(np.asarray(d, np.float32), name)
+
+
+def banner_messe(name, w=2560, h=240):
+    """Stoffbanner quer über die Konferenzwand."""
+    from PIL import ImageFont
+    d = Image.new('RGB', (w, h), (210, 36, 52))
+    dr = ImageDraw.Draw(d)
+    for x in range(0, w, 64):   # Zackenrand oben und unten
+        dr.polygon([(x, 0), (x + 32, 22), (x + 64, 0)], fill=(255, 210, 58))
+        dr.polygon([(x, h), (x + 32, h - 22), (x + 64, h)], fill=(255, 210, 58))
+    f = ImageFont.truetype('C:/Windows/Fonts/comicbd.ttf', 92)
+    dr.text((w / 2 + 4, h / 2 + 4), '1. INTERNATIONALE SCHERZARTIKEL-MESSE 1987', font=f, fill=(90, 10, 30), anchor='mm')
+    dr.text((w / 2, h / 2), '1. INTERNATIONALE SCHERZARTIKEL-MESSE 1987', font=f, fill=(255, 238, 120), anchor='mm')
+    arr = np.asarray(d, np.float32) * (0.92 + 0.08 * noise(w, h, 6, seed=161)[..., None])
+    save(arr, name)
+
+
+def dia_umsatz(name, w=800, h=600):
+    """Dia auf der Leinwand: Umsatzkurve der Scherzartikel-Branche 1987, stürzt ab. Darunter „HA. HA. HA.“"""
+    from PIL import ImageFont
+    d = Image.new('RGB', (w, h), (246, 244, 236))
+    dr = ImageDraw.Draw(d)
+    f1 = ImageFont.truetype('C:/Windows/Fonts/ariblk.ttf', 54)
+    f2 = ImageFont.truetype('C:/Windows/Fonts/comicbd.ttf', 64)
+    f3 = ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf', 22)
+    dr.text((w / 2, 52), 'UMSATZ 1987', font=f1, fill=(30, 40, 90), anchor='mm')
+    x0, y0, x1, y1 = 90, 110, w - 50, h - 140
+    dr.line([x0, y0, x0, y1, x1, y1], fill=(30, 30, 40), width=5)
+    bars = [0.82, 0.9, 0.7, 0.55, 0.32, 0.12]
+    bw = (x1 - x0) / len(bars)
+    for i, v in enumerate(bars):
+        bx = x0 + 18 + i * bw
+        dr.rectangle([bx, y1 - (y1 - y0) * v, bx + bw * 0.62, y1 - 3], fill=(80, 150, 220), outline=(30, 40, 90), width=3)
+        dr.text((bx + bw * 0.31, y1 + 20), ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN'][i], font=f3, fill=(30, 30, 40), anchor='mm')
+    pts = [(x0 + 18 + i * bw + bw * 0.31, y1 - (y1 - y0) * v - 20) for i, v in enumerate(bars)]
+    dr.line(pts, fill=(220, 30, 40), width=9)
+    ex, ey = pts[-1]
+    dr.polygon([(ex + 26, ey + 36), (ex - 18, ey + 14), (ex + 10, ey - 12)], fill=(220, 30, 40))
+    dr.text((w / 2, h - 58), 'HA.  HA.  HA.', font=f2, fill=(220, 30, 40), anchor='mm')
+    save(np.asarray(d, np.float32), name)
+
+
+def schnittmuster(name, w=512, h=512):
+    """Rückseite des Propaganda-Plakats: Bastelbogen „Werde ein Tentakel!“ mit gestrichelter Schnittlinie und Augenlöchern."""
+    from PIL import ImageFont
+    d = Image.new('RGB', (w, h), (236, 226, 200))
+    dr = ImageDraw.Draw(d)
+    for y in range(0, h, 32):   # Raster
+        dr.line([0, y, w, y], fill=(214, 202, 176), width=1)
+        dr.line([y, 0, y, h], fill=(214, 202, 176), width=1)
+    f = ImageFont.truetype('C:/Windows/Fonts/ariblk.ttf', 34)
+    f2 = ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf', 18)
+    dr.text((w / 2, 34), 'WERDE EIN TENTAKEL!', font=f, fill=(91, 37, 137), anchor='mm')
+    dr.text((w / 2, 66), 'Bastelbogen · Bürger-Kostüm · Größe M (Mensch)', font=f2, fill=(60, 40, 70), anchor='mm')
+    pts = []
+    for i in range(41):   # Umriss eines Tentakels, gestrichelt
+        t = i / 40
+        y = 470 - t * 360
+        r = 110 - 40 * t ** 1.5
+        pts.append((w / 2 - r + 18 * math.sin(t * 3), y))
+    pts += [(w / 2 + 18 * math.sin(3) , 100)]
+    for i in range(40, -1, -1):
+        t = i / 40
+        y = 470 - t * 360
+        r = 110 - 40 * t ** 1.5
+        pts.append((w / 2 + r + 18 * math.sin(t * 3), y))
+    for i in range(len(pts) - 1):
+        if i % 2 == 0:
+            dr.line([pts[i], pts[i + 1]], fill=(40, 30, 50), width=4)
+    for sx in (-1, 1):
+        dr.ellipse([w / 2 + sx * 34 - 16, 150, w / 2 + sx * 34 + 16, 190], outline=(200, 30, 50), width=4)
+    dr.text((w / 2 + 120, 300), '✂', font=f, fill=(40, 30, 50), anchor='mm')
+    dr.text((w / 2, 492), 'Hier schneiden. Lachen nicht vergessen!', font=f2, fill=(200, 30, 50), anchor='mm')
+    save(np.asarray(d, np.float32), name)
+
+
+def flagge_lila(name, figur, w=768, h=512):
+    """Lilas Fahne: Purpur mit Goldrand, goldene Scheibe, darin der Lila Tentakel (Spielbild), Krone darüber."""
+    d = Image.new('RGB', (w, h), (110, 40, 160))
+    dr = ImageDraw.Draw(d)
+    dr.rectangle([0, 0, w - 1, h - 1], outline=(232, 192, 64), width=22)
+    dr.rectangle([30, 30, w - 31, h - 31], outline=(70, 20, 110), width=6)
+    cx_, cy_, r = w / 2, h / 2 + 10, 170
+    dr.ellipse([cx_ - r, cy_ - r, cx_ + r, cy_ + r], fill=(240, 200, 70), outline=(70, 20, 110), width=8)
+    fig = Image.open(figur).convert('RGBA')
+    fig = fig.crop(fig.getbbox())
+    s = (r * 1.55) / fig.height
+    fig = fig.resize((int(fig.width * s), int(fig.height * s)), Image.LANCZOS)
+    d.paste(fig, (int(cx_ - fig.width / 2), int(cy_ + r * 0.82 - fig.height)), fig)
+    for k in range(5):   # Krone über der Scheibe
+        x = cx_ - 80 + k * 40
+        dr.polygon([(x - 18, cy_ - r - 4), (x, cy_ - r - 56), (x + 18, cy_ - r - 4)], fill=(240, 200, 70), outline=(70, 20, 110))
+    save(np.asarray(d, np.float32), name)
+
+
 JOBS = {
     'gras.png': lambda n: speckle(n, ['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21),
     'fels.png': lambda n: speckle(n, ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22),
@@ -629,6 +758,14 @@ JOBS = {
     'marmor_schach.png': lambda n: marmor(n, '#cdb6e6', '#9d7cc4', '#f4ecff', n=4),
     'marmor_lila.png': lambda n: marmor(n, '#6b2f96', None, '#c8a0e8', seed=143),
     'palastwand.png': palastwand,
+    'plakat_messe.png': plakat_messe,
+    'banner_messe.png': banner_messe,
+    'dia_umsatz.png': dia_umsatz,
+    'schnittmuster.png': schnittmuster,
+    'flagge_lila.png': lambda n: flagge_lila(n, 'art/render/lila/idle.png'),
+    'teppich_80er.png': lambda n: speckle(n, ['#7a3e2a', '#8e4a30', '#a25a36'], scale=12, seed=163, tile=True),
+    'paneel_80er.png': lambda n: planks(n, 512, 512, 7, ['#8a5a32', '#7c5030', '#966438', '#84562f'], grain=0.22, nails=False, seed=165),
+    'deckenplatten.png': lambda n: kacheln(n, '#e6e0cc', '#b4ae9a', n=4, seed=167, var=0.03),
 }
 
 if __name__ == '__main__':

@@ -133,7 +133,159 @@ def pose_pflanze(p):
     OB['C_Kopf'].rotation_euler = (0, 0.35, 0) if p.get('schnapp') else (0, 0, 0)
 
 
-WHAT = {'ted': (build_ted, pose_ted, -1.25), 'pflanze': (build_pflanze, pose_pflanze, -0.45)}   # Ted: offene Seite zur Kamera
+# ---------- Drei neue Cameos (Konferenzsaal, Labor, Zukunftsgarten) ----------
+def kasten(B, name, loc, size, mat, parent, bevel=0.0):
+    """Quader (Voxel-Look), Größe über die Skalierung."""
+    import bmesh
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    return B.obj(name, bm, mat, parent, loc, scale=size, smooth=False, bevel=bevel)
+
+
+def drahtweg(name, pts, r, mat, parent, SC):
+    """Gebogener Draht als Kurve durch die Punkte (Büroklammer)."""
+    cd = bpy.data.curves.get(name) or bpy.data.curves.new(name, 'CURVE')
+    cd.splines.clear()
+    cd.dimensions, cd.bevel_depth, cd.bevel_resolution, cd.use_fill_caps = '3D', r, 6, True
+    sp = cd.splines.new('POLY')
+    sp.points.add(len(pts) - 1)
+    for q, co in zip(sp.points, pts):
+        q.co = (*co, 1)
+    cd.materials.clear()
+    cd.materials.append(mat)
+    o = bpy.data.objects.new(name, cd)
+    SC.collection.objects.link(o)
+    o.parent = parent
+    return o
+
+
+def build_klammer(SC, B, R):
+    """Karl Klammer: eine silberne Büroklammer (Doppelschleife, aufrecht, leicht gebogen) mit Glupschaugen und dicken
+    Augenbrauen, die auf einem gelben Notizblatt steht. Bilder: idle, brauen (Brauen hoch: „Brauchen Sie Hilfe?“), blick."""
+    WIRE, WHITE, BLACK = toon('C_Draht', '#c8ced8', hi=0.9), toon('C_AugeWeiss', '#ffffff', hi=0.6), toon('N_Schwarz', '#16121e', hi=0.15)
+    PAPER, LINE = toon('C_Notiz', '#fff2a8', hi=0.1), toon('C_NotizLinie', '#8ab4e8', hi=0.0)
+    # Notizblatt mit Linien
+    kasten(B, 'C_Blatt', (0, 0, 0.006), (0.6, 0.44, 0.012), PAPER, R)
+    for i in range(5):
+        B.rod(f'C_BlattLinie{i}', (-0.26, -0.16 + i * 0.08, 0.014), (0.26, -0.16 + i * 0.08, 0.014), 0.004, LINE, R, seg=4)
+    # Gem-Klammer in der x-z-Ebene: innere Schleife oben, Bogen unten, äußere Schleife oben, offenes Ende
+    def bogen(cx, cz, rr, a0, a1, n=16):
+        return [(cx + rr * math.cos(a0 + (a1 - a0) * i / n), 0.0, cz + rr * math.sin(a0 + (a1 - a0) * i / n)) for i in range(n + 1)]
+    pts = [(0.03, 0, 0.36)] + bogen(-0.005, 0.65, 0.035, 0.0, math.pi) + bogen(0.025, 0.16, 0.065, math.pi, 2 * math.pi) + bogen(0.0, 0.72, 0.09, 0.0, math.pi) + [(-0.09, 0, 0.3)]
+    W = B.empty('C_KlammerWurzel'); W.parent = R; W.location = (0, 0, -0.075); W.rotation_euler = (0.0, -0.1, 0)
+    drahtweg('C_KlammerDraht', pts, 0.016, WIRE, W, SC)
+    # Augen (über der unteren Schleife), Pupillen, Brauen (Wurzel zum Heben)
+    for k, x in (('L', -0.065), ('R', 0.075)):
+        B.sphere(f'C_KAuge{k}', (x, -0.06, 0.6), (0.06, 0.04, 0.075), WHITE, W)
+        B.sphere(f'C_KPupille{k}', (x + 0.01, -0.1, 0.59), (0.025, 0.015, 0.03), BLACK, W)
+        BR = B.empty(f'C_KBraueWurzel{k}'); BR.parent = W; BR.location = (x, -0.08, 0.7)
+        B.rod(f'C_KBraue{k}', (-0.05, 0, -0.005 if k == 'L' else 0.012), (0.05, 0, 0.012 if k == 'L' else -0.005), 0.016, BLACK, BR, seg=8)
+    return dict(frames=[('idle', {}), ('brauen', {'brauen': 1}), ('blick', {'blick': 1})], top=0.85)
+
+
+def pose_klammer(p):
+    OB = bpy.data.objects
+    for k in 'LR':
+        OB[f'C_KBraueWurzel{k}'].location.z = 0.76 if p.get('brauen') else 0.7
+        OB[f'C_KBraueWurzel{k}'].rotation_euler = (0, (0.25 if k == 'L' else -0.25) if p.get('brauen') else 0, 0)
+        OB[f'C_KAuge{k}'].scale = (0.06, 0.04, 0.09) if p.get('brauen') else (0.06, 0.04, 0.075)
+        OB[f'C_KPupille{k}'].location = ((-0.065 if k == 'L' else 0.075) + (0.03 if p.get('blick') else 0.01), -0.1, 0.59 if not p.get('brauen') else 0.6)
+
+
+def build_clawd(SC, B, R):
+    """Clawd, das kleine Maskottchen von Claude Code, als Voxel-Figur: terrakotta-oranger Klotz mit zwei schwarzen
+    Augen-Balken, Stummelärmchen an den Seiten und vier Beinchen. Bilder: idle, blinzel, hops (Ärmchen hoch, springt)."""
+    ORANGE, ORANGED, BLACK = toon('C_Clawd', '#d97757', hi=0.12), toon('C_ClawdDunkel', '#b85c3e', hi=0.08), toon('N_Schwarz', '#16121e', hi=0.15)
+    K = B.empty('C_ClawdKoerper'); K.parent = R
+    kasten(B, 'C_ClawdRumpf', (0, 0, 0.31), (0.5, 0.3, 0.36), ORANGE, K, bevel=0.012)
+    for k, sx in (('L', -1), ('R', 1)):
+        kasten(B, f'C_ClawdAuge{k}', (sx * 0.1, -0.152, 0.34), (0.05, 0.012, 0.11), BLACK, K)
+        A = B.empty(f'C_ClawdArm{k}'); A.parent = K; A.location = (sx * 0.25, 0, 0.3)
+        kasten(B, f'C_ClawdArmKlotz{k}', (sx * 0.05, 0, 0), (0.1, 0.13, 0.1), ORANGE, A, bevel=0.008)
+    for i, x in enumerate((-0.17, -0.06, 0.06, 0.17)):
+        kasten(B, f'C_ClawdBein{i}', (x, -0.02, 0.07), (0.06, 0.09, 0.14), ORANGED, K, bevel=0.005)
+    return dict(frames=[('idle', {}), ('blinzel', {'blinzel': 1}), ('hops', {'hops': 1})], top=0.5)
+
+
+def pose_clawd(p):
+    OB = bpy.data.objects
+    for k in 'LR':
+        OB[f'C_ClawdAuge{k}'].scale = (0.05, 0.012, 0.025 if p.get('blinzel') else 0.11)
+        OB[f'C_ClawdArm{k}'].rotation_euler = (0, (-0.9 if k == 'R' else 0.9) if p.get('hops') else 0, 0)
+    OB['C_ClawdKoerper'].location.z = 0.09 if p.get('hops') else 0.0
+
+
+def build_roboter(SC, B, R):
+    """Humanoider Roboter im Stil des Unitree G1 (gut 1,3 m): dunkles Gestell, helle Verkleidungen an Brust, Oberarmen und
+    Oberschenkeln, runder Kopf mit dunklem Visier und blauem Lichtring, Kugelgelenke. Gelenk-Empties für die Posen;
+    Bilder: idle, kick (Kung-Fu-Tritt zur Seite, Fäuste hoch), gruss (winkt)."""
+    DARK, MID, LIGHT = toon('C_RoboDunkel', '#262a32', hi=0.4), toon('C_RoboMittel', '#4a505c', hi=0.5), toon('C_RoboHell', '#d6dae2', hi=0.5)
+    VISOR, LED = toon('C_RoboVisier', '#0e1018', hi=0.9), toon('C_RoboLED', '#5fd3ff', hi=0.9)
+    e = LED.node_tree.nodes.get('ToonEmi')
+    if e:
+        e.inputs['Strength'].default_value = 2.5
+    H = B.empty('C_RoboHuefte'); H.parent = R; H.location = (0, 0, 0.66)
+    # Rumpf mit Brustpanzer, Rucksack-Akku, Hals und Kopf
+    T = B.empty('C_RoboRumpf'); T.parent = H
+    B.sphere('C_RoboBecken', (0, 0, 0.0), (0.15, 0.1, 0.08), DARK, T)
+    B.cone('C_RoboTaille', 0.02, 0.16, 0.08, 0.09, MID, T, seg=20, bevel=0.0)
+    B.cone('C_RoboBrust', 0.14, 0.52, 0.14, 0.19, DARK, T, scale=(1, 0.62, 1), seg=24, bevel=0.03)
+    B.sphere('C_RoboPanzer', (0, -0.085, 0.38), (0.15, 0.05, 0.12), LIGHT, T)
+    B.rod('C_RoboLEDStreifen', (-0.08, -0.13, 0.27), (0.08, -0.13, 0.27), 0.008, LED, T, seg=6)
+    B.sphere('C_RoboAkku', (0, 0.1, 0.32), (0.12, 0.06, 0.15), MID, T)
+    B.rod('C_RoboHals', (0, 0, 0.5), (0, 0, 0.58), 0.035, MID, T, seg=12)
+    K = B.empty('C_RoboKopf'); K.parent = T; K.location = (0, 0, 0.66)
+    B.sphere('C_RoboSchaedel', (0, 0, 0.0), (0.11, 0.12, 0.12), LIGHT, K)
+    B.sphere('C_RoboVisier', (0, -0.07, 0.0), (0.09, 0.07, 0.08), VISOR, K)
+    B.torus('C_RoboRing', (0, -0.135, 0.0), 0.045, 0.008, LED, K, rot=(math.pi / 2, 0, 0), seg=24, sseg=6)
+    B.sphere('C_RoboAuge', (0, -0.14, 0.0), (0.015, 0.008, 0.015), LED, K)
+    # Arme: Schulterkugel, Oberarm (hell), Ellbogen, Unterarm, Hand
+    for k, sx in (('L', -1), ('R', 1)):
+        S = B.empty(f'C_RoboSchulter{k}'); S.parent = T; S.location = (sx * 0.23, 0, 0.42)
+        B.cone(f'C_RoboSchulterKugel{k}', -0.05, 0.05, 0.065, 0.065, MID, S, rot=(0, math.pi / 2, 0), seg=24, bevel=0.01)
+        B.cone(f'C_RoboSchulterDeckel{k}', -0.008, 0.008, 0.05, 0.05, LIGHT, S, rot=(0, math.pi / 2, 0), seg=24, bevel=0.0).location = (sx * 0.056, 0, 0)
+        B.rod(f'C_RoboOberarm{k}', (0, 0, -0.02), (0, 0, -0.22), 0.045, LIGHT, S, seg=14)
+        E = B.empty(f'C_RoboEllbogen{k}'); E.parent = S; E.location = (0, 0, -0.24)
+        B.sphere(f'C_RoboEllKugel{k}', (0, 0, 0), (0.04, 0.04, 0.04), DARK, E)
+        B.rod(f'C_RoboUnterarm{k}', (0, 0, -0.02), (0, 0, -0.2), 0.035, DARK, E, seg=12)
+        B.sphere(f'C_RoboHand{k}', (0, 0, -0.24), (0.045, 0.035, 0.055), MID, E)
+    # Beine: Hüftgelenk, Oberschenkel (hell), Knie, Unterschenkel, flacher Fuß
+    for k, sx in (('L', -1), ('R', 1)):
+        L = B.empty(f'C_RoboHueftGelenk{k}'); L.parent = H; L.location = (sx * 0.1, 0, -0.04)
+        B.cone(f'C_RoboHueftKugel{k}', -0.06, 0.06, 0.075, 0.075, MID, L, rot=(0, math.pi / 2, 0), seg=24, bevel=0.01)
+        B.rod(f'C_RoboOberschenkel{k}', (0, 0, -0.02), (0, 0, -0.27), 0.06, LIGHT, L, seg=14)
+        N = B.empty(f'C_RoboKnie{k}'); N.parent = L; N.location = (0, 0, -0.29)
+        B.cone(f'C_RoboKnieKugel{k}', -0.055, 0.055, 0.06, 0.06, DARK, N, rot=(0, math.pi / 2, 0), seg=24, bevel=0.01)
+        B.cone(f'C_RoboKnieDeckel{k}', -0.007, 0.007, 0.045, 0.045, LIGHT, N, rot=(0, math.pi / 2, 0), seg=20, bevel=0.0).location = (sx * 0.06, 0, 0)
+        B.rod(f'C_RoboUnterschenkel{k}', (0, 0, -0.02), (0, 0, -0.27), 0.042, DARK, N, seg=12)
+        B.cone(f'C_RoboFuss{k}', -0.33, -0.29, 0.065, 0.055, MID, N, xy=(0, -0.05), scale=(0.85, 2.0, 1), seg=16, bevel=0.01)
+    return dict(frames=[('idle', {}), ('kick', {'kick': 1}), ('gruss', {'gruss': 1})], top=1.36)
+
+
+def pose_roboter(p):
+    OB = bpy.data.objects
+    for n in ('C_RoboSchulterL', 'C_RoboSchulterR', 'C_RoboEllbogenL', 'C_RoboEllbogenR', 'C_RoboHueftGelenkL', 'C_RoboHueftGelenkR', 'C_RoboKnieL', 'C_RoboKnieR', 'C_RoboRumpf', 'C_RoboKopf'):
+        OB[n].rotation_euler = (0, 0, 0)
+    OB['C_RoboHuefte'].location = (0, 0, 0.66)
+    if p.get('kick'):   # Seitwärtstritt nach rechts, Standbein leicht gebeugt, Fäuste in Deckung, Oberkörper kippt weg
+        OB['C_RoboHueftGelenkR'].rotation_euler = (0, -1.45, 0)
+        OB['C_RoboKnieR'].rotation_euler = (0, 0.25, 0)
+        OB['C_RoboHueftGelenkL'].rotation_euler = (0, 0.12, 0)
+        OB['C_RoboKnieL'].rotation_euler = (-0.25, 0, 0)
+        OB['C_RoboHuefte'].location = (0, 0, 0.63)
+        OB['C_RoboRumpf'].rotation_euler = (0, 0.3, 0)
+        OB['C_RoboKopf'].rotation_euler = (0, -0.3, 0)
+        for k, sx in (('L', -1), ('R', 1)):
+            OB[f'C_RoboSchulter{k}'].rotation_euler = (-1.1, sx * 0.3, 0)
+            OB[f'C_RoboEllbogen{k}'].rotation_euler = (-1.6, 0, 0)
+    if p.get('gruss'):
+        OB['C_RoboSchulterR'].rotation_euler = (0, -2.6, 0)
+        OB['C_RoboEllbogenR'].rotation_euler = (0, -0.5, 0)
+        OB['C_RoboKopf'].rotation_euler = (0, 0.15, 0.2)
+
+
+WHAT = {'ted': (build_ted, pose_ted, -1.25), 'pflanze': (build_pflanze, pose_pflanze, -0.45),
+        'klammer': (build_klammer, pose_klammer, 0.35), 'clawd': (build_clawd, pose_clawd, 0.3), 'roboter': (build_roboter, pose_roboter, 0.35)}   # Ted: offene Seite zur Kamera
 for name in globals().get('WHO') or list(WHAT):
     build, pose, yaw = WHAT[name]
     SC = scene(name)
@@ -149,8 +301,13 @@ for name in globals().get('WHO') or list(WHAT):
     out = REPO + f'/art/render/{name}/'
     os.makedirs(out, exist_ok=True)
     meta = {'ppm': H / cam.data.ortho_scale, 'top': info['top'], 'frames': []}
+    only = globals().get('FRAMES')
+    if only and os.path.exists(out + 'meta.json'):
+        meta['frames'] = [f for f in json.load(open(out + 'meta.json'))['frames'] if f['name'] not in only]
     try:
         for fn, p in info['frames']:
+            if only and fn not in only:
+                continue
             pose(p)
             bpy.context.view_layer.update()
             q = world_to_camera_view(SC, cam, R.matrix_world.translation)
@@ -160,5 +317,7 @@ for name in globals().get('WHO') or list(WHAT):
         pose({})
     finally:
         win.scene = prev
+    order = [f[0] for f in info['frames']]
+    meta['frames'].sort(key=lambda f: order.index(f['name']))
     json.dump(meta, open(out + 'meta.json', 'w'), indent=1)
     print('cameo', name, [f['name'] for f in meta['frames']])

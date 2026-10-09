@@ -92,6 +92,12 @@ const ALTBAU3D = {
     180,
     58,
     70
+   ],
+   "KonfTuer": [
+    347,
+    196,
+    89,
+    139
    ]
   },
   "points": {
@@ -200,9 +206,9 @@ const ALTBAU3D = {
     111
    ],
    "Klo": [
-    705,
+    701,
     100,
-    144,
+    156,
     247
    ]
   },
@@ -234,6 +240,30 @@ const ALTBAU3D = {
    "pol": [
     397.0,
     158.6
+   ],
+   "klo_laverne_birne": [
+    663.5,
+    105.4
+   ],
+   "klo_laverne_oben": [
+    670.9,
+    141.0
+   ],
+   "klo_laverne_unten": [
+    668.9,
+    350.6
+   ],
+   "klo_hoagie_birne": [
+    893.6,
+    105.4
+   ],
+   "klo_hoagie_oben": [
+    910.3,
+    141.0
+   ],
+   "klo_hoagie_unten": [
+    905.8,
+    350.6
    ]
   },
   "variants": {
@@ -257,6 +287,20 @@ const ALTBAU3D = {
     "y": 129.0,
     "w": 64.0,
     "h": 29.0
+   },
+   "klo_laverne": {
+    "src": "img/altbau/labor_klo_laverne.jpg",
+    "x": 576.0,
+    "y": 93.0,
+    "w": 172.0,
+    "h": 263.0
+   },
+   "klo_hoagie": {
+    "src": "img/altbau/labor_klo_hoagie.jpg",
+    "x": 804.0,
+    "y": 93.0,
+    "w": 154.0,
+    "h": 263.0
    }
   },
   "sprites": {
@@ -363,6 +407,13 @@ const ALTBAU3D = {
     "y": 242.0,
     "w": 48.0,
     "h": 51.0
+   },
+   "fahne": {
+    "src": "img/altbau/gasthaus_fahne.jpg",
+    "x": 755.0,
+    "y": 180.0,
+    "w": 72.0,
+    "h": 169.0
    }
   },
   "sprites": {
@@ -537,6 +588,12 @@ const ALTBAU3D = {
     230,
     77,
     128
+   ],
+   "Mast": [
+    376,
+    29,
+    104,
+    313
    ]
   },
   "points": {
@@ -572,6 +629,20 @@ const ALTBAU3D = {
     "y": 6.0,
     "w": 59.0,
     "h": 82.0
+   },
+   "fahne_ur": {
+    "src": "img/altbau/fgarten_fahne_ur.jpg",
+    "x": 335.0,
+    "y": 16.0,
+    "w": 145.0,
+    "h": 110.0
+   },
+   "fahne_weg": {
+    "src": "img/altbau/fgarten_fahne_weg.jpg",
+    "x": 359.0,
+    "y": 15.0,
+    "w": 123.0,
+    "h": 98.0
    }
   },
   "sprites": {
@@ -643,7 +714,15 @@ const ALTBAU3D = {
     333.8
    ]
   },
-  "variants": {},
+  "variants": {
+   "plakat_weg": {
+    "src": "img/altbau/vorraum_plakat_weg.jpg",
+    "x": 145.0,
+    "y": 90.0,
+    "w": 145.0,
+    "h": 153.0
+   }
+  },
   "sprites": {}
  },
  "thron": {
@@ -684,6 +763,143 @@ const ALTBAU3D = {
     "pivot": [
      300.0,
      0.0
+    ]
+   }
+  }
+ },
+ "konferenz": {
+  "anchors": {
+   "Tuer": [
+    5,
+    180,
+    108,
+    155
+   ],
+   "Banner": [
+    148,
+    41,
+    685,
+    55
+   ],
+   "Leinwand": [
+    409,
+    86,
+    242,
+    146
+   ],
+   "Tisch": [
+    175,
+    249,
+    385,
+    77
+   ],
+   "Namensschild": [
+    285,
+    283,
+    31,
+    12
+   ],
+   "Gebiss": [
+    321,
+    284,
+    18,
+    10
+   ],
+   "Projektor": [
+    526,
+    275,
+    29,
+    19
+   ],
+   "Stuhl": [
+    132,
+    271,
+    41,
+    78
+   ],
+   "Kissen": [
+    138,
+    305,
+    25,
+    9
+   ],
+   "Ballons": [
+    115,
+    233,
+    83,
+    74
+   ],
+   "Stand": [
+    646,
+    228,
+    135,
+    115
+   ],
+   "Kotze": [
+    558,
+    391,
+    82,
+    14
+   ],
+   "Clown": [
+    788,
+    127,
+    149,
+    227
+   ],
+   "Platt": [
+    791,
+    300,
+    160,
+    62
+   ],
+   "Lachkiste": [
+    889,
+    339,
+    22,
+    14
+   ]
+  },
+  "points": {
+   "linse": [
+    544.9,
+    281.0
+   ],
+   "leinwand": [
+    529.6,
+    163.2
+   ],
+   "clownFuss": [
+    862.0,
+    343.9
+   ]
+  },
+  "variants": {
+   "clown_platt": {
+    "src": "img/altbau/konferenz_clown_platt.jpg",
+    "x": 783.0,
+    "y": 296.0,
+    "w": 175.0,
+    "h": 66.0
+   },
+   "clown_leer": {
+    "src": "img/altbau/konferenz_clown_leer.jpg",
+    "x": 783.0,
+    "y": 296.0,
+    "w": 175.0,
+    "h": 66.0
+   }
+  },
+  "sprites": {
+   "clown": {
+    "src": "img/altbau/konferenz_clown.png",
+    "x": 788.0,
+    "y": 127.0,
+    "w": 146.0,
+    "h": 225.0,
+    "pivot": [
+     862.0,
+     343.9
     ]
    }
   }

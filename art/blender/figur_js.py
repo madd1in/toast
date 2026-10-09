@@ -4,8 +4,8 @@
 import io, json, re
 
 GUESTS = ['sam', 'max', 'dave', 'guybrush', 'jack', 'salad', 'bender', 'prof', 'zoid', 'glados', 'simon', 'affe', 'bobbin', 'zak']
-FIGS = ['bernard', 'hoagie', 'laverne', 'drfred', 'gertrude', 'hancock', 'green', 'lila', 'nett', 'guard'] + GUESTS
-TENT = {'green', 'lila', 'nett', 'guard'}   # Tentakel: ohne Augen, das Spiel verformt das Bild (tent3d in figuren3d.js)
+FIGS = ['bernard', 'hoagie', 'laverne', 'drfred', 'gertrude', 'hancock', 'green', 'lila', 'nett', 'guard', 'kostuem'] + GUESTS
+TENT = {'green', 'lila', 'nett', 'guard', 'kostuem'}   # Tentakel: ohne Augen, das Spiel verformt das Bild (tent3d in figuren3d.js)
 # Blinzeln: Lid-Ellipse (Halbachsen, Farbe; None = Hautfarbe aus dem Rendering) über den Augen-Ankern; Mund-Ellipse beim Reden
 LOOK = {
     'bernard': dict(lid=[3.3, 3.6, '#eef2f6'], mouth=[4.4, 3.6]),   # Augen hinter Brillengläsern
