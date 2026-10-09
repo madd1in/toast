@@ -19,7 +19,11 @@ function altbauBild(id, src) {
 }
 function malBild(g, im, x, y, w, h) {
   if (!imgOk(im)) return false;
-  if (g.isPix) g.drawSprite(im, 0, 0, im.naturalWidth, im.naturalHeight, x, y, w, h); else g.drawImage(im, x, y, w, h);
+  if (g.isPix) {
+    g.drawSprite(im, 0, 0, im.naturalWidth, im.naturalHeight, x, y, w, h);
+    // Sparmodus (Xbox): die Pixelkopie eines ganzen Raumbilds (6,7 MB) nicht behalten – der Pixel-Hintergrund ist ja schon gemalt
+    if (LOWMEM && im.naturalWidth * im.naturalHeight > 1e6) delete im._pixSrc;
+  } else g.drawImage(im, x, y, w, h);
   return true;
 }
 // Raum auf das 3D-Bild umstellen: Lauffläche wie die neuen 3D-Räume, Hotspots neu (o.objs: id -> Felder), Zustände (o.zustand: Variante -> Bedingung)
