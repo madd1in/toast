@@ -493,5 +493,99 @@ const ALTBAU3D = {
    }
   },
   "sprites": {}
+ },
+ "fgarten": {
+  "anchors": {
+   "Klo": [
+    52,
+    114,
+    165,
+    228
+   ],
+   "Statue": [
+    291,
+    98,
+    114,
+    241
+   ],
+   "Baumplatz": [
+    610,
+    345,
+    191,
+    21
+   ],
+   "Baum": [
+    542,
+    22,
+    353,
+    339
+   ],
+   "Laterne": [
+    487,
+    -7,
+    116,
+    364
+   ],
+   "Palast": [
+    848,
+    -27,
+    276,
+    370
+   ],
+   "Wegweiser": [
+    -13,
+    230,
+    77,
+    128
+   ]
+  },
+  "points": {
+   "kloBirne": [
+    136.4,
+    120.1
+   ],
+   "kloOben": [
+    136.8,
+    146.3
+   ],
+   "kloUnten": [
+    118.7,
+    340.0
+   ],
+   "lampe": [
+    545.0,
+    47.0
+   ],
+   "lampeFuss": [
+    545.0,
+    342.0
+   ],
+   "baum": [
+    700.0,
+    356.0
+   ]
+  },
+  "variants": {
+   "zelle_weg": {
+    "src": "img/altbau/fgarten_zelle_weg.jpg",
+    "x": 518.0,
+    "y": 6.0,
+    "w": 59.0,
+    "h": 82.0
+   }
+  },
+  "sprites": {
+   "baum": {
+    "src": "img/altbau/fgarten_baum.png",
+    "x": 545.0,
+    "y": 31.0,
+    "w": 323.0,
+    "h": 331.0,
+    "pivot": [
+     700.0,
+     356.0
+    ]
+   }
+  }
  }
 };

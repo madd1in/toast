@@ -234,3 +234,64 @@ function drehDraw(data, name, winkel) {
     ROOMS.garten1776.objs.find(q => q.id === 'plumpsklo').draw = c => kloFx(c, 'plumpsklo', P.kloOben[0], P.kloOben[1], P.kloUnten[1], P.kloBirne[0], P.kloBirne[1]);
   }
 }
+
+// =================== ZUKUNFT: GARTEN ===================
+// Der Apfelbaum ist ein 3D-Bild, das beim Wachsen um den Stammfuß skaliert; die Laterne leuchtet, solange die Zelle drinsteckt.
+{
+  const D = altbau3d('fgarten', {
+    fill: '#3a1a5a',
+    zustand: { zelle_weg: () => flagOn('zelle') },
+    objs: {
+      klo_zukunft: { rect: [52, 114, 165, 228], walk: [150, 362] },
+      statue: { rect: [291, 98, 114, 241], walk: [350, 362] },
+      baumplatz: { rect: [610, 338, 191, 32], walk: [700, 394] },
+      baum: { rect: [560, 30, 300, 326], walk: [650, 382] },
+      laterne: { rect: [516, 14, 60, 330], walk: [560, 362] },
+      zum_palast: { rect: [848, 40, 112, 300], walk: [912, 362] },
+      zum_landeplatz: { rect: [0, 226, 70, 134], walk: [38, 374], draw: null },
+    },
+  });
+  if (D) {
+    const Pt = D.points, S = D.sprites.baum, baumImg = loadImg(S.src), [bx, by] = S.pivot, [lx, ly] = Pt.lampe, [fx, fy] = Pt.lampeFuss;
+    const objs = ROOMS.fgarten.objs, ob = id => objs.find(q => q.id === id);
+    ob('klo_zukunft').draw = c => kloFx(c, 'klo_zukunft', Pt.kloOben[0], Pt.kloOben[1], Pt.kloUnten[1], Pt.kloBirne[0], Pt.kloBirne[1]);
+    ob('baum').draw = c => {
+      if (!imgOk(baumImg)) return;
+      let k = 1;
+      if (G.treeGrowT) {   // wächst mit kleinem Nachfedern aus dem Boden
+        const x = Math.max(0, Math.min(1, (G.t - G.treeGrowT) / 1800));
+        k = x < 1 ? (1 - Math.pow(1 - x, 3)) * (1 + Math.sin(x * Math.PI) * 0.08) : 1;
+      }
+      if (k <= 0) return;
+      c.save(); c.translate(bx, by); c.scale(k, k); c.translate(-bx, -by);
+      if (!c.isPix) shadow(c, bx, by + 4, 125, 20, 0.26);
+      malBild(c, baumImg, S.x, S.y, S.w, S.h);
+      c.restore();
+    };
+    ob('laterne').draw = (c, t) => {
+      if (flagOn('zelle') || c.isPix) return;
+      const p = 0.5 + Math.sin(t * 0.005) * 0.2;
+      const g = c.createRadialGradient(lx, ly, 3, lx, ly, 60); g.addColorStop(0, `rgba(140,255,130,${p * 0.7})`); g.addColorStop(1, 'rgba(140,255,130,0)');
+      c.fillStyle = g; c.fillRect(lx - 60, ly - 60, 120, 120);
+      c.save(); c.translate(fx, fy + 4); c.scale(1, 0.26);   // grüner Schein der Zelle auf dem Boden
+      const g2 = c.createRadialGradient(0, 0, 5, 0, 0, 85);
+      g2.addColorStop(0, `rgba(140,255,130,${0.32 * p})`); g2.addColorStop(1, 'rgba(140,255,130,0)');
+      c.fillStyle = g2; c.beginPath(); c.ellipse(0, 0, 85, 85, 0, 0, Math.PI * 2); c.fill(); c.restore();
+    };
+    const kx = Pt.kloOben[0];
+    ROOMS.fgarten.dyn = (c, t) => {
+      drawPuddles(c, t, [[210, 396, 48], [600, 408, 58], [880, 386, 40]], 'rgba(230,160,240,0.45)');
+      // Tentakel-Ufo patrouilliert am Himmel
+      const uk = (t % 14000) / 14000, ux = -80 + uk * (W + 160), uy = 120 + Math.sin(uk * Math.PI * 4) * 14;
+      c.save(); c.globalAlpha = 0.18; P(c, [ux - 8, uy + 6, ux + 8, uy + 6, ux + 40, uy + 150, ux - 40, uy + 150], '#a6ff8f', 0); c.restore();
+      E(c, ux, uy, 26, 8, '#9aa3ad', 2.5); E(c, ux, uy - 5, 11, 7, '#c9a6ff', 2.5);
+      for (let i = -1; i <= 1; i++) E(c, ux + i * 12, uy + 1, 2, 2, Math.floor(t / 200 + i) % 2 ? '#ffe36b' : '#ff5fa8', 0);
+      const k = 0.5 + Math.sin(t * 0.004) * 0.5;   // Zyan-Ring um den Sockel des Klo 3000
+      E(c, kx, 334, 64, 11, null, 3, 0, `rgba(60,240,255,${0.4 + k * 0.6})`);
+      for (let i = 0; i < 8; i++) {
+        const x = (i * 131 + t * 0.012 * (i % 3 + 1)) % W, y = 120 + ((i * 47 + t * 0.008) % 160);
+        E(c, x, y, 2, 2, `rgba(255,220,255,${0.3 + 0.3 * Math.sin(t * 0.003 + i)})`, 0);
+      }
+    };
+  }
+}

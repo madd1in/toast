@@ -1093,11 +1093,11 @@ def baum(B, name, x, y, s, LEAF, LEAF2, TRUNK, parent=None, aepfel=None):
         B.rod(f'{name}Ast{k}', (x, y, 1.9 * s), (x + dx * s, y, dz * s), 0.12 * s, TRUNK, parent, r1=0.07 * s, seg=10)
     for k, (dx, dy, dz, r) in enumerate(((0, 0, 3.4, 1.5), (-1.2, 0.2, 2.9, 1.1), (1.15, -0.1, 3.0, 1.15), (-0.5, -0.4, 3.9, 1.0), (0.6, 0.3, 3.95, 1.05), (0, -0.6, 2.8, 0.9))):
         B.sphere(f'{name}Krone{k}', (x + dx * s, y + dy * s, dz * s), (r * s, r * s * 0.9, r * s * 0.85), LEAF if k % 2 else LEAF2, parent)
-    if aepfel:
+    if aepfel:   # gleichmäßig über die Vorderseite der Krone verteilt (Goldener Winkel)
         for k in range(9):
-            rnd = random.Random(k + len(name))
-            a, zz = rnd.uniform(0, 6.28), rnd.uniform(2.6, 4.2)
-            B.sphere(f'{name}Apfel{k}', (x + math.cos(a) * 1.3 * s, y - 1.0 * s, zz * s), (0.13 * s,) * 3, aepfel, parent)
+            a = k * 2.39996
+            r_, zz = 0.35 + 0.85 * ((k * 0.618) % 1), 2.7 + (k % 4) * 0.38
+            B.sphere(f'{name}Apfel{k}', (x + math.cos(a) * r_ * 1.5 * s, y - 1.05 * s, zz * s + math.sin(a) * 0.25 * s), (0.13 * s,) * 3, aepfel, parent)
 
 
 def build_garten1776(SC):
@@ -1287,8 +1287,198 @@ def build_garten1776(SC):
     return spec
 
 
+# ------------------------------------------------------------------ Zukunftsgarten
+def tentakelturm(B, tube, name, x, y, h, w, col, win, seed):
+    """Organischer Wohnturm der Tentakel-Zukunft: geschwungener, sich verjüngender Schlauch mit Kuppe, hellen Saugnäpfen an
+    einer Seite und leuchtenden Fenstern."""
+    rnd = random.Random(seed)
+    lean = rnd.uniform(-0.12, 0.12) * h
+    pts = [(x, y, -0.5), (x - w * 0.15, y, h * 0.35), (x + w * 0.12 + lean * 0.5, y, h * 0.7), (x + lean, y, h)]
+    mat = toon(f'FG_Turm{col}', col, hi=0.1)
+    tube(name, pts, w / 2, mat, None, tip=0.55)
+    B.sphere(name + 'Kuppe', (x + lean, y, h), (w * 0.3, w * 0.3, w * 0.34), mat, None)
+    light = toon(f'FG_TurmHell{col}', '#' + ''.join(f'{min(255, int(int(col[i:i + 2], 16) * 1.45)):02x}' for i in (1, 3, 5)), hi=0.1)
+    for i in range(5):
+        z = h * (0.15 + i * 0.16)
+        B.sphere(f'{name}Napf{i}', (x + w * 0.3 * (1 - z / h * 0.4) + lean * z / h, y - w * 0.32, z), (w * 0.09, w * 0.04, w * 0.07), light, None)
+    for i in range(4):
+        z = h * (0.2 + i * 0.18)
+        on = rnd.random() < 0.75
+        R.box(B, f'{name}Fenster{i}', (x - w * 0.12 + lean * z / h, y - w * 0.42, z), (w * 0.14, 0.05, w * 0.18), win if on else toon('FG_FensterAus', '#3a1858', hi=0.0), bevel=0)
+
+
+def build_fgarten(SC):
+    """Zukunftsgarten: Nachthimmel mit Mond, rosa Planet und geparkter Untertasse, Skyline aus geschwungenen Tentakel-Türmen,
+    Wiese mit lila Weg, die Statue Seiner Lilaheit (das echte 3D-Modell, in Stein), das Klo 3000, die Laterne mit Energiezelle
+    (Variante „zelle_weg“), der kahle Fleck für den Apfelbaum (der Baum ist ein Sprite und wächst im Spiel), der Palasteingang
+    und ein Wegweiser zum Landeplatz."""
+    B = R.Builder(SC)
+    tube = R.tube_in(SC)
+    GRASS, DIRT = tex('FG_Wiese', 'wiese_zukunft.png', 0.12, hi=0.0), tex('GA_Erde', 'erde.png', 0.35, hi=0.0)
+    PATH, SKY = toon('FG_Weg', '#c9a8ea', hi=0.1), unlit('FG_Himmel', 'zukunftshimmel.png', 1.0)
+    PURPLE, PURPLED, GOLD = toon('FG_Palast', '#5e2a86', hi=0.15), toon('FG_PalastDunkel', '#3a1252', hi=0.05), toon('FG_Gold', '#d8b040', hi=0.6)
+    SILVER, SILVERD, VIO = toon('FG_Silber', '#c9d3dc', hi=0.4), toon('FG_SilberDunkel', '#8d959e', hi=0.4), toon('FG_Klotuer', '#6a2fa8', hi=0.1)
+    STONE, STONED, LAMPP = toon('FG_Stein', '#b4a6d0', hi=0.2), toon('FG_SteinDunkel', '#8f86a6', hi=0.1), toon('FG_Laternenpfahl', '#3c2a5a', hi=0.2)
+    WIN = glow(toon('FG_Fenster', '#ffe36b', hi=0.9), 1.8)
+    BLACKF = 'C:/Windows/Fonts/ariblk.ttf'
+    # Himmel, Mond, Planet, Untertasse
+    quad(B, 'FG_Himmel', 300, 80, SKY, (0, 230, 25))
+    bpy.data.objects['FG_Himmel'].visible_shadow = False
+    mp = gp(180, 72, 190)
+    B.sphere('FG_Mond', tuple(mp), (8.5, 8.5, 8.5), glow(toon('FG_Mond', '#ffe6a0', hi=0.9), 1.6), None)
+    for k, (dx, dz, r) in enumerate(((-2.5, 2.0, 1.6), (3.0, -2.5, 1.1))):
+        B.sphere(f'FG_MondKrater{k}', (mp.x + dx, mp.y - 7.6, mp.z + dz), (r, 0.6, r), glow(toon('FG_Krater', '#f0d488', hi=0.6), 1.3), None)
+    pp = gp(250, 42, 200)
+    B.sphere('FG_Planet', tuple(pp), (3.4, 3.4, 3.4), glow(toon('FG_Planet', '#ffc6e0', hi=0.8), 1.2), None)
+    up = gp(700, 34, 110)
+    B.sphere('FG_Untertasse', tuple(up), (6.0, 6.0, 1.6), toon('FG_Untertasse', '#9b2fd1', hi=0.5), None)
+    B.sphere('FG_UntertasseKuppel', (up.x, up.y, up.z + 1.0), (2.4, 2.4, 1.6), SILVER, None)
+    # Skyline aus Tentakel-Türmen (wie gezeichnet bei x 40, 300, 440, 640, 780, 920)
+    for i, (gx, gh, gw, col) in enumerate(((40, 190, 54, '#3b1660'), (300, 150, 44, '#4a1f73'), (440, 230, 60, '#3b1660'), (640, 170, 50, '#5e2a8a'), (780, 240, 64, '#4a1f73'), (920, 160, 50, '#3b1660'))):
+        yt = 55 + (i % 3) * 6
+        u = upm(yt)
+        tentakelturm(B, tube, f'FG_Turm{i}', wx(gx, yt), yt, gh / u * 0.9, gw / u, col, WIN, 300 + i)
+    # Boden: Wiese (fein unterteilt für Freestyle), lila Weg zum Palast, kahler Fleck für den Baum
+    wiese = R.plane(B, 'FG_Wiese', -150, 150, 4, 230, 0.0, GRASS)
+    bm = bmesh.new()
+    bm.from_mesh(wiese.data)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=60, use_grid_fill=True)
+    bm.to_mesh(wiese.data)
+    bm.free()
+    left, right = [], []
+    for i in range(13):
+        k = i / 12
+        gy = 440 - k * (440 - 338)
+        y = wy(gy)
+        gxc = 610 + k * 300
+        half = 90 * (1 - k * 0.6)
+        left.append((wx(gxc - half, y), y))
+        right.append((wx(gxc + half, y), y))
+    bm = bmesh.new()
+    vs = [bm.verts.new((x, y, 0.005)) for x, y in left + right[::-1]]
+    f = bm.faces.new(vs)
+    if f.normal.z < 0:
+        f.normal_flip()
+    ohne_kontur(B.obj('FG_Weg', bm, PATH, None, (0, 0, 0), smooth=False))
+    yb = wy(356)
+    B.cone('FG_Baumplatz', 0.0, 0.03, 84 / upm(yb), 84 / upm(yb), DIRT, None, xy=(wx(700, yb), yb), seg=40, bevel=0.01, scale=(1, 0.55, 1))
+
+    # --- Klo 3000 (silberne Kapsel, Mitte unten bei 140/340: dort leuchtet im Spiel der Zyan-Ring) ---
+    yK = wy(340) + 0.8
+    kx = wx(140, yK)
+    KZ = B.empty('FG_Klo')
+    KZ.location = (kx, yK, 0)
+    B.cone('FG_KloRumpf', 0.0, 2.3, 0.82, 0.82, SILVER, KZ, xy=(0, 0), seg=40, bevel=0.03)
+    B.sphere('FG_KloKappe', (0, 0, 2.3), (0.82, 0.82, 0.55), SILVER, KZ)
+    B.sphere('FG_KloHaube', (0, 0, 2.75), (0.5, 0.5, 0.2), toon('FG_Haube', '#e6edf2', hi=0.7), KZ)
+    R.box(B, 'FG_KloTuer', (0, -0.78, 1.25), (0.95, 0.12, 2.0), VIO, KZ, bevel=0.2)
+    R.box(B, 'FG_KloGlanz', (-0.28, -0.85, 1.4), (0.08, 0.02, 1.0), toon('FG_Glanz', '#f4f0ff', hi=0.6), KZ, bevel=0.03)
+    R.box(B, 'FG_KloSchild', (0, -0.86, 0.75), (0.7, 0.03, 0.18), toon('FG_SchildGelb', '#ffd23a', hi=0.4), KZ, bevel=0.02)
+    text(SC, 'FG_KloText', 'KLO 3000', 0.11, toon('FG_KloSchrift', '#4a1a6a', hi=0.2), (0, -0.885, 0.745), font=BLACKF, extrude=0.004, parent=KZ)
+    B.rod('FG_KloRohr', (0, 0, 2.9), (0, 0, 3.35), 0.05, SILVERD, KZ, seg=10)
+    B.sphere('FG_KloBirne', (0, 0, 3.42), (0.09, 0.09, 0.09), toon('L2_Birnenrot', '#7a2020', hi=0.6), KZ)
+    B.cone('FG_KloSockel', 0.0, 0.06, 0.95, 0.95, toon('FG_Sockel', '#2a1a40', hi=0.2), KZ, xy=(0, 0), seg=40, bevel=0.01)
+
+    # --- Statue Seiner Lilaheit: das 3D-Modell des Lila Tentakels, in Stein ---
+    yS = wy(340) + 0.6
+    sx = wx(350, yS)
+    p0, p1 = gp(296, 262, yS - 0.5), gp(404, 340, yS - 0.5)
+    pw = p1.x - p0.x
+    R.box(B, 'FG_Sockel', (sx, yS, 0.6), (pw, 1.0, 1.2), STONED, bevel=0.03)
+    R.box(B, 'FG_SockelPlatte', (sx, yS, 1.24), (pw + 0.2, 1.15, 0.1), STONE, bevel=0.02)
+    text(SC, 'FG_SockelText1', 'SEINE LILAHEIT', 0.13, toon('FG_Inschrift', '#2a1a40', hi=0.1), (sx, yS - 0.51, 0.78), font=BLACKF, extrude=0.004)
+    text(SC, 'FG_SockelText2', 'Herrscher der Welt', 0.09, toon('FG_Inschrift', '#2a1a40', hi=0.1), (sx, yS - 0.51, 0.55), font='C:/Windows/Fonts/georgiab.ttf', extrude=0.004)
+    ST = B.empty('FG_Statue')
+    src = bpy.data.scenes['Tentakel3D_v2']
+    from mathutils import Matrix
+    for o in list(src.objects):
+        if o.type not in ('MESH', 'CURVE'):
+            continue
+        n = o.copy()
+        n.data = o.data.copy()
+        n.name = 'FG_Statue_' + o.name
+        SC.collection.objects.link(n)
+        n.data.materials.clear()
+        n.data.materials.append(STONED if 'Napf' in o.name or 'Schlitz' in o.name else STONE)
+        n.parent = ST
+        n.matrix_parent_inverse = Matrix.Identity(4)
+    # Krone: „Herrscher der Welt“ (und damit liest man die Statue eindeutig als Seine Lilaheit)
+    CR = toon('FG_Krone', '#e8c040', hi=0.7)
+    B.cone('FG_Krone', 3.32, 3.56, 0.36, 0.42, CR, ST, xy=(-0.12, 0.0), seg=24, bevel=0.01)
+    for k in range(6):
+        a = 2 * math.pi * k / 6
+        B.cone(f'FG_KronenZacke{k}', 3.56, 3.86, 0.09, 0.0, CR, ST, xy=(-0.12 + math.cos(a) * 0.38, math.sin(a) * 0.38), seg=8, bevel=0)
+        B.sphere(f'FG_KronenPerle{k}', (-0.12 + math.cos(a) * 0.38, math.sin(a) * 0.38, 3.88), (0.05, 0.05, 0.05), toon('FG_Perle', '#ff5fa8', hi=0.8), ST)
+    ST.location, ST.rotation_euler, ST.scale = (sx, yS, 1.29), (0, 0, 0.95), (0.62, 0.62, 0.62)   # Dreiviertelansicht: Lippen und Arme sichtbar
+
+    # --- Laterne mit Energiezelle (Kopf bei 545/47 wie gezeichnet: dort schwirren die Glühwürmchen) ---
+    yL = wy(342)
+    lb = Vector((wx(545, yL), yL, 0))
+    lh = gp(545, 47, yL)
+    tube('FG_Laternenpfahl', [(lb.x - 0.05, yL, -0.2), (lb.x - 0.18, yL, lh.z * 0.3), (lb.x + 0.15, yL, lh.z * 0.62), (lb.x - 0.05, yL, lh.z * 0.86), (lh.x, yL, lh.z - 0.32)], 0.1, LAMPP, None, tip=0.6)
+    B.sphere('FG_LaternenFuss', (lb.x, yL, 0.02), (0.3, 0.3, 0.08), LAMPP, None)
+    u = upm(yL)
+    hw, hh = 54 / u, 46 / u
+    for k, (dx, dz, sx_, sz_) in enumerate(((0, hh / 2, hw, 0.06), (0, -hh / 2, hw, 0.06), (-hw / 2, 0, 0.06, hh), (hw / 2, 0, 0.06, hh))):
+        R.box(B, f'FG_LampenRahmen{k}', (lh.x + dx, yL, lh.z + dz), (sx_, hw, sz_), toon('FG_Lampenkopf', '#2a1d40', hi=0.3), bevel=0.01)
+    B.cone('FG_LampenDach', lh.z + hh / 2, lh.z + hh / 2 + 0.25, hw * 0.75, 0.05, toon('FG_Lampenkopf', '#2a1d40', hi=0.3), None, xy=(lh.x, yL), seg=4, bevel=0, rot=(0, 0, math.pi / 4))
+    glas_an = R.box(B, 'FG_LampenGlas', (lh.x, yL, lh.z), (hw - 0.06, hw - 0.12, hh - 0.06), glow(toon('FG_Lampenschein', '#a6ff9a', hi=0.8), 1.2), bevel=0)
+    glas_aus = R.box(B, 'FG_LampenGlasAus', (lh.x, yL, lh.z), (hw - 0.06, hw - 0.12, hh - 0.06), toon('FG_LampeDunkel', '#14101e', hi=0.4), bevel=0)
+    zelle = [glas_an, R.box(B, 'FG_Zelle', (lh.x, yL - hw / 2 + 0.02, lh.z), (hw * 0.6, 0.06, hh * 0.32), glow(toon('L2_Zellgruen', '#7dff7a', hi=0.8), 2.0), bevel=0.02)]
+    for k, sx2 in enumerate((-1, 1)):
+        zelle.append(R.box(B, f'FG_ZellKappe{k}', (lh.x + sx2 * hw * 0.32, yL - hw / 2 + 0.02, lh.z), (0.06, 0.08, hh * 0.36), toon('L_Messing', '#d8a83c', hi=0.75), bevel=0.01))
+    zelle.append(lamp(SC, 'FG_LichtLaterne', (lh.x, yL - hw, lh.z), 60, (0.55, 1.0, 0.5), 0.3, dist=1.2))
+
+    # --- Palasteingang rechts: lila Mauer mit Spitzbogentür, Goldsäule, Schild PALAST ---
+    yP = 12.4
+    px0 = wx(866, yP)
+    dx0, dx1 = wx(886, yP), wx(1000, yP)
+    flaeche(B, 'FG_Palastmauer', 'xz', px0, 9.5, 0, 5.5, [(dx0, dx1, 0, 4.4)], PURPLE, (0, yP + 0.3, 0), 0.6)
+    bogenzwickel(B, 'FG_PalastBogen', (dx0 + dx1) / 2, 2.6, (dx1 - dx0) / 2, 4.4, yP, 0.6, PURPLE)
+    R.box(B, 'FG_PalastInnen', ((dx0 + dx1) / 2, yP + 0.55, 2.2), (dx1 - dx0, 0.05, 4.4), toon('FG_PalastNacht', '#1a0a2a', hi=0.0), bevel=0)
+    B.cone('FG_Goldsaeule', 0, 3.3, 0.12, 0.12, GOLD, None, xy=(dx0 - 0.1, yP - 0.12), seg=16, bevel=0.01)
+    B.sphere('FG_SaeulenKnauf', (dx0 - 0.1, yP - 0.12, 3.36), (0.16, 0.16, 0.12), GOLD, None)
+    s0, s1 = gp(872, 90, yP - 0.1), gp(958, 66, yP - 0.1)
+    R.box(B, 'FG_PalastSchild', ((s0.x + s1.x) / 2, yP - 0.1, (s0.z + s1.z) / 2), (s1.x - s0.x, 0.08, s1.z - s0.z), GOLD, bevel=0.03)
+    text(SC, 'FG_PalastText', 'PALAST', 0.26, toon('FG_SchildLila', '#4a1a6a', hi=0.2), ((s0.x + s1.x) / 2, yP - 0.15, (s0.z + s1.z) / 2 - 0.02), font=BLACKF, extrude=0.006)
+    lamp(SC, 'FG_LichtPalast', ((dx0 + dx1) / 2, yP - 0.6, 3.0), 80, (1.0, 0.75, 0.95), 0.5, dist=3.0)
+
+    # --- Wegweiser zum Landeplatz (linker Rand) ---
+    ys = 11.4
+    sx3 = wx(34, ys)
+    B.rod('FG_WegPfahl', (sx3, ys, 0), (sx3, ys, 1.75), 0.06, toon('FG_Wegpfahl', '#3c2a5a', hi=0.2), None, seg=10)
+    WS = B.empty('FG_Wegschild')
+    WS.location = (sx3, ys - 0.07, 1.42)
+    bm = bmesh.new()
+    f = bm.faces.new([bm.verts.new((x, 0, z)) for x, z in ((0.45, -0.17), (-0.38, -0.17), (-0.56, 0), (-0.38, 0.17), (0.45, 0.17))])
+    if f.normal.y > 0:
+        f.normal_flip()
+    B.obj('FG_WegBrett', bm, glow(toon('FG_WegNeon', '#7fe8ff', hi=0.6), 1.2), WS, (0, 0, 0), smooth=False, solid=0.05)
+    text(SC, 'FG_WegText', 'Landeplatz', 0.115, toon('FG_WegSchrift', '#140828', hi=0.1), (-0.02, -0.035, -0.005), font=BLACKF, extrude=0.004, parent=WS)
+
+    # --- Apfelbaum (Sprite: wächst im Spiel aus dem kahlen Fleck) ---
+    BT = B.empty('FG_Baum')
+    BT.location = (wx(700, yb), yb, 0)
+    baum(B, 'FG_Baum', 0, 0, 0.92, toon('GA_Laub', '#3f9a3a', hi=0.1), toon('GA_LaubHell', '#55b84a', hi=0.1), toon('GA_Stamm', '#6b4424', hi=0.05), parent=BT, aepfel=toon('G_Apfel', '#e0302a', hi=0.7))
+
+    # Licht: Mondlicht von links hinten (kühl-rosa), Stadtschein von vorn rechts, Klo-Zyan
+    sonne_aus(SC, (0.5, -0.45, -0.74), 2.6, (0.95, 0.85, 1.0))
+    sonne_aus(SC, (-0.4, 0.85, -0.35), 0.7, (1.0, 0.6, 0.9))
+    lamp(SC, 'FG_LichtKlo', (kx, yK - 1.0, 0.3), 60, (0.3, 0.95, 1.0), 0.4, dist=2.0)
+    spec = {
+        'anchors': {'Klo': [KZ], 'Statue': [ST, bpy.data.objects['FG_Sockel']], 'Baumplatz': [bpy.data.objects['FG_Baumplatz']], 'Baum': [BT],
+                    'Laterne': [bpy.data.objects['FG_Laternenpfahl'], bpy.data.objects['FG_LampenDach']], 'Palast': [bpy.data.objects['FG_Palastmauer'], bpy.data.objects['FG_PalastSchild']],
+                    'Wegweiser': [WS, bpy.data.objects['FG_WegPfahl']]},
+        'points': {'kloBirne': bpy.data.objects['FG_KloBirne'], 'kloOben': (kx, yK, 3.0), 'kloUnten': (kx, yK - 0.8, 0.0), 'lampe': tuple(lh), 'lampeFuss': (lb.x, yL, 0.0),
+                   'baum': (wx(700, yb), yb, 0.0)},
+        'sprites': {'baum': (BT, [o for o in SC.objects if o.parent == BT])},
+        'variants': {'zelle_weg': ([glas_aus], zelle)},
+    }
+    return spec
+
+
 ROOMS = {'lobby': (build_lobby, ('#2a2238', '#120c1c')), 'labor': (build_labor, ('#1a3a3a', '#0a1a1c')), 'gasthaus': (build_gasthaus, ('#d8b88a', '#4a2e18')),
-         'garten1776': (build_garten1776, ('#d6f1ff', '#62bdf6'))}
+         'garten1776': (build_garten1776, ('#d6f1ff', '#62bdf6')), 'fgarten': (build_fgarten, ('#c85a8e', '#1c0838'))}
 
 
 # ------------------------------------------------------------------ Porträts für Gemälde (texturen.py: gemaelde())

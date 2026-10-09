@@ -515,6 +515,27 @@ def unterschrift(name, w=512, h=360):
     save(np.asarray(d.filter(ImageFilter.GaussianBlur(0.5)), np.float32), name)
 
 
+def zukunftshimmel(name, w=1024, h=512, seed=131):
+    """Nachthimmel der Tentakel-Zukunft: oben tiefviolett, zum Horizont pink, Sterne, Nebelbänder (Mond und Planet sind 3D)."""
+    yy = np.linspace(0, 1, h)[:, None, None]
+    top, mid, bot = hexrgb('#1c0838'), hexrgb('#6a2a7a'), hexrgb('#c85a8e')
+    arr = np.where(yy < 0.6, top + (mid - top) * (yy / 0.6), mid + (bot - mid) * ((yy - 0.6) / 0.4)) * np.ones((1, w, 1), np.float32)
+    arr += (noise(w, h, 4, 4, seed)[..., None] - 0.5) * 24
+    d = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    dr = ImageDraw.Draw(d)
+    r = random.Random(seed)
+    for _ in range(220):
+        x, y, s = r.randint(0, w), r.randint(0, int(h * 0.7)), r.choice((1, 1, 1, 2, 2, 3))
+        dr.ellipse([x - s, y - s, x + s, y + s], fill=(255, 240, 255))
+    neb = Image.new('L', (w, h), 0)
+    nd = ImageDraw.Draw(neb)
+    for cx_, cy_, rx, ry in ((0.5, 0.86, 0.45, 0.06), (0.28, 0.92, 0.34, 0.045), (0.78, 0.8, 0.3, 0.05)):
+        nd.ellipse([w * (cx_ - rx), h * (cy_ - ry), w * (cx_ + rx), h * (cy_ + ry)], fill=110)
+    neb = neb.filter(ImageFilter.GaussianBlur(18))
+    d = Image.composite(Image.new('RGB', (w, h), (232, 160, 216)), d, neb)
+    save(np.asarray(d, np.float32), name)
+
+
 JOBS = {
     'gras.png': lambda n: speckle(n, ['#3f7a2c', '#5a9a3a', '#7cbc4a'], blades=True, seed=21),
     'fels.png': lambda n: speckle(n, ['#6a6460', '#8a847c', '#a8a298'], scale=6, cracks=True, seed=22),
@@ -549,6 +570,8 @@ JOBS = {
     'hancock_zettel.png': unterschrift,
     'erde.png': lambda n: speckle(n, ['#5e3c22', '#6e4828', '#84583a'], scale=8, seed=121, tile=True),
     'wiese.png': lambda n: speckle(n, ['#4a8a34', '#5fae3e', '#7cc95a'], blades=True, seed=123, tile=True),
+    'wiese_zukunft.png': lambda n: speckle(n, ['#5aa83a', '#76c44a', '#9ee46a'], blades=True, seed=133, tile=True),
+    'zukunftshimmel.png': zukunftshimmel,
 }
 
 if __name__ == '__main__':
