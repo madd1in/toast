@@ -772,7 +772,7 @@ function exitFullscreen() { const ex = document.exitFullscreen || document.webki
 function toggleFullscreen() { if (isFullscreen()) exitFullscreen(); else enterFullscreen(); }
 function firstInteraction() {
   Sound.init();
-  if (G.settings.lang && G.settings.lang !== 'de' && !Lang.active && Lang.state !== 'loading' && Lang.supported()) setLang(G.settings.lang, false);
+  if (G.settings.lang && G.settings.lang !== 'de' && !Lang.active && Lang.state !== 'loading' && (Lang.supported() || navigator.onLine)) setLang(G.settings.lang, false);
   if (G.settings.fullscreen && !G.fsTried) { G.fsTried = true; enterFullscreen(); }
 }
 
@@ -1467,7 +1467,7 @@ function menuItems() {
     { id: 'ui', label: 'Bedienung: ' + (G.settings.ui === 'classic' ? 'Klassisch (Verben)' : 'Modern (minimal)') },
     { id: 'hotspots', label: 'Hotspot-Hilfe: ' + (G.settings.hotspots ? 'an' : 'aus') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
-    typeof toggleEcht3d === 'function' && { id: 'echt3d', label: 'Echtzeit-3D (Beta, Hafen): ' + (G.settings.echt3d ? 'an' : 'aus') },
+    typeof toggleEcht3d === 'function' && { id: 'echt3d', label: 'Echtzeit-3D (Beta): ' + (G.settings.echt3d ? 'an' : 'aus') },
     fsAvailable && { id: 'fs', label: 'Vollbild: ' + (isFullscreen() ? 'an' : 'aus') },
     back,
   ].filter(Boolean);
@@ -1526,11 +1526,10 @@ function toggleMusic() { G.settings.music = !G.settings.music; Sound.setMusic(G.
 // ---------- Sprachen ----------
 function langLabel() {
   const l = LANGS.find(q => q.id === (G.settings.lang || 'de')) || LANGS[0];
-  const st = Lang.cur === 'de' ? (Lang.supported() ? '' : ' (weitere nur in Chrome am PC)') : Lang.state === 'loading' ? ` (lädt ${Math.round(Lang.progress * 100)} %)` : Lang.state === 'tap' ? ' (tippen zum Laden)' : Lang.state === 'ready' ? '' : ' (nicht verfügbar)';
+  const st = Lang.cur === 'de' ? (Lang.supported() ? '' : ' (andere übersetzen online)') : Lang.state === 'loading' ? (Lang.supported() ? ` (lädt ${Math.round(Lang.progress * 100)} %)` : ' (verbindet …)') : Lang.state === 'tap' ? ' (tippen zum Laden)' : Lang.state === 'ready' ? '' : ' (nicht verfügbar)';
   return `​Sprache · Language: ${l.label}${st}`;
 }
 function cycleLang() {
-  if (!Lang.supported()) { note('Weitere Sprachen brauchen den eingebauten Übersetzer von Chrome (ab Version 138, am PC).'); return; }
   const i = LANGS.findIndex(q => q.id === (G.settings.lang || 'de'));
   setLang(LANGS[(i + 1) % LANGS.length].id, true);
 }
@@ -1590,7 +1589,7 @@ function setLang(id, user) {
     if (G.settings.lang !== id) return;
     if (ok && id !== 'de') { Lang.prewarm(langStrings()); if (user) note(`Sprache: ${LANGS.find(q => q.id === id).label}${Voice.hasVoice ? '' : ' – keine passende Stimme installiert'}`); }
     else if (!ok && Lang.state === 'tap') { if (user) note('Tippe noch einmal, um das Sprachpaket zu laden.'); }
-    else if (!ok && id !== 'de') { note('Diese Sprache ist im Übersetzer des Browsers nicht verfügbar.'); }
+    else if (!ok && id !== 'de') { note('Diese Sprache ist gerade nicht verfügbar – ohne Internet bleibt es beim Deutschen.'); }
   });
 }
 function toggleVoice() { if (!Voice.available) return; G.settings.voice = !G.settings.voice; Voice.on = G.settings.voice; saveSettings(); }

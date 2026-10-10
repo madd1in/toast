@@ -7,6 +7,8 @@
 // ============================================================
 
 const flagOn = k => !!(G.state && G.state.flags && G.state.flags[k]);
+// im Echtzeit-3D (js/echt3d.js) bewegt die 3D-Szene Pendel, Hebel, Baum und Clown selbst – dann keine Bilder darüber malen
+const in3d = () => typeof echt3dOn === 'function' && echt3dOn(ROOMS[viewRoomId()]);
 function altbauNeu(id) {   // Hintergrund neu malen (Bild geladen)
   for (const k of Object.keys(bgCache)) if (k === id || k.startsWith(id + '|')) delete bgCache[k];
   if (ROOMS[id]) delete ROOMS[id]._pix;
@@ -37,6 +39,7 @@ function altbau3d(id, o) {
     return { on, v, im };
   });
   Object.assign(room, {
+    zustand3d: o.zustand || {},
     sMin: 0.67, sMax: 1, yTop: 350, yBot: 432, walk: o.walk || [[20, 352], [940, 350], [955, 432], [5, 432]],
     bgKey: () => vars.map(z => z.on() ? 1 : 0).join(''),
     draw(g) {
@@ -54,7 +57,7 @@ function altbau3d(id, o) {
 function pendelDraw(data, name, fenster, amp = 0.16) {
   const s = data.sprites[name], im = loadImg(s.src), [px, py] = s.pivot, F = data.anchors[fenster];
   return (c, t) => {
-    if (!imgOk(im)) return;
+    if (!imgOk(im) || in3d()) return;
     c.save(); c.beginPath(); c.rect(F[0] + 1, F[1] + 1, F[2] - 2, F[3] - 2); c.clip();
     c.translate(px, py); c.rotate(Math.sin(t * 0.0032) * amp); c.translate(-px, -py);
     malBild(c, im, s.x, s.y, s.w, s.h);
@@ -66,7 +69,7 @@ function pendelDraw(data, name, fenster, amp = 0.16) {
 function drehDraw(data, name, winkel) {
   const s = data.sprites[name], im = loadImg(s.src), [px, py] = s.pivot;
   return (c, t) => {
-    if (!imgOk(im)) return;
+    if (!imgOk(im) || in3d()) return;
     c.save(); c.translate(px, py); c.rotate(winkel(t)); c.translate(-px, -py);
     malBild(c, im, s.x, s.y, s.w, s.h);
     c.restore();
@@ -261,7 +264,7 @@ function drehDraw(data, name, winkel) {
     const objs = ROOMS.fgarten.objs, ob = id => objs.find(q => q.id === id);
     ob('klo_zukunft').draw = c => kloFx(c, 'klo_zukunft', Pt.kloOben[0], Pt.kloOben[1], Pt.kloUnten[1], Pt.kloBirne[0], Pt.kloBirne[1]);
     ob('baum').draw = c => {
-      if (!imgOk(baumImg)) return;
+      if (!imgOk(baumImg) || in3d()) return;
       let k = 1;
       if (G.treeGrowT) {   // wächst mit kleinem Nachfedern aus dem Boden
         const x = Math.max(0, Math.min(1, (G.t - G.treeGrowT) / 1800));

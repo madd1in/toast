@@ -4,6 +4,8 @@
 //  Deutsch ist die Originalfassung. Für Englisch, Französisch, Spanisch, Japanisch, Chinesisch
 //  und Koreanisch übersetzt der eingebaute Übersetzer des Browsers (Chrome ab Version 138 am PC)
 //  alle Texte direkt auf dem Gerät; die Sprachausgabe liest sie mit einer Stimme der Zielsprache vor.
+//  Browser ohne eingebauten Übersetzer (Edge, Firefox, Safari) übersetzen online nach – dieselbe Zeile wird
+//  nur einmal geholt und genauso gespeichert; ohne Internet bleibt es beim Deutschen.
 //  Übersetzungen werden pro Sprache im Browser gespeichert, damit sie beim nächsten Mal sofort da sind.
 // ============================================================
 
@@ -16,7 +18,7 @@ const Lang = (() => {
   const bgWait = new Set();   // Schilder in Raum-Hintergründen: nach ihrer Übersetzung den Hintergrund neu malen
   const cache = new Map(), outs = new Set(), waiting = new Map(), queue = [];
   const KEY = 'tentakel-toast-lang-';
-  const supported = () => typeof self !== 'undefined' && 'Translator' in self;
+  const supported = () => typeof self !== 'undefined' && !!self.Translator;
   // ein Null-Breiten-Leerzeichen am Anfang markiert Texte, die nie übersetzt werden (z. B. die Sprachwahl selbst)
   const wanted = s => typeof s === 'string' && s.length > 1 && s.charCodeAt(0) !== 0x200b && /[a-zäöüß]/.test(s) && /[A-Za-zÄÖÜäöüß]{3}/.test(s);
   function load(id) {
@@ -45,18 +47,41 @@ const Lang = (() => {
     if (!waiting.has(s)) { waiting.set(s, []); if (urgent) queue.unshift(s); else queue.push(s); pump(); }
     else if (urgent) { const i = queue.indexOf(s); if (i > 0) { queue.splice(i, 1); queue.unshift(s); } }
   }
+  // Fallback für Browser ohne eingebauten Übersetzer (Edge, Firefox, Safari): übersetzt online, Zeile für Zeile,
+  // und legt alles wie die native Übersetzung im Browser ab – offline oder bei Störung bleibt einfach Deutsch.
+  function webTranslator() {
+    return {
+      async translate(s) {
+        const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=de&tl=' + cur + '&dt=t&q=' + encodeURIComponent(s));
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        return (d && d[0] || []).map(seg => seg && seg[0] || '').join('') || s;
+      }
+    };
+  }
   // muss beim ersten Mal aus einem Klick heraus aufgerufen werden: das Sprachpaket wird erst dann geladen
   async function set(id) {
     if (id === cur && (id === 'de' || tr)) return true;
     cur = id; tr = null; queue.length = 0; waiting.clear(); bgWait.clear(); load(id);
     if (id === 'de') { state = 'off'; return true; }
-    if (!supported()) { state = 'unsupported'; return false; }
     state = 'loading'; progress = 0;
-    try {
-      const t = await Translator.create({ sourceLanguage: 'de', targetLanguage: id, monitor(m) { m.addEventListener('downloadprogress', e => { progress = e.loaded || 0; }); } });
-      if (cur !== id) return false;
-      tr = t; state = 'ready'; pump(); return true;
-    } catch (e) { if (cur === id) state = /not.?allowed|activation|gesture/i.test(String(e && e.message)) ? 'tap' : 'error'; return false; }
+    if (supported()) {   // eingebauter Übersetzer: offline auf dem Gerät, in Chrome ab 138
+      try {
+        const t = await Translator.create({ sourceLanguage: 'de', targetLanguage: id, monitor(m) { m.addEventListener('downloadprogress', e => { progress = e.loaded || 0; }); } });
+        if (cur !== id) return false;
+        tr = t; state = 'ready'; pump(); return true;
+      } catch (e) {
+        if (cur !== id) return false;
+        if (/not.?allowed|activation|gesture/i.test(String(e && e.message))) { state = 'tap'; return false; }   // Sprachpaket braucht einen Klick
+        // sonst weiter mit dem Online-Fallback (z. B. Sprachpaar fehlt im Gerät)
+      }
+    }
+    // Online-Fallback (Edge, Firefox, Safari – oder wenn der eingebaute Übersetzer versagt):
+    // eine Zeile als Probe übersetzen; ohne Internet bleibt es beim Deutschen
+    const w = webTranslator();
+    try { await w.translate('Ja'); } catch (e) { if (cur === id) state = 'error'; return false; }
+    if (cur !== id) return false;
+    tr = w; state = 'ready'; pump(); return true;
   }
   // sofort: Übersetzung aus dem Speicher – sonst das Original, und die Übersetzung wird im Hintergrund geholt
   function t(s) {

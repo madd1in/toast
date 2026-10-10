@@ -575,10 +575,12 @@ def render_hafen_layers(SC, cam):
 
 
 # ------------------------------------------------------------------ Marsgesicht (Zukunft: Ausflug vom Landeplatz)
-def build_mars(SC, froh=False):
+def build_mars(SC, froh=False, echt=False):
     """Rote Wüste mit gelandetem Lieferraumschiff, Briefkasten und dem riesigen steinernen Gesicht (Verbeugung vor dem
     Mars-Gesicht der Boulevard-Presse): missmutig mit Eisbeutel auf der Stirn (froh=False) oder mit geschlossenen Freudenaugen
-    und breitem Lächeln, nachdem es seine Kopfschmerztabletten bekommen hat (froh=True). Beide Bilder sonst identisch."""
+    und breitem Lächeln, nachdem es seine Kopfschmerztabletten bekommen hat (froh=True). Beide Bilder sonst identisch.
+    echt=True (für den Echtzeit-3D-Export): baut BEIDE Gesichtszustände in eine Szene – die Froh-Teile mit Präfix F_
+    und zunächst versteckt; das Spiel schaltet im laufenden Bild die Zustände um (img/3d/mars.json, Zustand „froh“)."""
     B = Builder(SC)
     tube = tube_in(SC)
     SAND, ROCK = tex_toon('R_MarsSand', 'marssand.png', 0.09), tex_toon('R_MarsFels', 'marsfels.png', 0.22, hi=0.15)   # Fels matt, kein Glanz
@@ -628,27 +630,33 @@ def build_mars(SC, froh=False):
     B.sphere('Nase', (FX, FRONT - 0.7, FZ - 0.2), (1.4, 2.1, 2.5), ROCKL, G_)
     for s, k in (('L', -1), ('R', 1)):
         B.sphere(f'Nasenloch{s}', (FX + k * 0.7, FRONT - 2.6, FZ - 1.9), (0.4, 0.4, 0.3), DARK, G_)
-        # Brauen: missmutig mit nach innen fallenden Enden, froh sanft gewölbt
-        box(B, f'Braue{s}', (FX + k * 3.4, FRONT - 0.2, FZ + (4.5 if froh else 4.1)), (4.4, 1.2, 1.0), ROCKD, G_, rot=(0, k * 0.12 if froh else -k * 0.34, 0), bevel=0.2)   # missmutig: Innenenden nach unten
-        if froh:   # Freudenaugen: zwei geschlossene Bögen, dazu rosige Wangen
-            tube(f'Lachauge{s}', [(FX + k * 4.9, FRONT - 0.6, FZ + 1.7), (FX + k * 3.4, FRONT - 0.9, FZ + 2.9), (FX + k * 1.9, FRONT - 0.6, FZ + 1.7)], 0.3, DARK, G_)
-            B.sphere(f'Rouge{s}', (FX + k * 4.9, FRONT - 0.4, FZ - 0.5), (1.3, 0.25, 0.8), BLUSH, G_)
-        else:      # Augen: dunkle Höhle, Augapfel, Pupille, schwere Oberlider
+        if froh or echt:   # Freudenaugen: zwei geschlossene Bögen, dazu rosige Wangen; beim Echtzeit-Export mit Präfix F_
+            P = 'F_' if echt else ''
+            box(B, f'{P}Braue{s}', (FX + k * 3.4, FRONT - 0.2, FZ + 4.5), (4.4, 1.2, 1.0), ROCKD, G_, rot=(0, k * 0.12, 0), bevel=0.2)
+            tube(f'{P}Lachauge{s}', [(FX + k * 4.9, FRONT - 0.6, FZ + 1.7), (FX + k * 3.4, FRONT - 0.9, FZ + 2.9), (FX + k * 1.9, FRONT - 0.6, FZ + 1.7)], 0.3, DARK, G_)
+            B.sphere(f'{P}Rouge{s}', (FX + k * 4.9, FRONT - 0.4, FZ - 0.5), (1.3, 0.25, 0.8), BLUSH, G_)
+        if not froh or echt:   # Augen: dunkle Höhle, Augapfel, Pupille, schwere Oberlider; Brauen missmutig mit nach innen fallenden Enden
+            box(B, f'Braue{s}', (FX + k * 3.4, FRONT - 0.2, FZ + 4.1), (4.4, 1.2, 1.0), ROCKD, G_, rot=(0, -k * 0.34, 0), bevel=0.2)
             B.sphere(f'Hoehle{s}', (FX + k * 3.4, FRONT - 0.1, FZ + 2.3), (2.2, 1.0, 1.8), DARK, G_)
             B.sphere(f'Augapfel{s}', (FX + k * 3.4, FRONT - 0.6, FZ + 2.1), (1.5, 0.8, 1.4), PALE, G_)
             B.sphere(f'Pupille{s}', (FX + k * 3.2, FRONT - 1.3, FZ + 1.8), (0.6, 0.3, 0.6), BLACK, G_)
             B.sphere(f'Lid{s}', (FX + k * 3.4, FRONT - 1.0, FZ + 3.0), (1.8, 0.9, 1.0), ROCK, G_)
-    if froh:   # breites Lächeln mit offenem Mund und Zahnreihe
-        B.sphere('Mundoeffnung', (FX, FRONT - 0.2, FZ - 4.2), (3.6, 0.55, 1.4), DARK, G_)
+    if froh or echt:   # breites Lächeln mit offenem Mund und Zahnreihe
+        P = 'F_' if echt else ''
+        B.sphere(f'{P}Mundoeffnung', (FX, FRONT - 0.2, FZ - 4.2), (3.6, 0.55, 1.4), DARK, G_)
         for i in range(5):
-            box(B, f'Zahn{i}', (FX - 2.4 + i * 1.2, FRONT - 0.65, FZ - 3.2), (0.9, 0.35, 0.9), PALE, G_, bevel=0.2)
-        tube('Lachen', [(FX - 4.0, FRONT - 0.5, FZ - 3.0), (FX - 2.0, FRONT - 0.9, FZ - 5.2), (FX + 2.0, FRONT - 0.9, FZ - 5.2), (FX + 4.0, FRONT - 0.5, FZ - 3.0)], 0.4, DARK, G_)
-    else:      # Schmollmund
+            box(B, f'{P}Zahn{i}', (FX - 2.4 + i * 1.2, FRONT - 0.65, FZ - 3.2), (0.9, 0.35, 0.9), PALE, G_, bevel=0.2)
+        tube(f'{P}Lachen', [(FX - 4.0, FRONT - 0.5, FZ - 3.0), (FX - 2.0, FRONT - 0.9, FZ - 5.2), (FX + 2.0, FRONT - 0.9, FZ - 5.2), (FX + 4.0, FRONT - 0.5, FZ - 3.0)], 0.4, DARK, G_)
+    if not froh or echt:   # Schmollmund
         tube('Schmollen', [(FX - 3.6, FRONT - 0.5, FZ - 5.0), (FX - 1.6, FRONT - 0.9, FZ - 3.8), (FX + 1.6, FRONT - 0.9, FZ - 3.8), (FX + 3.6, FRONT - 0.5, FZ - 5.0)], 0.45, DARK, G_)
         box(B, 'Eisbeutel', (FX + 0.4, FRONT - 0.5, FZ + 6.1), (5.0, 1.0, 2.6), ICE, G_, rot=(0, 0, 0.08), bevel=0.3)
         box(B, 'Band', (FX, FRONT - 0.15, FZ + 6.1), (14.2, 0.7, 0.8), PALE, G_, bevel=0.2)
         for i, x in enumerate((1.4, -0.3)):
             B.sphere(f'Tropfen{i}', (FX + x, FRONT - 0.9, FZ + 4.5 - i * 0.5), (0.22, 0.2, 0.4), ICE, G_)
+    if echt:   # Froh-Teile initially versteckt; das Spiel blendet sie im Zustand „froh“ ein (img/3d/mars.json)
+        for o in SC.objects:
+            if o.name.startswith('F_'):
+                o.hide_render = True
     # --- gelandetes Lieferraumschiff links ---
     S = B.empty('Raumschiff')
     S.location = (-10.5, 33.0, 0.0)
@@ -690,8 +698,67 @@ def build_mars(SC, froh=False):
     return {'Gesicht': G_, 'Raumschiff': S, 'Briefkasten': BK, 'Schild': SCH, 'Rover': RV, 'Mond': bpy.data.objects['Phobos']}
 
 
+# ---------------------------------------------------------------- Testkammer (Zukunft: GLaDOS' Prüfstand)
+# Nachbau der in Unreal Engine gebauten Kammer (art/unreal/testkammer.py) für den Echtzeit-3D-Export:
+# gleiche Kamera-Konvention (solve_cam), gleiche Maße (x rechts, y in die Tiefe, z hoch, Meter).
+def build_testkammer(SC):
+    B = Builder(SC)
+    WEISS, FUGE, DUNKEL = toon('T_Paneel', '#e4eaee', hi=0.5), toon('T_Fuge', '#3c4048'), toon('T_KammerDunkel', '#2a2c34')
+    BODEN = toon('T_KammerBoden', '#4e5260', hi=0.35)
+    LEISTE = toon('T_LampeLeiste', '#fff8e8', hi=0.9)
+    BLAU, ORANGE = toon('T_NeonBlau', '#3a9aff', hi=0.85), toon('T_NeonOrange', '#ff8a20', hi=0.85)
+    GLAS, WARM, ROSA = toon('T_FensterGlas', '#b89a78', hi=0.8), toon('T_FensterWarm', '#ffd9a0', hi=0.85), toon('T_Herz', '#ff5aa8', hi=0.7)
+    WUERFEL, SCHILD = toon('T_WuerfelGrau', '#a8b0bc', hi=0.5), toon('T_SchildWeiss', '#f0ecdc', hi=0.4)
+    # Boden (Lauffläche ~6–18 m vor der Kamera), Decke, Sockel
+    box(B, 'Boden', (0, 12.0, -0.05), (26, 12.4, 0.1), BODEN, bevel=0.0)
+    box(B, 'Decke', (0, 12.0, 6.5), (24, 12, 0.3), DUNKEL, bevel=0.0)
+    box(B, 'Sockel', (0, 16.85, 0.12), (24, 0.14, 0.24), DUNKEL, bevel=0.0)
+    # Rückwand aus weißen Paneelen; hinter den Fugen die dunkle Wand
+    box(B, 'WandHinten', (0, 17.15, 3.2), (24, 0.1, 6.4), FUGE, bevel=0.0)
+    for i in range(-7, 8):
+        for j in range(4):
+            box(B, f'Paneel{i}_{j}', (i * 1.6, 17.0, 0.8 + j * 1.6), (1.56, 0.2, 1.56), WEISS, bevel=0.0)
+    # Seitenwände schräg zur Kamera; links ein dunkler Durchgang (Ausgang zum Palast)
+    for k in (-1, 1):
+        box(B, f'Seitenwand{k}', (k * 9.6, 12.0, 3.2), (0.2, 10.4, 6.4), WEISS, bevel=0.0)
+    box(B, 'TuerLoch', (-9.45, 9.2, 1.8), (0.12, 2.0, 3.4), FUGE, bevel=0.0)
+    box(B, 'TuerRahmen', (-9.42, 9.2, 1.8), (0.14, 2.3, 3.7), DUNKEL, bevel=0.0)
+    # Lichtleisten an der Decke
+    for i in range(-3, 4):
+        box(B, f'Leiste{i}', (i * 2.8, 13.5, 6.32), (2.2, 0.25, 0.06), LEISTE, bevel=0.0)
+    # Beobachtungsfenster oben rechts mit warmem Licht dahinter
+    box(B, 'FensterRahmen', (5.2, 16.88, 4.6), (3.6, 0.1, 1.6), DUNKEL, bevel=0.0)
+    box(B, 'FensterGlas', (5.2, 16.86, 4.6), (3.3, 0.08, 1.3), GLAS, bevel=0.0)
+    box(B, 'FensterWarm', (5.2, 17.05, 4.6), (3.2, 0.1, 1.2), WARM, bevel=0.0)
+    # zwei Portal-Ovale an der Rückwand (flache, hochkant gestellte Ellipsen)
+    B.sphere('PortalBlau', (-5.6, 16.86, 1.5), (0.62, 0.03, 1.15), BLAU, None)
+    B.sphere('PortalOrange', (1.2, 16.86, 1.5), (0.62, 0.03, 1.15), ORANGE, None)
+    # Begleiter-Würfel mit Herz
+    box(B, 'Wuerfel', (-3.0, 13.4, 0.45), (0.9, 0.9, 0.9), WUERFEL, bevel=0.06)
+    B.sphere('Herz', (-3.0, 12.94, 0.45), (0.3, 0.05, 0.3), ROSA, None)
+    # Schild „KUCHEN-AUSGABE: BALD“ (der Text kommt aus dem Spiel, js/gaeste.js) mit dunklem Rahmen – sonst weiß auf weiß –
+    # und Deckenhalterung für die Test-KI („Kuchenschild“, weil es auf dem Mars schon ein „Schild“ gibt)
+    box(B, 'KuchenschildRahmen', (-6.2, 16.90, 3.6), (2.56, 0.06, 1.16), DUNKEL, bevel=0.0)
+    box(B, 'Kuchenschild', (-6.2, 16.84, 3.6), (2.4, 0.08, 1.0), SCHILD, bevel=0.0)
+    B.rod('Halterung', (2.4, 13.0, 6.5), (2.4, 13.0, 5.9), 0.5, DUNKEL, None, seg=24)
+    B.torus('HalterungsRing', (2.4, 13.0, 5.9), 0.5, 0.07, DUNKEL, None, rot=(math.pi / 2, 0, 0), seg=24)
+    # Licht wie in Unreal: kühle Fülllichter, warmes Fensterlicht, eine sanfte Sonne von vorn oben
+    sun(SC, (0.9, 0.3, -0.55), 1.2, (1.0, 0.96, 0.92))
+    for name, ort, watt, farbe, radius in (('Fuell', (0, 10.0, 5.0), 60, (0.86, 0.91, 1.0), 14),
+                                           ('FuellLinks', (-6.5, 12.0, 4.0), 45, (0.9, 0.93, 1.0), 12),
+                                           ('FensterGlanz', (5.2, 15.8, 4.6), 30, (1.0, 0.75, 0.43), 7)):
+        ld = bpy.data.lights.new('Licht_' + name, 'POINT')
+        ld.energy, ld.color, ld.shadow_soft_size = watt, farbe, 0.4
+        ld.use_custom_distance, ld.cutoff_distance = True, radius
+        lo = bpy.data.objects.new('Licht_' + name, ld)
+        SC.collection.objects.link(lo)
+        lo.location = ort
+    return {'Wuerfel': bpy.data.objects['Wuerfel'], 'PortalBlau': bpy.data.objects['PortalBlau'], 'PortalOrange': bpy.data.objects['PortalOrange'], 'Schild': bpy.data.objects['Schild']}
+
+
 ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12')),
-           'mars': (lambda SC: build_mars(SC, False), ('#f4c496', '#7a3c52')), 'mars_froh': (lambda SC: build_mars(SC, True), ('#f4c496', '#7a3c52'))}
+           'testkammer': (build_testkammer, ('#3a4058', '#20242e')),
+           'mars': (lambda SC: build_mars(SC, False, echt=bool(globals().get('ECHT'))), ('#f4c496', '#7a3c52')), 'mars_froh': (lambda SC: build_mars(SC, True), ('#f4c496', '#7a3c52'))}
 
 
 import altbau   # die alten, gezeichneten Räume in 3D (Lobby …): eigene Varianten und Sprites, siehe altbau.py

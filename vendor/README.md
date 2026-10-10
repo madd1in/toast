@@ -1,0 +1,1 @@
+three.js r169 (three.module.min.js + GLTFLoader, OutlineEffect, BufferGeometryUtils aus examples/jsm) - lokal eingebunden, damit der Echtzeit-3D-Modus auch ohne Internet laeuft. Lizenz: MIT (siehe Dateikoepfe).

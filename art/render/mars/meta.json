@@ -1,0 +1,11 @@
+{
+ "echt3d": {
+  "variants": {
+   "froh": [
+    ["F_BraueL", "F_BraueR", "F_LachaugeL", "F_LachaugeR", "F_RougeL", "F_RougeR", "F_Mundoeffnung", "F_Zahn0", "F_Zahn1", "F_Zahn2", "F_Zahn3", "F_Zahn4", "F_Lachen"],
+    ["BraueL", "BraueR", "HoehleL", "HoehleR", "AugapfelL", "AugapfelR", "PupilleL", "PupilleR", "LidL", "LidR", "Schmollen", "Eisbeutel", "Band", "Tropfen0", "Tropfen1"]
+   ]
+  },
+  "sky": ["#f4c496", "#7a3c52"]
+ }
+}

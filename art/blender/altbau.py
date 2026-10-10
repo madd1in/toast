@@ -2342,6 +2342,10 @@ def render(name, setup, only=None, no_render=False):
                 _show([root] + objs, False)
     finally:
         win.scene = prev
+    namen = lambda objs: sorted({q.name for o in objs for q in tree(o)})
+    meta['echt3d'] = {'variants': {k: [namen(vis), namen(hid)] for k, (vis, hid) in spec['variants'].items()},
+                      'sprites': {k: {'wurzel': root.name, 'teile': namen([root] + objs)} for k, (root, objs) in spec['sprites'].items()},
+                      'sky': list(sky)}
     json.dump(meta, open(out + 'meta.json', 'w'), indent=1)
     print('altbau', name, json.dumps(meta['anchors']))
     return meta

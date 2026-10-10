@@ -57,6 +57,7 @@ raum3d('mars', 'img/raum_mars.jpg', {
     }
   },
 });
+ROOMS.mars.zustand3d = { froh: marsFroh };   // Echtzeit-3D: das Gesicht schaltet im selben Moment um wie das Bild (Froh-Teile F_*)
 ROOM_FX.mars = { verb: [2.4, 0.16], light: [-1, '#ffd2a0', '#3a1a30'], bloom: 0.22, amb: ['wind', 'hum'], motes: 'dust' };
 GRADE.mars = ['#ff9a6a', 0.12];
 ACT.zak.refuse = item => item === 'tabletten' ? 'Die sind fürs Gesicht, nicht für mich. Mein Kopfweh heißt Redaktionsschluss und ist nicht heilbar.' : pick(['Danke, aber ich bin im Dienst. Notizblock und Kamera sind meine ganze Welt.', 'Behalt das, du brauchst es bestimmt noch.']);

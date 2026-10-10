@@ -52,7 +52,7 @@ ROOM_FX.konferenz = { verb: [0.9, 0.14], light: [1, '#fff0d0', '#2a1a3a'], bloom
     // Lachi: ein Bild, das sich sanft wiegt, beim Stupsen nachfedert und beim Anstechen in sich zusammenfällt
     const S = D.sprites.clown, im = loadImg(S.src), [px, py] = S.pivot;
     ob('clown').draw = (c, t) => {
-      if (!imgOk(im)) return;
+      if (!imgOk(im) || in3d()) return;
       let sx = 1, sy = 1, rot = Math.sin(t * 0.0013) * 0.025, k = 0;
       if (G.clownStoss) { const q = (G.t - G.clownStoss) / 1100; if (q < 1) { rot += Math.sin(q * Math.PI * 4) * 0.17 * (1 - q); sy = 1 - Math.sin(q * Math.PI * 4) * 0.04 * (1 - q); } }
       if (G.clownPlatt && G.t - G.clownPlatt > 2600) G.clownPlatt = 0;   // alter Zeitstempel aus einem früheren Spiel

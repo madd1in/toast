@@ -1,0 +1,1 @@
+{"zustaende": {}, "sprites": {}, "himmel": [], "ohneKontur": ["SchiffText"], "lichter": [{"typ": "SUN", "farbe": [0.85, 0.75, 1.0], "energie": 1.6, "richtung": [0.5619, 0.5457, -0.6216], "ort": [0.0, 0.0, 0.0], "weite": 0}, {"typ": "SUN", "farbe": [1.0, 0.6, 0.9], "energie": 0.8, "richtung": [-0.7301, 0.5794, -0.3624], "ort": [0.0, 0.0, 0.0], "weite": 0}]}
