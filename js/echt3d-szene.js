@@ -126,7 +126,7 @@ export async function init(base = 'img/3d/') {
 export function hasRoom(id) {
   const r = rooms[id];
   if (r) return r.ready;
-  rooms[id] = { loading: true, ready: false };
+  rooms[id] = { id, loading: true, ready: false };
   (id === 'hafen' ? ladeHafen() : ladeRaum(id)).then(x => { Object.assign(rooms[id], x, { ready: true, loading: false }); },
     e => { console.error('Echtzeit-3D', id, e); rooms[id].failed = true; });
   return false;
@@ -318,6 +318,51 @@ export function owns(a, roomId) {
   return f.rig ? true : roomId === 'hafen';
 }
 
+// ---------- Kamera-Choreografie: damit das echte 3D zur Geltung kommt ----------
+// Anfahrt beim Betreten (von weiter hinten, rechts und unten heran), echter Perspektiv-Zoom im Gespräch
+// (Dolly statt flacher 2D-Skalierung – nahe Teile wandern weiter als ferne), sanfter Parallax-Schwung im Stand
+// und ein Kamera-Ruck, wenn eine Figur den wilden Schreck-Take macht. Danach sitzt die Kamera wieder exakt
+// auf der Blender-Pose, sodass Hotspots und Laufwege pixelgenau stimmen.
+let letzterRaum = null;
+const _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _up = new THREE.Vector3(), _an = new THREE.Vector3(), _ab = new THREE.Vector3(), _yA = new THREE.Vector3(0, 1, 0);
+function kameraLoesen(R) {   // einmalig: Kamera aus ihrem glTF-Knoten lösen (World-Transform backen) und Home-Pose sichern
+  const c = R.camera;
+  if (c.parent) {
+    c.position.setFromMatrixPosition(c.matrixWorld);
+    c.quaternion.setFromRotationMatrix(c.matrixWorld);
+    c.parent.remove(c);
+    R.scene.add(c);
+  }
+  R.home = c.clone();
+  R.home.aspect = c.aspect; R.home.updateProjectionMatrix();
+  R.phase = (R.id || 'x').charCodeAt(0) % 7;
+}
+function kameraFahren(R, t, actors) {
+  const cam = R.camera, home = R.home;
+  cam.position.copy(home.position);
+  cam.quaternion.copy(home.quaternion);
+  if (letzterRaum !== R.id) { letzterRaum = R.id; R.sweepT0 = t; }
+  _fw.set(0, 0, -1).applyQuaternion(home.quaternion);
+  _rt.set(1, 0, 0).applyQuaternion(home.quaternion);
+  _up.set(0, 1, 0).applyQuaternion(home.quaternion);
+  const k = (t - R.sweepT0) / 1250;
+  if (k < 1) {   // Anfahrt: weich heranfahren (ease-out), leicht aus schräg unten rechts
+    const e = 1 - Math.pow(1 - k, 3);
+    cam.position.addScaledVector(_fw, -(1 - e) * 1.15).addScaledVector(_rt, (1 - e) * 0.52).addScaledVector(_up, -(1 - e) * 0.26);
+    cam.quaternion.multiply(_q.setFromAxisAngle(_yA, (1 - e) * 0.045));
+  }
+  const g = typeof G !== 'undefined' && G && G.cam ? G.cam : null;   // Gespräch: echter Dolly-Zoom zur Dialogkamera
+  if (g && g.z > 1.001) {
+    toWorld(home, g.x, 400, _an);
+    _ab.copy(cam.position).sub(_an).divideScalar(g.z);
+    cam.position.copy(_an).add(_ab);
+  }
+  let schreck = 0;   // Ruck beim wilden Take: kurzes Zurückzucken der Kamera
+  for (const a of actors) { const m = a.mimik; if (m && m.kind === 'schreck') schreck = Math.max(schreck, 1 - Math.min(1, Math.max(0, (t - m.t0) / 700))); }
+  if (schreck > 0) cam.position.addScaledVector(_fw, -0.09 * schreck).addScaledVector(_rt, Math.sin(t * 0.09) * 0.02 * schreck);
+  cam.position.addScaledVector(_rt, Math.sin(t * 0.00019 + R.phase) * 0.011).addScaledVector(_up, Math.sin(t * 0.00013 + R.phase * 2) * 0.008);   // Parallax-Schwung im Stand
+}
+
 // ---------- Bild für einen Spiel-Frame ----------
 let lastT = 0;
 const _vis = new Map();
@@ -327,6 +372,8 @@ export function frame(t, actors, pxW, ctx) {
   if (renderer.domElement.width !== w) renderer.setSize(w, h, false);
   const dt = Math.min(100, Math.max(0, t - lastT)); lastT = t;
   const s = t / 1000, camera = R.camera;
+  if (!R.home) kameraLoesen(R);
+  kameraFahren(R, t, actors);
   if (R.anim) hafenAnim(R.anim, s);
   // Zustände: sichtbar, wenn ein eingeschalteter Zustand es zeigt; ausgeblendet, wenn einer es versteckt
   if (R.data.zustaende) {
@@ -346,23 +393,24 @@ export function frame(t, actors, pxW, ctx) {
     if (p.rot) sp.o.quaternion.premultiply(_q2.setFromAxisAngle(sp.achse, p.rot));
     sp.o.scale.set(sp.s0.x * (p.sx || 1), sp.s0.y * (p.sy || 1), sp.s0.z * (p.sx || 1));
   }
-  // Figuren an ihre Spielposition, Blickrichtung, Haltung, Cartoon-Mimik
+  // Figuren an ihre Spielposition, Blickrichtung, Haltung, Cartoon-Mimik – über die Home-Kamera in der Welt
+  // verankert, damit sie bei Kamerafahrten und Dolly-Zoom wie echte Bewohner des Raums mitwandern
   const seen = new Set();
   for (const a of actors) {
     const f = figs[a.kind]; if (!f || !a.visible || !owns(a, ctx.id)) continue;
     seen.add(a.kind);
     if (f.holder.parent !== R.scene) R.scene.add(f.holder);
-    const p = toWorld(camera, a.x, a.y, _v.clone());
+    const p = toWorld(R.home, a.x, a.y, _v.clone());
     if (f.last && a.walking) f.walkPh += p.distanceTo(f.last) / 0.62 * Math.PI;
     f.last = (f.last || new THREE.Vector3()).copy(p);
     const mf = typeof mimikForm === 'function' ? mimikForm(a, t) : null;
     f.holder.position.copy(p);
-    if (mf && (mf.lift || mf.jx)) { const upm = unitsPerMeter(camera, p); if (mf.lift) f.holder.position.y += mf.lift / upm; if (mf.jx) f.holder.position.x += mf.jx / upm; }   // Sprung und Zittern in Spiel-Pixeln
+    if (mf && (mf.lift || mf.jx)) { const upm = unitsPerMeter(R.home, p); if (mf.lift) f.holder.position.y += mf.lift / upm; if (mf.jx) f.holder.position.x += mf.jx / upm; }   // Sprung und Zittern in Spiel-Pixeln
     f.holder.scale.set(mf ? mf.sx : 1, mf ? mf.sy : 1, mf ? mf.sx : 1);
     // Blickrichtung: beim Gehen zum Ziel, sonst leicht zur Kamera gedreht wie die Sprites
     let want = a.dir < 0 ? -Math.PI + 0.56 : -0.56;
     if (a.walking && a.target) {
-      const q = toWorld(camera, a.target[0] !== undefined ? a.target[0] : a.target.x, a.target[1] !== undefined ? a.target[1] : a.target.y, new THREE.Vector3());
+      const q = toWorld(R.home, a.target[0] !== undefined ? a.target[0] : a.target.x, a.target[1] !== undefined ? a.target[1] : a.target.y, new THREE.Vector3());
       const dx = q.x - p.x, dz = q.z - p.z;
       if (dx * dx + dz * dz > 0.01) want = Math.atan2(-dz, dx);   // Blender-Gierwinkel: +x vorn, −y zur Kamera
     }

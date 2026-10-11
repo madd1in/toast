@@ -55,7 +55,14 @@ drawBg = function (room) {
     if (echt3dOn(room)) {
       const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible && !echt3dBild(a));
       const bild = ECHT3D.mod.frame(G.t, acts, Math.min(1920, W * VS * DPR * SSK), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE });
-      if (bild) { cx.drawImage(bild, 0, 0, W, SH); return; }
+      if (bild) {
+        // Die Dialog-Kamera zoomt die Szene jetzt echt in 3D (Dolly mit Parallax) – deshalb hier die flache
+        // 2D-Skalierung des Bildes zurücknehmen; Figuren-Bilder und Effekte oben drüber zoomen weiter wie gehabt
+        const cz = G.cam && G.cam.z > 1.001 ? G.cam.z : 1;
+        if (cz > 1) { cx.save(); cx.translate(G.cam.x, G.cam.y); cx.scale(1 / cz, 1 / cz); cx.translate(-G.cam.x, -G.cam.y); cx.drawImage(bild, 0, 0, W, SH); cx.restore(); }
+        else cx.drawImage(bild, 0, 0, W, SH);
+        return;
+      }
     }
   }
   return drawBgOhne3D(room);
