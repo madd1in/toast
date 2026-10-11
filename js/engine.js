@@ -1822,7 +1822,12 @@ function drawSpeech(scr) {
   let x = W / 2, y = 36 + lines.length * lh, col = '#ffffff';
   if (sp.a) {
     col = sp.a.color;
-    if (sp.a.room === room.id && sp.a.visible) { const sc = roomScale(room, sp.a.climbY != null ? sp.a.climbY : sp.a.y) * (sp.a.scaleMul || 1); x = sp.a.x; y = sp.a.y - sp.a.h * sc - 12; if (scr) [x, y] = scrPt(x, y); }
+    if (sp.a.room === room.id && sp.a.visible) {
+      const sc = roomScale(room, sp.a.climbY != null ? sp.a.climbY : sp.a.y) * (sp.a.scaleMul || 1); x = sp.a.x; y = sp.a.y - sp.a.h * sc - 12;
+      const k3 = typeof echt3dKopf === 'function' && echt3dKopf(sp.a, room, sp.a.h * sc + 12);   // gedrehte 3D-Kamera: über dem Kopf, wo er gerade ist
+      if (k3) [x, y] = k3;
+      if (scr) [x, y] = scrPt(x, y);
+    }
   }
   const maxW = Math.max(...lines.map(l => cx.measureText(l).width));
   x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, x));

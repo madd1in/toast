@@ -86,21 +86,29 @@ if (typeof EGG_DRAW !== 'undefined') {
   const band = ROOMS.labor && ROOMS.labor.objs.find(o => o.id === 'absperrband');
   if (band && band.draw) { const malen = band.draw; band.draw = (c, t) => echt3dHatModell('labor', 'absperrband') ? undefined : malen(c, t); }
 }
+let echt3dUmgerechnet = false;
 // Krumme Räume: Mauszeiger und Klicks treffen das, was man sieht – der Bildpunkt wird über die verbogene 3D-Geometrie
 // auf die ursprüngliche Lage zurückgerechnet. Figuren, Tiere und gezeichnete Überlagerungen sind nicht verbogen.
 {
   const hitOhneKrumm = hitScene;
   let merk = null;
   hitScene = function (x, y) {
+    if (echt3dUmgerechnet) return hitOhneKrumm(x, y);   // Koordinaten kommen schon aus dem 3D-Picking
+    if (y < SH && G.state && ECHT3D.mod && ECHT3D.mod.freiAktiv() && echt3dOn(ROOMS[viewRoomId()])) {   // gedrehte Kamera: Bildpunkt -> Raumpunkt
+      if (merk && merk.x === x && merk.y === y && merk.frei && G.t - merk.t < 120) return merk.r;
+      const z = ECHT3D.mod.pick(x, y, viewRoomId()), r = z ? hitOhneKrumm(Math.round(z.x), Math.round(z.y)) : null;
+      merk = { x, y, frei: true, t: G.t, r };
+      return r;
+    }
     const direkt = hitOhneKrumm(x, y);
-    if (y >= SH || !G.state || !ECHT3D.mod || !ECHT3D.mod.entkruemmt || ECHT3D.mod.freiAktiv()) return direkt;
+    if (y >= SH || !G.state || !ECHT3D.mod || !ECHT3D.mod.entkruemmt) return direkt;
     const raum = viewRoomId();
     if (!echt3dOn(ROOMS[raum])) return direkt;
     const modell = k => !!(ECHT3D.mod.hatRequisit && ECHT3D.mod.hatRequisit(raum, k));
     if (direkt && (direkt[0] === 'a' || direkt[0] === 'c')) return direkt;
     if (direkt && direkt[0] === 'e' && !modell(direkt.slice(2))) return direkt;
     if (direkt && direkt[0] === 'o' && OBJ[direkt.slice(2)] && OBJ[direkt.slice(2)].draw && !modell(direkt.slice(2))) return direkt;
-    if (merk && merk.x === x && merk.y === y && merk.raum === raum && G.t - merk.t < 200) return merk.r;
+    if (merk && !merk.frei && merk.x === x && merk.y === y && merk.raum === raum && G.t - merk.t < 200) return merk.r;
     const u = ECHT3D.mod.entkruemmt(x, y, raum);
     const r = u ? hitOhneKrumm(u.x, u.y) || direkt : direkt;
     merk = { x, y, raum, t: G.t, r };
@@ -110,6 +118,7 @@ if (typeof EGG_DRAW !== 'undefined') {
 // Freie Kamera: gemalte Figuren, Tiere und Dinge ohne 3D-Modell werden zu Bildkarten im Raum (js/echt3d-szene.js,
 // kartenStellen); Bildschirm-Effekte, die der Kamera nicht folgen können, blendet js/engine.js dann aus (echt3dFrei)
 function echt3dFrei() { return !!(echt3dAktiv() && ECHT3D.mod.freiAktiv()); }
+function echt3dKopf(a, room, hoehePx) { return echt3dFrei() && a.room === room.id && ECHT3D.mod.kopfPunkt ? ECHT3D.mod.kopfPunkt(a.x, a.y, hoehePx, room.id) : null; }
 const KARTE_K = 1.6, kartenLeinwand = new Map();
 let echt3dMaltKarte = false;
 function echt3dKarte(key, x, y, malen) {
@@ -133,6 +142,14 @@ function echt3dKarten(room) {
 const drawEggOhneKarte = drawEgg, drawCritterOhneKarte = drawCritter;
 drawEgg = e => { if (!echt3dFrei()) drawEggOhneKarte(e); };
 drawCritter = (c, room) => { if (!echt3dFrei()) drawCritterOhneKarte(c, room); };
+// Geschlossene Räume: im Echtzeit-3D darf man über den ganzen Boden laufen (js/echt3d-szene.js, laufflaeche3d)
+{
+  const clampOhne3D = clampWalk;
+  clampWalk = function (room, x, y) {
+    const poly = room && ECHT3D.mod && ECHT3D.mod.laufflaeche3d && echt3dOn(room) ? ECHT3D.mod.laufflaeche3d(room.id) : null;
+    return clampOhne3D(poly ? { walk: poly } : room, x, y);
+  };
+}
 // Raumbild: im 3D-Raum das Echtzeit-Bild, sonst wie bisher
 const drawBgOhne3D = drawBg;
 drawBg = function (room) {
@@ -202,9 +219,13 @@ function echt3dPadDreh(rx, ry, dt) {
   return true;
 }
 function echt3dPadZurueck() {
-  if (!echt3dAktiv() || !echt3dKameraSteuerungErlaubt() || !ECHT3D.mod.freiAktiv()) return false;
-  ECHT3D.mod.freiZurueck();
+  if (!echt3dAktiv() || !echt3dKameraSteuerungErlaubt()) return false;
+  echt3dKameraWechsel();
   return true;
+}
+function echt3dKameraWechsel() {   // Auto-Kamera hinter der Figur <-> klassische Bühnenansicht
+  if (ECHT3D.mod.autoKameraUmschalten) { const an = ECHT3D.mod.autoKameraUmschalten(); note(an ? 'Kamera: hinter der Figur (C wechselt zur Bühnenansicht)' : 'Kamera: klassische Bühnenansicht (C wechselt zurück)'); }
+  else if (ECHT3D.mod.freiAktiv()) ECHT3D.mod.freiZurueck();
 }
 // Direktsteuerung wie in Psychonauts 2: in JEDEM Echtzeit-3D-Raum laufen (WASD/Pfeile, linker Stick, Touch-Stick) und
 // springen (Leertaste, A, Touch-Knopf); E bzw. A über einem Hotspot benutzt das Nächste. Klicken bleibt wie gehabt.
@@ -280,8 +301,7 @@ function drawEcht3dParkour() {
     if (p.y > SH || G.menu || G.busy || G.dialog || G.screen !== 'game') return false;
     G.mouse.x = p.x; G.mouse.y = p.y;
     const ziel = ECHT3D.mod.pick(p.x, p.y, viewRoomId());
-    ECHT3D.mod.freiZurueck();
-    if (ziel) setTimeout(() => { if (G.screen === 'game' && !G.busy) sceneClick(Math.round(ziel.x), Math.round(ziel.y), right); }, 720);
+    if (ziel) { echt3dUmgerechnet = true; try { sceneClick(Math.round(ziel.x), Math.round(ziel.y), right); } finally { echt3dUmgerechnet = false; } }
     return true;
   };
   const abbruchTouch = () => {
@@ -404,7 +424,7 @@ function drawEcht3dParkour() {
       const drag = dreh; dreh = null; stopEvent(e);
       if (!drag.moved) {
         const p = toLogical(e); G.mouse.x = p.x; G.mouse.y = p.y;
-        if (ECHT3D.mod.freiAktiv() && raumKlickAt(p, true)) return;
+        if (ECHT3D.mod.freiAktiv() && raumKlickAt(p, drag.button === 2)) return;
         onClick(p.x, p.y, drag.button === 2);
       }
       return;
@@ -447,8 +467,8 @@ function drawEcht3dParkour() {
     ECHT3D.mod.freiZoom(e.deltaY * 0.0035);
   }, { passive: false });
   window.addEventListener('keydown', e => {
-    if (aktiv() && echt3dKameraSteuerungErlaubt() && (e.key === 'c' || e.key === 'C') && ECHT3D.mod.freiAktiv()) {
-      e.stopImmediatePropagation(); e.preventDefault(); ECHT3D.mod.freiZurueck();
+    if (aktiv() && echt3dKameraSteuerungErlaubt() && (e.key === 'c' || e.key === 'C')) {
+      e.stopImmediatePropagation(); e.preventDefault(); echt3dKameraWechsel();
     }
   }, true);
 }

@@ -237,8 +237,9 @@ async function ladeRaum(id) {
   const extra = RAUM_EXTRAS[id] ? RAUM_EXTRAS[id](scene, H) : null;
   H.updateMatrixWorld(true);
   const req = reqGltf ? requisitenAufstellen(scene, camera, reqDef, reqGltf) : null;
+  const innen = INNENRAUM.has(id) ? raumSchliessen(scene, camera, id) : null;
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
-  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null };
+  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen };
 }
 
 async function ladeHafen() {
@@ -442,13 +443,14 @@ function kameraFahren(R, t, actors) {
 
   // freie Kamera: 360° um den Raum, dazu neigen und zoomen – um einen Zielpunkt in der Raummitte
   const o = R.orbit;
+  if (o && (o.zurueck || Math.abs(o.yaw) > 1e-4 || Math.abs(o.pitch) > 1e-4 || Math.abs(o.dist) > 1e-4) && R.kT == null) R.kT = t;
   if (o && (o.zurueck || Math.abs(o.yaw) > 1e-4 || Math.abs(o.pitch) > 1e-4 || Math.abs(o.dist) > 1e-4)) {
     if (o.zurueck) {
       if (o.rueckT0 == null) { o.rueckT0 = t; o.start = { yaw: o.yaw, pitch: o.pitch, dist: o.dist, w: o.w || 0 }; }
       const k = Math.min(1, (t - o.rueckT0) / 650), e = 1 - Math.pow(1 - k, 3);
       o.yaw = o.start.yaw * (1 - e); o.pitch = o.start.pitch * (1 - e); o.dist = o.start.dist * (1 - e); o.w = o.start.w * (1 - e);
       if (k >= 1) { o.yaw = o.pitch = o.dist = o.w = 0; o.zurueck = false; o.rueckT0 = null; }
-    } else o.w = Math.min(1, (o.w || 0) + 0.04);
+    } else o.w = Math.min(1, (o.w || 0) + Math.min(100, t - (R.kT || t)) / 550);   // Übergang in ~0,5 s, unabhängig von der Bildrate
     if (!R.zielHome) { R.zielHome = toWorld(R.home, 480, 300, new THREE.Vector3()); R.ziel = R.zielHome.clone(); R.basis = R.home.position.clone().sub(R.zielHome); R.basisLen = Math.max(2, R.basis.length()); }
     // Folgekamera wie in Psychonauts: der Drehpunkt gleitet zur gesteuerten Figur (auf Brusthöhe) und folgt ihr
     R.ziel.copy(R.zielHome);
@@ -459,8 +461,57 @@ function kameraFahren(R, t, actors) {
       .multiplyScalar(Math.max(0.3, ran + o.dist / R.basisLen));
     cam.position.copy(R.ziel).add(_ab);
     if (cam.position.y < 0.45) cam.position.y = 0.45;
+    if (R.innen && R.fokus) {   // Innenräume: Third-Person-Kamera wie in Psychonauts 2 / Super Mario 64 – hinter der Figur, im Raum
+      const I = R.innen, m = 0.4, w = Math.min(1, o.w || 0), dtk = Math.min(100, t - (R.kT || t));
+      const posD = new THREE.Vector3(), zielD = new THREE.Vector3();
+      const gp = gespraechsPartner(R);
+      if (gp) {   // Gespräch: seitlich auf beide Sprecher, Kamera auf der Raumseite zur Vorderwand
+        const mid = gp.a.clone().add(gp.b).multiplyScalar(0.5), d = gp.b.clone().sub(gp.a); d.y = 0;
+        const len = Math.max(0.6, d.length()); d.normalize();
+        const n = new THREE.Vector3(-d.z, 0, d.x); if (n.z < 0) n.negate();
+        posD.copy(mid).addScaledVector(n, Math.max(5.0, len * 1.4 + 3.4)); posD.y = Math.min(I.y1 - m, 2.05);
+        zielD.copy(mid); zielD.y = 1.35;
+      } else {
+        const weite = Math.max(2.2, 6.2 * (1 + o.dist / 6)), hoch = Math.max(0.7, Math.min(I.y1 - m, 2.3 + o.pitch * 3));
+        posD.set(0, hoch, weite).applyAxisAngle(_yA, o.yaw).add(R.fokus);
+        zielD.copy(R.fokus);
+      }
+      posD.set(Math.max(I.x0 + m, Math.min(I.x1 - m, posD.x)), posD.y, Math.max(I.z0 + m, Math.min(I.z1 - m, posD.z)));   // an den Wänden entlang statt hindurch
+      if (!R.glatt) R.glatt = { p: posD.clone(), z: zielD.clone() };
+      const k = Math.min(1, dtk / (gp ? 420 : 260));
+      R.glatt.p.lerp(posD, k); R.glatt.z.lerp(zielD, k);
+      cam.position.copy(home.position).lerp(R.glatt.p, w);
+      R.ziel.copy(R.zielHome).lerp(R.glatt.z, w);
+    }
     cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, R.ziel, _yA));
   }
+  R.kT = t;
+}
+
+// Gesprächspartner der gesteuerten Figur: wer gerade spricht (oder im Dialog steht), im selben Raum
+function gespraechsPartner(R) {
+  if (typeof G === 'undefined' || !G.state || typeof curId !== 'function') return null;
+  const ich = typeof ACT !== 'undefined' && ACT[curId()]; if (!ich || ich.room !== R.id) return null;
+  const sp = G.speech && G.speech.a;
+  let anderer = sp && sp !== ich && sp.room === R.id && sp.visible ? sp : null;
+  if (!anderer && G.dialog && R.letzterPartner && G.t - R.letzterPartner.t < 30000) anderer = R.letzterPartner.a;
+  if (!anderer && R.letzterPartner && G.speech && G.speech.a === ich && G.t - R.letzterPartner.t < 4000) anderer = R.letzterPartner.a;
+  if (!anderer) return null;
+  if (sp === anderer) R.letzterPartner = { a: anderer, t: G.t };
+  return { a: toWorld(R.home, ich.x, ich.y, new THREE.Vector3()), b: toWorld(R.home, anderer.x, anderer.y, new THREE.Vector3()) };
+}
+// Auto-Kamera (Innenräume): an = Kamera hinter der Figur, aus = klassische Bühnenansicht (Taste C, RS-Klick)
+let autoKamera = true;
+export function autoKameraAn() { return autoKamera; }
+export function autoKameraUmschalten() { autoKamera = !autoKamera; const o = orbit(letzterRaum); if (!autoKamera && o) { o.zurueck = true; o.rueckT0 = null; } return autoKamera; }
+// Bildpunkt (Szenen-Koordinaten der aktuellen Kamera) für einen Punkt in Kopfhöhe – Sprechblasen folgen so jeder Kamera
+export function kopfPunkt(gx, gy, hoehePx, id) {
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home || !freiAktiv()) return null;
+  const p = toWorld(R.home, gx, gy, new THREE.Vector3()), upm = unitsPerMeter(R.home, p);
+  p.y += hoehePx / upm;
+  p.project(R.camera);
+  if (p.z > 1) return null;   // hinter der Kamera
+  return [(p.x + 1) / 2 * GW, (1 - p.y) / 2 * GH];
 }
 
 // ---------- Freie Kamera: Steuerung und 3D-Picking ----------
@@ -497,6 +548,89 @@ export function pick(gx, gy, id) {
   if (R.krumm) entbiegen(R.krumm, punkt.clone(), punkt);
   punkt.project(R.home);
   return { x: (punkt.x + 1) / 2 * GW, y: (1 - punkt.y) / 2 * GH };
+}
+
+// ---------- Geschlossene Räume wie in Super Mario 64 ----------
+// Die Räume sind als Bühnenbild gebaut: offen nach vorn, teils auch zur Seite. Beim Laden misst die Szene sich mit
+// Tastrahlen selbst aus (Rückwand, Seitenwände, Decke) und ergänzt, was fehlt: Vorderwand, Seitenwände, Decke und
+// einen durchgehenden Boden, in den Stoffen der vorhandenen Wände. Die neuen Flächen sind nur von innen sichtbar –
+// die klassische Spielkamera vorn draußen blickt durch die Vorderwand hindurch, die frei gedrehte Kamera bleibt im
+// Raum (kameraFahren) und sieht ringsum geschlossene Wände. Die Lauffläche reicht im Echtzeit-3D über den ganzen Boden.
+const INNENRAUM = new Set(['lobby', 'stockwerk', 'dachboden', 'keller', 'uhrwerk', 'labor', 'konferenz', 'gasthaus', 'vorraum', 'thron', 'testkammer']);
+const VORNE_Z = -2.6;   // Vorderwand (three.js-z): zwischen der Spielkamera (z = 0) und dem vorderen Bodenrand
+function raumSchliessen(scene, cam, id) {
+  scene.updateMatrixWorld(true);
+  const C = toWorld(cam, 480, 392, new THREE.Vector3()), tast = new THREE.Raycaster(), hits = [];
+  const strahl = (o, d) => {
+    tast.set(o, d); tast.far = 30;
+    for (const h of tast.intersectObjects(scene.children, true)) {
+      let ok = h.object.visible !== false;
+      for (let q = h.object; q && ok; q = q.parent) if (q.visible === false) ok = false;
+      if (ok && h.distance > 0.3) return h;
+    }
+    return null;
+  };
+  const messen = (dir, quer) => {   // 9 Strahlen über Möbelhöhe, Median der Treffer
+    const r = [];
+    for (const hgt of [2.4, 3.0, 3.6]) for (const q of [-2, 0, 2]) {
+      const o = C.clone().add(new THREE.Vector3(0, hgt, 0)).addScaledVector(quer, q), h = strahl(o, dir);
+      if (h) r.push(h);
+    }
+    if (r.length < 4) return null;
+    r.sort((a, b) => a.distance - b.distance);
+    return r[Math.floor(r.length / 2)];
+  };
+  const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
+  const hinten = messen(new THREE.Vector3(0, 0, -1), X), links = messen(new THREE.Vector3(-1, 0, 0), Z), rechts = messen(new THREE.Vector3(1, 0, 0), Z);
+  if (!hinten) return null;   // ohne Rückwand ist es kein Innenraum
+  const oben = strahl(C.clone().add(new THREE.Vector3(0, 0.5, 0)), new THREE.Vector3(0, 1, 0));
+  const z0 = C.z - hinten.distance + 0.02, x0 = links ? C.x - links.distance + 0.02 : -10.5, x1 = rechts ? C.x + rechts.distance - 0.02 : 10.5;
+  const y1 = oben ? 0.5 + oben.distance - 0.02 : Math.max(4.6, 0);
+  const z1 = VORNE_Z;
+  // Stoffe: Wand von der Rückwand, Boden: häufigster Stoff unter fünf Tastpunkten
+  const wandMat = (Array.isArray(hinten.object.material) ? hinten.object.material[0] : hinten.object.material);
+  const zaehl = new Map();
+  for (const [dx, dz] of [[-4, 0], [4, 0], [0, -1.5], [-2, 1], [2, 1]]) {
+    const h = strahl(C.clone().add(new THREE.Vector3(dx, 1.2, dz)), new THREE.Vector3(0, -1, 0));
+    if (h && h.point.y < 0.15) { const m = Array.isArray(h.object.material) ? h.object.material[0] : h.object.material; zaehl.set(m, (zaehl.get(m) || 0) + 1); }
+  }
+  const bodenMat = [...zaehl.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0])[0] || wandMat;
+  const innenStoff = (m, dunkler) => {
+    const n = m.clone(); n.side = THREE.FrontSide;
+    if (dunkler && n.color) n.color = n.color.clone().multiplyScalar(dunkler);
+    n.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: false };
+    return n;
+  };
+  const W = innenStoff(wandMat), B = innenStoff(bodenMat), D = innenStoff(wandMat, 0.55);
+  const huelle = new THREE.Group(); huelle.name = 'Raumhuelle';
+  const flaeche = (w, h, mat, pos, rotY, rotX = 0) => {   // Ebene mit Innenseite zum Raum, Kacheln im Meter-Maßstab
+    const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w * 0.4, uv.getY(i) * h * 0.4);
+    const m = new THREE.Mesh(g, mat); m.position.copy(pos); m.rotation.set(rotX, rotY, 0, 'YXZ'); m.receiveShadow = true; huelle.add(m);
+    return m;
+  };
+  const bx = (x0 + x1) / 2, bz = (z0 + z1) / 2, bw = x1 - x0, bd = z1 - z0;
+  flaeche(bw, y1, W, new THREE.Vector3(bx, y1 / 2, z1), Math.PI);   // Vorderwand, schaut nach hinten in den Raum
+  if (!links) flaeche(bd, y1, W, new THREE.Vector3(x0, y1 / 2, bz), Math.PI / 2);
+  if (!rechts) flaeche(bd, y1, W, new THREE.Vector3(x1, y1 / 2, bz), -Math.PI / 2);
+  if (!oben) flaeche(bw, bd, D, new THREE.Vector3(bx, y1, bz), 0, Math.PI / 2);   // Decke, schaut nach unten
+  // Boden nur vor dem vorhandenen ergänzen (Abgründe und Treppenlöcher bleiben offen): vordere Bodenkante abtasten
+  let zKante = z1;
+  for (let z = C.z; z < z1; z += 0.5) {
+    let bedeckt = false;
+    for (const x of [-6, -3, 0, 3, 6]) { const h = strahl(new THREE.Vector3(x, 1.2, z), new THREE.Vector3(0, -1, 0)); if (h && Math.abs(h.point.y) < 0.2) { bedeckt = true; break; } }
+    if (!bedeckt) { zKante = z - 0.25; break; }
+  }
+  if (zKante < z1 - 0.05) flaeche(bw, z1 - zKante, B, new THREE.Vector3(bx, -0.012, (zKante + z1) / 2), 0, -Math.PI / 2);
+  scene.add(huelle);
+  return { x0, x1, z0, z1, y1 };
+}
+export function laufflaeche3d(id) {   // Lauffläche über den ganzen Boden in Spiel-Koordinaten (Projektion der Spielkamera)
+  const R = rooms[id]; if (!R || !R.ready || !R.innen || !R.home) return null;
+  if (R.lauf3d) return R.lauf3d;
+  const { x0, x1, z0, z1 } = R.innen, m = 0.45, v = new THREE.Vector3();
+  R.lauf3d = [[x0 + m, z0 + m], [x1 - m, z0 + m], [x1 - m, z1 - m], [x0 + m, z1 - m]].map(([x, z]) => { v.set(x, 0, z).project(R.home); return [(v.x + 1) / 2 * GW, (1 - v.y) / 2 * GH]; });
+  return R.lauf3d;
 }
 
 // ---------- Krumme Villa wie in Day of the Tentacle ----------
@@ -853,6 +987,19 @@ export function frame(t, actors, pxW, ctx) {
       else if (z < -0.0001) f.holder.position.y += z;
     }
     if (ich) {
+      if (R.innen && autoKamera) {   // Auto-Kamera hinter der Figur (Blickrichtung f.yaw: +x vorn, Kamera auf der Gegenseite)
+        // wie Super Mario 64: die Kamera bleibt auf der vorderen Raumhälfte (höchstens ~70° seitlich) und schwenkt beim
+        // Laufen träge hinter die Laufrichtung; läuft man auf sie zu, bleibt sie stehen
+        const o = orbit(ctx.id), hinter = Math.max(-1.22, Math.min(1.22, Math.atan2(-Math.cos(f.yaw), Math.sin(f.yaw))));
+        if (!freiAktiv() && !o.zurueck) { o.yaw = 0.01; o.rueckT0 = null; }
+        else if (a.walking && !o.zurueck) {
+          const roh = Math.atan2(-Math.cos(f.yaw), Math.sin(f.yaw));
+          if (Math.abs(roh) < 2.0) o.yaw += (hinter - o.yaw) * Math.min(1, dt / 1100);
+          if (Math.abs(o.yaw) < 3e-3) o.yaw = 3e-3 * Math.sign(o.yaw || 1);
+        }
+      } else if (R.innen && !freiAktiv() && (a.y > GH - 16 || a.x < 14 || a.x > GW - 14)) {   // klassische Ansicht: aus dem Bild gelaufen
+        const o = orbit(ctx.id); o.yaw = 0.012; o.zurueck = false; o.rueckT0 = null;
+      }
       a._pos3d = [p.x, -p.z, a._z3d || 0];   // Blender-Weltlage für Sammelobjekte (js/uhrwerk.js)
       const fz = Math.max(0, a._z3d || 0) + 0.95;   // Folgekamera: weich hinterher, Höhe gedämpft (Sprünge wackeln nicht)
       if (!R.fokus) R.fokus = new THREE.Vector3(p.x, fz, p.z);
@@ -951,4 +1098,9 @@ export function frame(t, actors, pxW, ctx) {
   for (const f of Object.values(figs)) f.holder.visible = seen.has(f.id) && f.holder.parent === R.scene;
   effect.render(R.scene, camera);
   return renderer.domElement;
+}
+export function raumInfo(id) {   // Fehlersuche: Innenmaße und Kameralage
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
+  const c = R.camera.position;
+  return { innen: R.innen, kamera: [c.x, c.y, c.z].map(v => +v.toFixed(2)), ziel: R.ziel && [R.ziel.x, R.ziel.y, R.ziel.z].map(v => +v.toFixed(2)) };
 }
