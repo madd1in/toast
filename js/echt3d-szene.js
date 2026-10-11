@@ -121,7 +121,7 @@ export async function init(base = 'img/3d/') {
   if (!renderer) throw new Error('WebGL-Renderer ließ sich nicht starten');
   renderer.setPixelRatio(1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = !sparsam;
+  renderer.shadowMap.enabled = !sparsam && !/xbox/i.test(navigator.userAgent || '');
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); kontextWeg = true; console.warn('Echtzeit-3D: WebGL-Kontext verloren'); });
   effect = new OutlineEffect(renderer, { defaultThickness: 0.0032, defaultColor: INK, defaultAlpha: 1 });
@@ -137,11 +137,31 @@ export async function init(base = 'img/3d/') {
 // Raum laden (einmal); bis er da ist, zeigt das Spiel das vorgerenderte Bild
 export function hasRoom(id) {
   const r = rooms[id];
-  if (r) return r.ready;
-  rooms[id] = { id, loading: true, ready: false };
+  if (r) { r.benutzt = performance.now(); return r.ready; }
+  raeumeAuf(id);
+  rooms[id] = { id, loading: true, ready: false, benutzt: performance.now() };
   (id === 'hafen' ? ladeHafen() : ladeRaum(id)).then(x => { Object.assign(rooms[id], x, { ready: true, loading: false }); },
-    e => { console.error('Echtzeit-3D', id, e); rooms[id].failed = true; });
+    e => {
+      console.error('Echtzeit-3D', id, e); rooms[id].failed = true;
+      if (typeof note === 'function') note(`Echtzeit-3D: Raum „${id}“ ließ sich nicht laden (${String((e && e.message) || e).slice(0, 80)}) – dort bleibt das vorgerenderte Bild.`);
+    });
   return false;
+}
+// Grafikspeicher schonen (Konsolen, Tablets): höchstens vier Räume geladen halten, den am längsten unbenutzten freigeben
+const RAUM_MAX = 4;
+function raeumeAuf(neu) {
+  const geladen = Object.values(rooms).filter(r => r.ready && r.id !== neu && r.id !== letzterRaum);
+  if (geladen.length < RAUM_MAX) return;
+  geladen.sort((a, b) => (a.benutzt || 0) - (b.benutzt || 0));
+  const R = geladen[0];
+  for (const f of Object.values(figs)) if (f.holder.parent === R.scene) R.scene.remove(f.holder);   // Figuren gehören allen Räumen
+  for (const k of karten.values()) if (k.mesh.parent === R.scene) R.scene.remove(k.mesh);
+  R.scene.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) { for (const v of Object.values(m)) if (v && v.isTexture && v !== GRAD) v.dispose(); m.dispose(); }
+  });
+  if (R.scene.background && R.scene.background.dispose) R.scene.background.dispose();
+  delete rooms[R.id];
 }
 export function failed(id) { return !!(rooms[id] && rooms[id].failed); }
 
@@ -1031,8 +1051,8 @@ export function frame(t, actors, pxW, ctx) {
         const o = orbit(ctx.id), hinter = Math.max(-1.22, Math.min(1.22, Math.atan2(-Math.cos(f.yaw), Math.sin(f.yaw))));
         if (!freiAktiv() && !o.zurueck) { o.yaw = 0.01; o.rueckT0 = null; }
         else if (a.walking && !o.zurueck) {
-          const roh = Math.atan2(-Math.cos(f.yaw), Math.sin(f.yaw));
-          if (Math.abs(roh) < 2.0) o.yaw += (hinter - o.yaw) * Math.min(1, dt / 1100);
+          const roh = Math.atan2(-Math.cos(f.yaw), Math.sin(f.yaw)), d = Math.atan2(Math.sin(roh - o.yaw), Math.cos(roh - o.yaw));
+          if (Math.abs(roh) < 2.0 && Math.abs(d) < 0.95) o.yaw += (hinter - o.yaw) * Math.min(1, dt / 1100);   // seitwärts/zurück: Kamera bleibt (kein Im-Kreis-Laufen)
           if (Math.abs(o.yaw) < 3e-3) o.yaw = 3e-3 * Math.sign(o.yaw || 1);
         }
       } else if (R.innen && !freiAktiv() && (a.y > GH - 16 || a.x < 14 || a.x > GW - 14)) {   // klassische Ansicht: aus dem Bild gelaufen

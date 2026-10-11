@@ -11,6 +11,7 @@ const ECHT3D = {
   mod: null, loading: false, failed: false,
   rooms: { hafen: 1, landeplatz: 1, keller: 1, lobby: 1, labor: 1, konferenz: 1, gasthaus: 1, garten1776: 1, fgarten: 1, vorraum: 1, thron: 1, testkammer: 1, mars: 1, stockwerk: 1, dachboden: 1, uhrwerk: 1 },
 };
+const ECHT3D_XBOX = /xbox/i.test(navigator.userAgent || '');   // Konsole: kleineres 3D-Bild, ohne Schatten (js/echt3d-szene.js)
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
 function echt3dOn(room) { return echt3dWanted(room) && !!ECHT3D.mod && ECHT3D.mod.ready && !(ECHT3D.mod.verloren && ECHT3D.mod.verloren()) && !ECHT3D.mod.failed(room.id) && ECHT3D.mod.hasRoom(room.id); }
 // Kann dieses Gerät WebGL 2? (three.js braucht es; manche Konsolen-Browser und alte Grafikchips nicht)
@@ -171,7 +172,7 @@ drawBg = function (room) {
     echt3dLoad();
     if (echt3dOn(room)) {
       const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible && !echt3dBild(a));
-      const bild = ECHT3D.mod.frame(G.t, acts, Math.min(1920, W * VS * DPR * SSK), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room) });
+      const bild = ECHT3D.mod.frame(G.t, acts, Math.min(ECHT3D_XBOX ? 1280 : 1920, W * VS * DPR * SSK), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room) });
       if (bild) {
         // Die Dialog-Kamera zoomt die Szene jetzt echt in 3D (Dolly mit Parallax) – deshalb hier die flache
         // 2D-Skalierung des Bildes zurücknehmen; Figuren-Bilder und Effekte oben drüber zoomen weiter wie gehabt
@@ -272,7 +273,9 @@ function echt3dBenutzen() {
 function echt3dSetzBewegungsziel(a, dx, dy, sek) {
   if (!a || a.room !== viewRoomId() || !ECHT3D.mod || !ECHT3D.mod.bewegungsZiel) return false;
   const kraft = Math.hypot(dx, dy); if (kraft < 0.025) return false;
-  const ziel = ECHT3D.mod.bewegungsZiel(a, dx, dy, sek, a.room);
+  // Ziel ein gutes Stück voraus (sonst ist die Figur jedes Bild „angekommen“ und die Laufanimation startet nie)
+  const ziel = ECHT3D.mod.bewegungsZiel(a, dx, dy, Math.max(sek, 0.24), a.room);
+  a._gelenkt = true;
   if (!ziel) return false;
   const [x, y] = clampWalk(ROOMS[a.room], ziel[0], ziel[1]);
   if (a._res) { const done = a._res; a._res = null; done(false); }
@@ -282,7 +285,13 @@ function echt3dSetzBewegungsziel(a, dx, dy, sek) {
 function echt3dPadBewegen(x, y, dt) {
   if (!echt3dParkourAktiv()) return false;
   if (x || y) echt3dSetzBewegungsziel(me(), x, y, dt / 1000);
+  else echt3dLenkungAus(me());
   return true;
+}
+function echt3dLenkungAus(a) {   // Stick/Tasten losgelassen: sofort stehen bleiben (statt zum vorausliegenden Ziel weiterzulaufen)
+  if (!a || !a._gelenkt) return;
+  a._gelenkt = false; a.target = null; a.walking = false; a.run = false;
+  if (a._res) { const done = a._res; a._res = null; done(true); }
 }
 function echt3dPadSpringen() {
   if (!echt3dParkourAktiv()) return false;
@@ -545,5 +554,6 @@ function drawEcht3dParkour() {
     const dx = (tasten.has('d') || tasten.has('arrowright') ? 1 : 0) - (tasten.has('a') || tasten.has('arrowleft') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.x : 0);
     const dy = (tasten.has('s') || tasten.has('arrowdown') ? 1 : 0) - (tasten.has('w') || tasten.has('arrowup') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.y : 0);
     if (dx || dy) echt3dSetzBewegungsziel(p, dx, dy, 0.09);
+    else if (!G.pointer || G.pointer !== 'pad') echt3dLenkungAus(p);
   }, 90);
 }

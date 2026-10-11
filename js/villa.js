@@ -114,7 +114,7 @@ if (typeof CRYSTAL_ROOMS !== 'undefined') CRYSTAL_ROOMS.push('stockwerk');
     if (G.state.crystals.dachboden) return;
     const bob = Math.sin(t * 0.0035) * 5, x = HOCH[0], y = HOCH[1] - 16 + bob;
     c.save();
-    if (!c.isPix) glow(c, x, y, 30 + Math.sin(t * 0.004) * 5, '#d79bff', 0.4 + Math.sin(t * 0.006) * 0.12);
+    if (!c.isPix) glowAt(c, x, y, 30 + Math.sin(t * 0.004) * 5, '#d79bff', 0.4 + Math.sin(t * 0.006) * 0.12);
     P(c, [x, y - 22, x + 13, y, x, y + 22, x - 13, y], '#e6c8ff', 2.5, '#8a5ad0');
     P(c, [x, y - 12, x + 6, y, x, y + 12, x - 6, y], '#f4e8ff', 0);
     c.restore();
