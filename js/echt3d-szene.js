@@ -171,6 +171,7 @@ async function ladeRaum(id) {
   H.traverse(o => { if (o.isMesh && beweglich.has(nm(o))) o.castShadow = true; });
   const stat = mergeStatic(H, n => beweglich.has(n));
   scene.add(H); scene.add(stat);
+  sprungToastStufen(scene, id);
   const nodes = new Map();
   H.traverse(o => { const n = nm(o); if (beweglich.has(n)) { if (!nodes.has(n)) nodes.set(n, []); nodes.get(n).push(o); } });
   const sprites = {};
@@ -324,7 +325,7 @@ export function owns(a, roomId) {
 // und ein Kamera-Ruck, wenn eine Figur den wilden Schreck-Take macht. Danach sitzt die Kamera wieder exakt
 // auf der Blender-Pose, sodass Hotspots und Laufwege pixelgenau stimmen.
 let letzterRaum = null;
-const _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _up = new THREE.Vector3(), _an = new THREE.Vector3(), _ab = new THREE.Vector3(), _yA = new THREE.Vector3(0, 1, 0);
+const _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _up = new THREE.Vector3(), _an = new THREE.Vector3(), _ab = new THREE.Vector3(), _yA = new THREE.Vector3(0, 1, 0), _m = new THREE.Matrix4();
 function kameraLoesen(R) {   // einmalig: Kamera aus ihrem glTF-Knoten lösen (World-Transform backen) und Home-Pose sichern
   const c = R.camera;
   if (c.parent) {
@@ -361,6 +362,135 @@ function kameraFahren(R, t, actors) {
   for (const a of actors) { const m = a.mimik; if (m && m.kind === 'schreck') schreck = Math.max(schreck, 1 - Math.min(1, Math.max(0, (t - m.t0) / 700))); }
   if (schreck > 0) cam.position.addScaledVector(_fw, -0.09 * schreck).addScaledVector(_rt, Math.sin(t * 0.09) * 0.02 * schreck);
   cam.position.addScaledVector(_rt, Math.sin(t * 0.00019 + R.phase) * 0.011).addScaledVector(_up, Math.sin(t * 0.00013 + R.phase * 2) * 0.008);   // Parallax-Schwung im Stand
+  // freie Kamera: 360° um den Raum, dazu neigen und zoomen – um einen Zielpunkt in der Raummitte
+  const o = R.orbit;
+  if (o && (o.zurueck || Math.abs(o.yaw) > 1e-4 || Math.abs(o.pitch) > 1e-4 || Math.abs(o.dist) > 1e-4)) {
+    if (o.zurueck) {
+      if (o.rueckT0 == null) { o.rueckT0 = t; o.start = { yaw: o.yaw, pitch: o.pitch, dist: o.dist }; }
+      const k = Math.min(1, (t - o.rueckT0) / 650), e = 1 - Math.pow(1 - k, 3);
+      o.yaw = o.start.yaw * (1 - e); o.pitch = o.start.pitch * (1 - e); o.dist = o.start.dist * (1 - e);
+      if (k >= 1) { o.yaw = o.pitch = o.dist = 0; o.zurueck = false; o.rueckT0 = null; }
+    }
+    if (!R.ziel) { R.ziel = toWorld(R.home, 480, 300, new THREE.Vector3()); R.basis = R.home.position.clone().sub(R.ziel); R.basisLen = Math.max(2, R.basis.length()); }
+    const pitchAxis = _rt.set(1, 0, 0).applyQuaternion(R.home.quaternion).applyAxisAngle(_yA, o.yaw);
+    _ab.copy(R.basis).applyAxisAngle(_yA, o.yaw).applyAxisAngle(pitchAxis, o.pitch)
+      .multiplyScalar(1 + o.dist / R.basisLen);
+    cam.position.copy(R.ziel).add(_ab);
+    if (cam.position.y < 0.45) cam.position.y = 0.45;
+    cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, R.ziel, _yA));
+  }
+}
+
+// ---------- Freie Kamera: Steuerung und 3D-Picking ----------
+function orbit(id) { const R = rooms[id]; if (!R) return null; return R.orbit || (R.orbit = { yaw: 0, pitch: 0, dist: 0, zurueck: false, rueckT0: null }); }
+export function freiAktiv() { const R = rooms[letzterRaum]; const o = R && R.orbit; return !!(o && (Math.abs(o.yaw) > 2e-3 || Math.abs(o.pitch) > 2e-3 || Math.abs(o.dist) > 2e-3)); }
+export function freiDreh(dx, dy, id) {
+  const o = orbit(id || letzterRaum); if (!o) return;
+  o.zurueck = false; o.rueckT0 = null;
+  o.yaw = ((o.yaw + dx + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  o.pitch = Math.max(-1.35, Math.min(1.35, o.pitch + dy));
+}
+export function freiZoom(d, id) {
+  const o = orbit(id || letzterRaum); if (!o) return;
+  o.zurueck = false; o.rueckT0 = null;
+  o.dist = Math.max(-2.2, Math.min(7, o.dist + d));
+}
+export function freiZurueck(id) { const o = orbit(id || letzterRaum); if (o && (o.yaw || o.pitch || o.dist)) { o.zurueck = true; o.rueckT0 = null; } }
+// Klick in der freien Kamera: Strahl durchs Bild schneidet Raum oder Boden – der Trefferpunkt zurück in Spiel-Koordinaten
+const _pickV = new THREE.Vector3();
+export function pick(gx, gy, id) {
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home) return null;
+  _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2);
+  ray.setFromCamera(_n, R.camera);
+  let punkt = null, dist = 1e9;
+  const boden = ray.ray.intersectPlane(ground, _pickV.clone());
+  if (boden) { punkt = boden.clone(); dist = boden.distanceTo(R.camera.position); }
+  const treffer = ray.intersectObjects(R.scene.children, true);
+  for (const h of treffer) {
+    let sichtbar = true;
+    for (let k = h.object; k; k = k.parent) if (k.visible === false) { sichtbar = false; break; }
+    if (sichtbar && h.distance < dist) { punkt = h.point.clone(); dist = h.distance; break; }
+  }
+  if (!punkt) return null;
+  punkt.project(R.home);
+  return { x: (punkt.x + 1) / 2 * GW, y: (1 - punkt.y) / 2 * GH };
+}
+
+// ---------- Hüpfen wie in Psychonauts 2: Plattformen, Schwerkraft, Sprung ----------
+// Sprungflächen in Blender-Weltmetern: [x0, x1, y0, y1, Oberkante].
+// Im Dachboden sind es Kisten, Koffer und Truhe; im Obergeschoss schweben Toaststufen über dem Treppenloch.
+const STOCKWERK_STUFEN = [
+  [6.65, 7.8, 8.05, 9.25, 0.28], [5.35, 6.5, 8.55, 9.75, 0.58],
+  [4.05, 5.2, 9.05, 10.25, 0.9], [2.75, 3.9, 9.55, 10.75, 0.56],
+];
+export const PLATTFORMEN = {
+  dachboden: [[2.4, 3.5, 14.8, 15.6, 0.62], [-4.5, -2.3, 14.8, 16.0, 1.28], [4.4, 7.4, 12.9, 14.7, 1.06], [-0.1, 1.4, 15.0, 16.2, 0.84], [-6.7, -5.7, 14.3, 15.3, 0.26]],
+  stockwerk: STOCKWERK_STUFEN,
+};
+const SPRUNGLOCH = { stockwerk: [[2.7, 8.35, 7.0, 11.3]] };
+function imSprungloch(id, x, y) { return (SPRUNGLOCH[id] || []).some(p => x >= p[0] && x <= p[1] && y >= p[2] && y <= p[3]); }
+function sprungToastStufen(scene, id) {
+  if (id !== 'stockwerk') return;
+  const rand = new THREE.MeshToonMaterial({ color: 0x874522, gradientMap: GRAD });
+  const krume = new THREE.MeshToonMaterial({ color: 0xf0bd68, gradientMap: GRAD });
+  const butter = new THREE.MeshToonMaterial({ color: 0xffed9b, gradientMap: GRAD });
+  for (const m of [rand, krume, butter]) m.userData.outlineParameters = { thickness: 0.004, color: INK, alpha: 1, visible: true };
+  for (const [i, p] of STOCKWERK_STUFEN.entries()) {
+    const x = (p[0] + p[1]) / 2, y = (p[2] + p[3]) / 2, w = p[1] - p[0], d = p[3] - p[2], h = p[4];
+    const basis = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), rand);
+    basis.position.set(x, h - 0.09, -y); basis.castShadow = true; basis.receiveShadow = true; scene.add(basis);
+    const toast = new THREE.Mesh(new THREE.BoxGeometry(w - 0.12, 0.035, d - 0.12), krume);
+    toast.position.set(x, h - 0.018, -y); toast.castShadow = true; toast.receiveShadow = true; scene.add(toast);
+    const klecks = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 7), butter);
+    klecks.scale.set(1.35, 0.23, 0.9); klecks.position.set(x + (i % 2 ? 0.16 : -0.16), h + 0.025, -y - 0.12); scene.add(klecks);
+  }
+}
+const G3D = 18.0, SPRUNG_V0 = 6.8;   // Sprunghöhe ≈ 1,3 m: reicht für Kisten und die Toaststufen
+function plattformHoehe(id, x, y, z) {
+  let h = imSprungloch(id, x, y) ? -4 : 0;
+  for (const p of PLATTFORMEN[id] || []) if (x >= p[0] - 0.25 && x <= p[1] + 0.25 && y >= p[2] - 0.25 && y <= p[3] + 0.25 && p[4] <= z + 0.3) h = Math.max(h, p[4]);
+  return h;
+}
+export function huepfen(a) {   // Sprung zünden – nur, wenn die Figur steht (Boden oder Plattform)
+  if ((a._vz3d || 0) !== 0) return false;
+  a._vz3d = SPRUNG_V0;
+  a._jumpT3d = performance.now();
+  return true;
+}
+export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py = Blender-Weltposition der Figur
+  let z = a._z3d || 0, vz = a._vz3d || 0;
+  const sek = Math.min(0.05, dt / 1000), loch = imSprungloch(id, px, py);
+  if (z <= 0.0001 && vz === 0 && !loch) return z;
+  if (loch && z <= 0.0001 && vz === 0) vz = -0.35;
+  vz -= G3D * sek;
+  z += vz * sek;
+  const boden = plattformHoehe(id, px, py, z);
+  if (z <= boden && vz <= 0) {
+    z = boden; a._vz3d = 0;
+    if (z > 0.02) a._checkpoint3d = [a.x, a.y, z];
+  } else a._vz3d = vz;
+  a._z3d = z;
+  if (z < -2.4 && a._checkpoint3d) {
+    const [x, y, h] = a._checkpoint3d;
+    a.x = x; a.y = y; a.target = null; a.walking = false; a.run = false;
+    if (a._res) { const done = a._res; a._res = null; done(false); }
+    a._z3d = h; a._vz3d = 0; a._respawned3d = true;
+    return h;
+  }
+  return z;
+}
+export function stehHoehe(id, x, y) { return plattformHoehe(id, x, y, 99); }   // höchste Plattform am Ort
+export function bewegungsZiel(a, dx, dy, sek, id = a.room) {
+  const R = rooms[id]; if (!R || !R.ready || !R.home || !R.camera) return null;
+  const kraft = Math.hypot(dx, dy); if (kraft < 0.025) return null;
+  const p = toWorld(R.home, a.x, a.y, new THREE.Vector3());
+  _fw.copy(R.camera.getWorldDirection(_fw)); _fw.y = 0;
+  if (_fw.lengthSq() < 1e-5) return null;
+  _fw.normalize(); _rt.crossVectors(_fw, _yA).normalize();
+  const schritt = 5.2 * Math.min(1, kraft) * Math.max(0, sek);
+  p.addScaledVector(_rt, dx / kraft * schritt).addScaledVector(_fw, -dy / kraft * schritt);
+  p.y = 0; p.project(R.home);
+  return [(p.x + 1) * GW / 2, (1 - p.y) * GH / 2];
 }
 
 // ---------- Bild für einen Spiel-Frame ----------
@@ -400,12 +530,21 @@ export function frame(t, actors, pxW, ctx) {
     const f = figs[a.kind]; if (!f || !a.visible || !owns(a, ctx.id)) continue;
     seen.add(a.kind);
     if (f.holder.parent !== R.scene) R.scene.add(f.holder);
-    const p = toWorld(R.home, a.x, a.y, _v.clone());
+    if (a.id === curId() && a._checkpointRoom3d !== ctx.id) {
+      a._checkpointRoom3d = ctx.id; a._z3d = 0; a._vz3d = 0; a._checkpoint3d = [a.x, a.y, 0];
+    }
+    let p = toWorld(R.home, a.x, a.y, _v.clone());
     if (f.last && a.walking) f.walkPh += p.distanceTo(f.last) / 0.62 * Math.PI;
     f.last = (f.last || new THREE.Vector3()).copy(p);
     const mf = typeof mimikForm === 'function' ? mimikForm(a, t) : null;
     f.holder.position.copy(p);
     if (mf && (mf.lift || mf.jx)) { const upm = unitsPerMeter(R.home, p); if (mf.lift) f.holder.position.y += mf.lift / upm; if (mf.jx) f.holder.position.x += mf.jx / upm; }   // Sprung und Zittern in Spiel-Pixeln
+    if (f.rig && a.id === curId() && ((a._vz3d || 0) !== 0 || (a._z3d || 0) > 0.0001 || imSprungloch(ctx.id, p.x, p.z))) {   // gesteuerte Figur: Sprung, Plattform oder Treppenloch
+      const z = schwerkraft(a, dt, ctx.id, p.x, p.z);
+      if (a._respawned3d) { p.copy(toWorld(R.home, a.x, a.y, _v)); f.holder.position.copy(p); }
+      if (z > 0.0001) f.holder.position.y += z;
+      else if (z < -0.0001) f.holder.position.y += z;
+    }
     f.holder.scale.set(mf ? mf.sx : 1, mf ? mf.sy : 1, mf ? mf.sx : 1);
     // Blickrichtung: beim Gehen zum Ziel, sonst leicht zur Kamera gedreht wie die Sprites
     let want = a.dir < 0 ? -Math.PI + 0.56 : -0.56;
@@ -419,7 +558,8 @@ export function frame(t, actors, pxW, ctx) {
     f.holder.rotation.set(0, f.yaw, mf && mf.rot ? -mf.rot : 0, 'YXZ');   // Mimik-Neigung nach vorn (Wut) oder hinten (Verlegenheit)
     if (f.rig) {
       let p0 = pose(f.rig, {});
-      if (a.walking) p0 = walkPose(f.rig, f.walkPh);
+      if (Math.abs(a._vz3d || 0) > 0.15) p0 = pose(f.rig, { aR: -2.3, eR: 0.24, aL: 2.3, eL: 0.24, tR: -0.52, tL: -0.52, kR: 0.88, kL: 0.88, lean: -0.1 });
+      else if (a.walking) p0 = walkPose(f.rig, f.walkPh);
       else if (a.pose && (POSES[a.pose.kind] || POSES[a.pose.kind + '0'])) {
         const k = a.pose.kind, el = (t - a.pose.t0) / Math.max(1, a.pose.dur), env = Math.sin(Math.min(1, el) * Math.PI);
         const tgt = POSES[k] ? pose(f.rig, POSES[k]) : mix(pose(f.rig, POSES[k + '0']), pose(f.rig, POSES[k + '1']), 0.5 + 0.5 * Math.sin(t * 0.012));

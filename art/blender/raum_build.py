@@ -756,7 +756,127 @@ def build_testkammer(SC):
     return {'Wuerfel': bpy.data.objects['Wuerfel'], 'PortalBlau': bpy.data.objects['PortalBlau'], 'PortalOrange': bpy.data.objects['PortalOrange'], 'Schild': bpy.data.objects['Schild']}
 
 
+# ---------------------------------------------------------------- Obergeschoss (Diele im ersten Stock der Villa)
+def build_stockwerk(SC):
+    """Nachtdiele über der Lobby: Tapetenwände, drei verschlossene Türen (Dr. Fred, Badezimmer, Grünes Tentakel),
+    Treppenabgang mit Geländer, ausziehbare Leiter zur Dachboden-Luke, Teppich, Ahnen-Portraits, Mondfenster."""
+    B = Builder(SC)
+    DIEL = tex_toon('T_DielenOben', 'dielen_dunkel.png', 0.5)
+    TAP = tex_toon('T_TapeteOben', 'tapete_lila.png', 0.3)
+    HOLZ = toon('T_HolzOben', '#7a5a3a', hi=0.35)
+    DUNKEL, NACHT, GOLD = toon('T_ObenDunkel', '#241a30'), toon('T_NachtFenster', '#101830', hi=0.5), toon('T_Messing', '#c8a04a', hi=0.6)
+    box(B, 'Boden', (0, 12, -0.05), (26, 12.4, 0.1), DIEL, bevel=0.0)
+    box(B, 'WandHinten', (0, 17.2, 3.2), (26, 0.4, 6.4), TAP, bevel=0.0)
+    box(B, 'SockelHinten', (0, 16.95, 0.45), (26, 0.12, 0.9), HOLZ, bevel=0.0)
+    for k in (-1, 1):
+        box(B, f'Seitenwand{k}', (k * 9.8, 12, 3.2), (0.3, 10.4, 6.4), TAP, bevel=0.0)
+    box(B, 'Decke', (0, 12, 6.5), (26, 12, 0.3), DUNKEL, bevel=0.0)
+    # drei Türen an der Rückwand
+    TUER = {}
+    for name, x, breite in (('TuerFred', -6.4, 2.6), ('TuerBad', -1.6, 2.2), ('TuerGruen', 3.2, 2.6)):
+        box(B, name + 'Rahmen', (x, 16.9, 2.25), (breite + 0.3, 0.25, 4.5), HOLZ, bevel=0.02)
+        TUER[name] = box(B, name, (x, 16.8, 2.2), (breite, 0.12, 4.3), toon(f'T_Blatt{name}', '#3a2438' if name != 'TuerGruen' else '#1f4030', hi=0.3), bevel=0.02)
+        B.sphere(name + 'Klinke', (x + breite / 2 - 0.35, 16.68, 2.2), (0.09, 0.06, 0.09), GOLD, None)
+        box(B, name + 'Schild', (x, 16.72, 3.9), (breite * 0.55, 0.06, 0.3), toon('T_SchildGold', '#e8cf8a'), bevel=0.0)
+    # Treppenabgang: Öffnung im Boden rechts, Stufen führen hinab, Geländer aus Stäben
+    box(B, 'Treppenloch', (5.6, 9.0, -0.06), (5.6, 4.4, 0.14), toon('T_TreppenSchwarz', '#0a0612'), bevel=0.0)
+    for i in range(7):
+        box(B, f'Treppe{i}', (5.6, 10.9 - i * 0.55, -0.15 - i * 0.32), (5.2, 0.55, 0.14), HOLZ, bevel=0.01)
+    box(B, 'Gelaender', (8.25, 10.2, 1.15), (0.12, 3.6, 0.12), HOLZ, bevel=0.01)
+    box(B, 'GelaenderHand', (8.25, 10.2, 2.1), (0.16, 3.8, 0.14), HOLZ, bevel=0.01)
+    for i in range(5):
+        B.rod(f'GelaenderStab{i}', (8.25, 8.8 + i * 0.75, 0.1), (8.25, 8.8 + i * 0.75, 2.0), 0.045, HOLZ, None)
+    # Leiter zur Dachboden-Luke (links, ausziehbar)
+    box(B, 'Dachluke', (-6.0, 13.0, 6.32), (2.2, 2.2, 0.12), HOLZ, bevel=0.02)
+    for k in (-1, 1):
+        B.rod(f'LeiterHolm{k}', (-6.0, 12.0 + k * 0.35, 6.3), (-6.0, 12.0 + k * 0.35, 2.2), 0.06, HOLZ, None)
+    for i in range(9):
+        B.rod(f'LeiterSprosse{i}', (-6.0, 11.65, 2.5 + i * 0.42), (-6.0, 12.35, 2.5 + i * 0.42), 0.04, HOLZ, None)
+    # Mondfenster mit Vorhang, Teppich, Portraits, Wandleuchte, Besen
+    box(B, 'FensterRahmen', (-8.5, 16.9, 3.6), (0.3, 0.25, 3.0), HOLZ, bevel=0.02)
+    box(B, 'FensterOben', (-8.45, 16.85, 3.6), (0.16, 0.14, 2.6), NACHT, bevel=0.0)
+    B.sphere('MondOben', (-8.45, 17.4, 4.5), (0.5, 0.08, 0.5), toon('T_MondOben', '#f4f0d8', hi=0.8), None)
+    for k in (-1, 1):
+        box(B, f'Vorhang{k}', (-8.3, 16.75, 3.6 + k * 1.5), (0.14, 0.12, 0.9), toon('T_Vorhang', '#5a2a4a', hi=0.3), bevel=0.0)
+    plane(B, 'Teppich', -2.6, 2.6, 6.2, 11.4, 0.012, tex_toon('T_TeppichOben', 'teppich_80er.png', 0.4))
+    for i, (x, w) in enumerate(((-3.4, 1.3), (0.2, 1.1))):
+        box(B, f'PortraitRahmen{i}', (x, 16.92, 4.6), (w, 0.12, 1.6), GOLD, bevel=0.02)
+        box(B, f'Portrait{i}', (x, 16.86, 4.6), (w - 0.16, 0.1, 1.44), toon(f'T_Ahne{i}', ['#2a2038', '#38283a'][i]), bevel=0.0)
+    box(B, 'Nachttisch', (-3.9, 14.6, 0.4), (1.0, 0.7, 0.8), HOLZ, bevel=0.03)
+    B.cone('Wandleuchte', 1.6, 2.1, 0.22, 0.1, toon('T_LampenSchirm', '#e8c890', hi=0.7), None, xy=(-1.2, 16.7), bevel=0.02)
+    B.sphere('WandleuchteGlanz', (-1.2, 16.6, 1.85), (0.18, 0.12, 0.18), toon('T_LampenLicht', '#ffe9b0', hi=0.9), None)
+    B.rod('Besen', (-8.2, 15.2, 0.9), (-8.2, 15.5, 0.1), 0.045, HOLZ, None)
+    B.cone('Besenkopf', 0.55, 0.85, 0.16, 0.05, toon('T_Besen', '#c8a05a'), None, xy=(-8.2, 15.05), bevel=0.0)
+    sun(SC, (0.9, 0.25, -0.5), 1.1, (0.72, 0.74, 1.0))
+    ld = bpy.data.lights.new('Licht_Oben', 'POINT'); ld.energy, ld.color, ld.shadow_soft_size = 42, (1.0, 0.86, 0.62), 0.4
+    ld.use_custom_distance, ld.cutoff_distance = True, 11
+    lo = bpy.data.objects.new('Licht_Oben', ld); SC.collection.objects.link(lo); lo.location = (-1.2, 14.5, 2.6)
+    return {**TUER, 'Treppe': bpy.data.objects['Treppe0'], 'Dachluke': bpy.data.objects['Dachluke'], 'Fenster': bpy.data.objects['FensterOben'], 'Teppich': bpy.data.objects['Teppich']}
+
+
+# ---------------------------------------------------------------- Dachboden (unter dem Dach der Villa)
+def build_dachboden(SC):
+    """Verschlafener Dachboden: schräge Ziegelwände, Balken, Dachfenster mit Mondlicht, Kistenstapel und Weihnachtsbaum,
+    Teleskop, alte Truhe, Labor-Ersatzteilkiste, Spinnweben mit Spinne – und die Leiter zurück zur Diele."""
+    B = Builder(SC)
+    DIEL = tex_toon('T_DielenDach', 'dielen_dunkel.png', 0.55)
+    ZIEGEL = tex_toon('T_ZiegelDach', 'dachziegel.png', 0.5, hi=0.2)
+    HOLZ, DUNKEL, ALT = toon('T_HolzDach', '#6a4a30', hi=0.3), toon('T_DachDunkel', '#170f0c'), toon('T_Sperrholz', '#c8a878', hi=0.4)
+    NACHT = toon('T_NachtDach', '#0c1226', hi=0.5)
+    box(B, 'Boden', (0, 12, -0.05), (24, 12.4, 0.1), DIEL, bevel=0.0)
+    box(B, 'Ruckwand', (0, 17.3, 2.6), (24, 0.4, 5.2), HOLZ, bevel=0.0)
+    box(B, 'WandLinks', (-9.6, 12, 2.6), (0.4, 10.4, 5.2), HOLZ, bevel=0.0)
+    box(B, 'WandRechts', (9.6, 12, 2.6), (0.4, 10.4, 5.2), HOLZ, bevel=0.0)
+    for k in (-1, 1):   # schräge Dachflächen
+        box(B, f'Dachflaeche{k}', (k * 5.2, 12, 4.6), (9.6, 11.6, 0.25), ZIEGEL, rot=(0, k * 0.62, 0), bevel=0.0)
+    box(B, 'Dachfirst', (0, 12, 6.35), (1.2, 11.6, 0.4), HOLZ, bevel=0.03)
+    for i in range(4):   # Balken unter dem First
+        B.rod(f'Balken{i}', (-9.4, 6.6 + i * 3.4, 5.0), (9.4, 6.6 + i * 3.4, 5.0), 0.14, HOLZ, None)
+    # Dachfenster (Gauge) mit Mondlicht
+    box(B, 'GaubeRahmen', (-2.2, 16.9, 4.4), (2.6, 1.2, 2.2), HOLZ, bevel=0.03)
+    box(B, 'Dachfenster', (-2.2, 16.4, 4.4), (1.9, 0.14, 1.5), NACHT, bevel=0.0)
+    B.sphere('MondDach', (-2.2, 17.1, 4.9), (0.42, 0.07, 0.42), toon('T_MondDach', '#f0ecd4', hi=0.8), None)
+    # Kistenstapel, Weihnachtsbaum, Truhe, Labor-Kiste, Koffer
+    KISTEN = B.empty('Kisten')
+    KISTEN.location = (5.6, 13.6, 0.0)
+    for i, (dx, dy, w, h) in enumerate(((0, 0, 1.5, 1.0), (1.7, 0.3, 1.2, 0.8), (0.2, 1.6, 1.1, 0.9), (-1.4, 0.4, 1.0, 0.7))):
+        box(B, f'Kiste{i}', (dx, dy, h / 2), (w, w, h), ALT, KISTEN, rot=(0, 0, 0.06 * (i % 3 - 1)), bevel=0.02)
+    box(B, 'Koffer', (2.9, 15.2, 0.3), (1.1, 0.55, 0.6), toon('T_Koffer', '#7a4a2a'), bevel=0.05)
+    B.cone('Baum', 0.4, 2.4, 1.0, 0.12, toon('T_BaumAlt', '#2a4436'), None, xy=(-6.2, 14.8), seg=10, bevel=0.0)
+    B.rod('Baumstamm', (-6.2, 14.8, 0.0), (-6.2, 14.8, 0.5), 0.12, HOLZ, None)
+    box(B, 'Baumfuss', (-6.2, 14.8, 0.12), (0.8, 0.8, 0.24), ALT, bevel=0.02)
+    TR = box(B, 'Truhe', (-3.4, 15.4, 0.55), (2.0, 1.0, 1.1), toon('T_Truhe', '#5a3a24'), bevel=0.04)
+    box(B, 'Truhendeckel', (-3.4, 15.4, 1.16), (2.0, 1.0, 0.18), toon('T_Truhe', '#5a3a24'), bevel=0.06)
+    box(B, 'Ersatzteilkiste', (0.6, 15.6, 0.4), (1.4, 0.9, 0.8), ALT, bevel=0.02)
+    box(B, 'Ersatzteilschild', (0.6, 15.1, 0.72), (1.2, 0.05, 0.25), toon('T_FredsKiste', '#3a3c46'), bevel=0.0)
+    # Teleskop am Dachfenster
+    TL = B.empty('Teleskop'); TL.location = (-2.2, 15.8, 1.05)
+    B.rod('TeleskopRohr', (0, 0, 0.35), (0, 1.35, 1.55), 0.14, toon('T_MessingDach', '#b89040', hi=0.7), TL, r1=0.09)
+    B.rod('TeleskopStativ0', (0, 0, 0.3), (0, 0, 0.0), 0.05, HOLZ, TL)
+    B.rod('TeleskopStativ1', (0, 0, 0.3), (0.4, 0, 0.0), 0.05, HOLZ, TL)
+    B.rod('TeleskopStativ2', (0, 0, 0.3), (-0.4, 0, 0.0), 0.05, HOLZ, TL)
+    # Leiter zur Luke (Bodenmitte) und Staub
+    box(B, 'Luke', (-2.0, 11.0, 6.3), (1.8, 1.8, 0.14), HOLZ, bevel=0.02)
+    for k in (-1, 1):
+        B.rod(f'LeiterHolmD{k}', (-2.0, 10.2 + k * 0.33, 6.25), (-2.0, 10.2 + k * 0.33, 2.1), 0.055, HOLZ, None)
+    for i in range(9):
+        B.rod(f'LeiterSprosseD{i}', (-2.0, 9.87, 2.4 + i * 0.42), (-2.0, 10.53, 2.4 + i * 0.42), 0.035, HOLZ, None)
+    SP = B.empty('Spinnweben'); SP.location = (7.8, 16.2, 3.9)
+    for i in range(3):
+        B.torus(f'Netz{i}', (0, 0, 0), 0.5 + i * 0.42, 0.018, toon('T_Netz', '#d8d4c8', hi=0.6), SP, rot=(i * 0.5, 0.35, i * 0.4), seg=28, sseg=6)
+    SPINNE = B.sphere('Spinne', (7.8, 15.9, 3.7), (0.16, 0.13, 0.13), toon('T_Spinne', '#1a1216'), None)
+    for i in range(8):
+        a = i / 8 * 6.28
+        B.rod(f'Spinnenbein{i}', (math.cos(a) * 0.06, -0.08, 0.02), (math.cos(a) * 0.3, -0.22, math.sin(a) * 0.12 + 0.06), 0.014, toon('T_Spinne', '#1a1216'), SPINNE)
+    sun(SC, (-0.5, -0.3, -0.8), 1.5, (0.78, 0.82, 1.0))
+    ld = bpy.data.lights.new('Licht_Dach', 'POINT'); ld.energy, ld.color, ld.shadow_soft_size = 26, (0.9, 0.9, 1.0), 0.5
+    ld.use_custom_distance, ld.cutoff_distance = True, 9
+    lo = bpy.data.objects.new('Licht_Dach', ld); SC.collection.objects.link(lo); lo.location = (-2.2, 15.0, 4.0)
+    return {'Kisten': KISTEN, 'Truhe': TR, 'Teleskop': TL, 'Dachfenster': bpy.data.objects['Dachfenster'], 'Baum': bpy.data.objects['Baum'], 'Spinne': bpy.data.objects['Spinne']}
+
+
 ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12')),
+           'stockwerk': (build_stockwerk, ('#2a1f46', '#0c0818')), 'dachboden': (build_dachboden, ('#221812', '#0a0604')),
            'testkammer': (build_testkammer, ('#3a4058', '#20242e')),
            'mars': (lambda SC: build_mars(SC, False, echt=bool(globals().get('ECHT'))), ('#f4c496', '#7a3c52')), 'mars_froh': (lambda SC: build_mars(SC, True), ('#f4c496', '#7a3c52'))}
 

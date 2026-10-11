@@ -1,0 +1,1 @@
+{"zustaende": {}, "sprites": {}, "himmel": [], "ohneKontur": [], "lichter": [{"typ": "SUN", "farbe": [0.72, 0.74, 1.0], "energie": 1.1, "richtung": [0.2406, 0.7612, -0.6023], "ort": [0.0, 0.0, 0.0], "weite": 0}, {"typ": "POINT", "farbe": [1.0, 0.86, 0.62], "energie": 42.0, "richtung": [0.0, 0.0, -1.0], "ort": [-1.2, 14.5, 2.6], "weite": 11.0}]}

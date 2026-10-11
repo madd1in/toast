@@ -1342,7 +1342,7 @@ window.addEventListener('keydown', e => {
 // ---------- Controller (Gamepad API, Xbox-Layout) ----------
 try { if ('gamepadInputEmulation' in navigator) navigator.gamepadInputEmulation = 'gamepad'; } catch (e) { /* nur Edge auf Xbox */ }
 const PAD = { prev: [], hold: {}, idx: -1 };
-window.addEventListener('gamepadconnected', e => { PAD.idx = e.gamepad.index; note('Controller verbunden: A Aktion · X Standard · B Zurück · Y Tipp · LB/RB Figur · LT/RT Verb'); });
+window.addEventListener('gamepadconnected', e => { PAD.idx = e.gamepad.index; note('Controller: A Aktion · X Standard · B Zurück · Y Tipp · LB/RB Figur · LT/RT Verb · rechter Stick: 3D-Kamera'); });
 window.addEventListener('gamepaddisconnected', () => { PAD.idx = -1; });
 function currentPad() {
   if (!navigator.getGamepads) return null;
@@ -1395,15 +1395,17 @@ function pollPad(dt) {
   const dz = v => Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82;
   const ax = dz(gp.axes[0] || 0), ay = dz(gp.axes[1] || 0), rx = dz(gp.axes[2] || 0), ry = dz(gp.axes[3] || 0);
   const mag = Math.hypot(ax, ay);
-  if (mag > 0 || rx || ry) {
+  const parkour3d = typeof echt3dPadBewegen === 'function' && echt3dPadBewegen(ax, ay, dt);
+  const kamera3d = typeof echt3dPadDreh === 'function' && echt3dPadDreh(rx, ry, dt);
+  if (!parkour3d && (mag > 0 || ((rx || ry) && !kamera3d))) {
     if (G.pointer !== 'pad' || G.mouse.x < 0) { G.mouse.x = W / 2; G.mouse.y = SH / 2; }
     G.pointer = 'pad';
     const sp = 760 * (0.25 + 0.75 * mag);
-    G.mouse.x = Math.max(0, Math.min(W, G.mouse.x + ax * sp * dt / 1000 + rx * 220 * dt / 1000));
-    G.mouse.y = Math.max(0, Math.min(H - 1, G.mouse.y + ay * sp * dt / 1000 + ry * 220 * dt / 1000));
-  }
+    G.mouse.x = Math.max(0, Math.min(W, G.mouse.x + ax * sp * dt / 1000 + (kamera3d ? 0 : rx * 220 * dt / 1000)));
+    G.mouse.y = Math.max(0, Math.min(H - 1, G.mouse.y + ay * sp * dt / 1000 + (kamera3d ? 0 : ry * 220 * dt / 1000)));
+  } else if ((kamera3d && (rx || ry)) || parkour3d && mag) G.pointer = 'pad';
   if (now.some(Boolean)) { G.pointer = 'pad'; Sound.init(); }
-  if (down(11)) toggleRetro();
+  if (down(11) && !(typeof echt3dPadZurueck === 'function' && echt3dPadZurueck())) toggleRetro();
   // Steuerkreuz mit Wiederholung beim Halten
   [[12, 0, -1], [13, 0, 1], [14, -1, 0], [15, 1, 0]].forEach(([i, dx, dy]) => {
     if (down(i)) { snapNav(dx, dy); PAD.hold[i] = G.t + 380; }
@@ -1424,7 +1426,7 @@ function pollPad(dt) {
   } else if (G.screen === 'end') {
     if (down(0) || down(9)) { G.saved = null; G.hasSaves = anySave(); G.screen = 'title'; music(); }
   } else if (G.screen === 'game') {
-    if (down(0)) onClick(G.mouse.x, G.mouse.y, false);
+    if (down(0) && !(typeof echt3dPadSpringen === 'function' && echt3dPadSpringen())) onClick(G.mouse.x, G.mouse.y, false);
     if (down(2)) onClick(G.mouse.x, G.mouse.y, true);
     if (down(1)) onBack();
     if (down(3) && !G.busy && !G.menu) showHint();
@@ -2224,9 +2226,11 @@ const HELP = [
   'Inventar: Maus an den unteren Rand oder I · Gegenstand anklicken, dann Ziel oder Gesicht',
   'Maus: Verb anklicken, dann Gegenstand oder Person', 'Rechtsklick: Standard-Aktion · ohne Verb: hinlaufen',
   'Doppelklick/-tipp: rennen · Ausgänge sofort benutzen', 'Touch: tippen · lange drücken = Standard-Aktion',
-  'Controller: Stick = Zeiger · Steuerkreuz = von Ziel zu Ziel', 'A Aktion · X Standard · B Zurück · Y Tipp · RS Pixel-Grafik',
-  'LB/RB Figur wechseln · LT/RT Verb wählen · LS Klo-Post', 'Ansicht/Tab/Leertaste: Hotspots · F Vollbild · F1/P Pixel-Grafik',
-  'Tastatur: Pfeile springen · Enter Aktion · 1–3 Figur · K Klo-Post', 'G Gib · N Nimm · B Benutze · S Schau an · R Rede mit',
+  'Echtzeit-3D: rechts ziehen, rechter Stick oder Wischen dreht · Mausrad/Pinch zoomt', 'Kamera zurück: C · RS-Klick · zwei Finger tippen',
+  'Sprungpassagen: WASD/Linker Stick laufen · Leertaste/A springen · Mobil: Steuerkreis und SPRINGEN',
+  'Controller: linker Stick = Zeiger · Steuerkreuz = von Ziel zu Ziel', 'A Aktion · X Standard · B Zurück · Y Tipp · rechter Stick: 3D-Kamera',
+  'RS-Klick setzt die 3D-Kamera zurück · LB/RB Figur · LT/RT Verb · LS Klo-Post', 'Ansicht/Tab/Leertaste: Hotspots · F Vollbild · F1/P Pixel-Grafik',
+  'Tastatur: Pfeile = Zielnavigation, im Parcours Bewegung · Enter Aktion · 1–3 Figur · K Klo-Post', 'G Gib · N Nimm · B Benutze · S Schau an · R Rede mit',
   'Klo-Post: Gegenstand wählen → Gesicht unten rechts (geht überall) · O Foto',
   'Menü → Extras: Minispiele, Fotoalbum, Figuren-Steckbriefe, Musikbox, Erfolge',
   'M: Zeitreise-Karte – besuchte Orte deiner Zeit per Schnellreise erreichen',
@@ -4040,6 +4044,7 @@ function drawScreen() {
     cx.restore();
     txt(cx, 'Lade' + '.'.repeat(1 + Math.floor(t / 400) % 3), W / 2, H / 2 + 80, '400 26px "Titan One", sans-serif', '#ffd23a', 'center', 5, '#1b1020');
   }
+  if (!G.photoMode && typeof drawEcht3dParkour === 'function') drawEcht3dParkour();
   drawCursor();
 }
 function render() {

@@ -159,7 +159,9 @@ Mit **F1**, **P**, dem Knopf „Pixel“ oder dem rechten Stick am Controller sc
 | Tipp | H · „Tipp“ | „Tipp“ | Y |
 | Rennen / Ausgang sofort | Doppelklick | Doppeltippen | A zweimal |
 | Klo-Post | K · „Klo-Post“ | „Klo-Post“ | Linker Stick |
-| Pixel-Grafik | F1 · P | „Pixel“ | Rechter Stick |
+| 3D-Kamera (Echtzeit-3D) | Rechts ziehen · Mausrad zoomt · C zurück | Wischen drehen · Pinch zoomen · zwei Finger zurück | Rechter Stick drehen · RS-Klick zurück |
+| Sprungpassagen (Dachboden / Treppenlücke) | WASD/Pfeile laufen · Leertaste springt · Maus klickt zum Ziel | Steuerkreis laufen · SPRINGEN-Taste · Wischen dreht Kamera | Linker Stick laufen · A springen · rechter Stick dreht Kamera |
+| Pixel-Grafik | F1 · P | „Pixel“ | RS-Klick bei neutraler Kamera |
 | Vollbild | F | Symbol oben rechts | – |
 | Foto | O · F2 | – | – |
 | Menü | Esc | „Menü“ | Menü |
