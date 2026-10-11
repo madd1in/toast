@@ -287,18 +287,102 @@ def build_landeplatz(SC):
     import lieferschiff
     importlib.reload(lieferschiff)
     lieferschiff.build(SC, B, toon, S)   # Drehkörper-Rumpf, Kuppel, Seitentriebwerke, Leitwerk, Landebeine (lieferschiff.py)
-    # Skyline mit Neon-Fenstern weit hinten, darüber ein großer blasser Mond
+    # Skyline: abgestufte Zukunftshäuser mit Fensterraster, Gesimsen und unterschiedlichen Dachformen.
+    city_bodies = ('#30264f', '#293754', '#263f50', '#392a52', '#30435a')
+    city_bases = ('#51416e', '#405673', '#3b5a69', '#59406f', '#456177')
+    city_accents = ('#806ca6', '#6884a0', '#5c91a1', '#9970a4', '#7193a6')
+    city_glass = toon('R_CityGlass', '#17233a')
+    city_lights = (toon('R_CityFensterCyan', '#7fe8ff', hi=0.95),
+                   toon('R_CityFensterPink', '#ff7ad9', hi=0.95),
+                   toon('R_CityFensterGold', '#ffd86a', hi=0.95))
+
+    def city_mesh(name, pieces, material):
+        if not pieces:
+            return None
+        bm = bmesh.new()
+        for center, size in pieces:
+            geom = bmesh.ops.create_cube(bm, size=1)['verts']
+            bmesh.ops.scale(bm, verts=geom, vec=Vector(size))
+            bmesh.ops.translate(bm, verts=geom, vec=Vector(center))
+        return B.obj(name, bm, material, None, (0, 0, 0), smooth=False)
+
     for i in range(20):
         rnd = random.Random(300 + i)
-        x, y, hgt, w_ = -80 + i * 8.4 + rnd.uniform(-1.5, 1.5), rnd.uniform(85, 125), rnd.uniform(16, 48), rnd.uniform(5, 8)
-        box(B, f'Turm{i}', (x, y, hgt / 2 - 1), (w_, w_, hgt), toon(f'R_Turm{i % 3}', ['#2a1e4a', '#33245a', '#241a40'][i % 3]), bevel=0.05)
-        for j in range(int(hgt // 4.5)):
-            if rnd.random() < 0.75:
-                c = NEON if (i + j) % 4 == 0 else NEONP if (i + j) % 5 == 0 else toon('R_FensterGelb', '#ffd86a', hi=0.95)
-                box(B, f'Fenster{i}_{j}', (x, y - w_ / 2 - 0.08, 2.5 + j * 4.5), (w_ * 0.72, 0.1, 0.9), c, bevel=0)
-        if i % 4 == 1:
-            B.cone(f'Antenne{i}', hgt - 1, hgt + 5, 0.25, 0.05, toon('R_Turm0', '#2a1e4a'), None, xy=(x, y), bevel=0)
-            B.sphere(f'Blink{i}', (x, y, hgt + 5.2), (0.6, 0.6, 0.6), toon('R_Rot', '#ff4a5a', hi=0.95), None)
+        x = -80 + i * 8.4 + rnd.uniform(-1.2, 1.2)
+        y = 88 + (i % 4) * 7.5 + rnd.uniform(-2.5, 2.5)
+        hgt = rnd.uniform(22, 50)
+        w_ = rnd.uniform(6.2, 9.0)
+        depth = rnd.uniform(5.8, 8.2)
+        style = i % 4
+        body = toon(f'R_CityBody{i}', city_bodies[i % len(city_bodies)])
+        base = toon(f'R_CityBase{i}', city_bases[i % len(city_bases)])
+        accent = toon(f'R_CityAccent{i}', city_accents[i % len(city_accents)])
+
+        # Wider plinth and a clean, beveled main tower give each building a solid silhouette.
+        box(B, f'HausSockel{i}', (x, y, 1.35), (w_ + 1.1, depth + 1.0, 2.7), base, bevel=0.12)
+        box(B, f'Turm{i}', (x, y, (hgt + 2.6) / 2), (w_, depth, hgt - 2.6), body, bevel=0.14)
+
+        # Every tower gets a recognizable crown, with four different roof profiles across the skyline.
+        if style == 0:
+            box(B, f'Dachstufe{i}', (x, y, hgt - 0.65), (w_ * 0.78, depth * 0.76, 1.3), base, bevel=0.08)
+            box(B, f'Dachhaus{i}', (x, y, hgt + 1.0), (w_ * 0.42, depth * 0.5, 2.0), accent, bevel=0.08)
+        elif style == 1:
+            box(B, f'Dachstufe{i}', (x, y, hgt - 1.0), (w_ * 0.68, depth * 0.7, 2.0), base, bevel=0.09)
+            box(B, f'Dachkrone{i}', (x, y, hgt + 0.3), (w_ * 0.42, depth * 0.44, 0.8), accent, bevel=0.06)
+        elif style == 2:
+            B.cone(f'Dachspitze{i}', hgt - 0.2, hgt + 4.2, w_ * 0.36, 0.08, accent, None, xy=(x, y), seg=8, bevel=0)
+        else:
+            box(B, f'Dachhalle{i}', (x, y, hgt + 0.9), (w_ * 0.55, depth * 0.56, 1.8), accent, bevel=0.12)
+            B.torus(f'Dachneon{i}', (x, y, hgt + 1.88), 0.8, 0.045, NEON if i % 2 else NEONP, None, scale=(w_ * 0.38, depth * 0.34, 1), seg=32, sseg=6)
+
+        # Corner ribs, floor ledges, and roof lights remain visible from every orbit angle.
+        trim = []
+        for sx in (-1, 1):
+            trim.append(((x + sx * (w_ / 2 - 0.14), y, (hgt + 2.6) / 2), (0.2, depth + 0.12, hgt - 3.0)))
+        for sy in (-1, 1):
+            trim.append(((x, y + sy * (depth / 2 - 0.14), (hgt + 2.6) / 2), (w_ + 0.12, 0.2, hgt - 3.0)))
+        for z in range(7, int(hgt - 1), 8):
+            trim.append(((x, y - depth / 2 - 0.08, z), (w_ + 0.26, 0.18, 0.16)))
+            trim.append(((x, y + depth / 2 + 0.08, z), (w_ + 0.26, 0.18, 0.16)))
+            trim.append(((x - w_ / 2 - 0.08, y, z), (0.18, depth + 0.26, 0.16)))
+            trim.append(((x + w_ / 2 + 0.08, y, z), (0.18, depth + 0.26, 0.16)))
+        city_mesh(f'Hausdetails{i}', trim, accent)
+
+        # Dark glass panes wrap all four sides; a deterministic subset glows in cyan, pink, or gold.
+        dark_windows = []
+        lit_windows = [[], [], []]
+        floors = max(3, int((hgt - 8) / 4.0))
+        rows_z = [5.0 + row * (hgt - 10.0) / max(1, floors - 1) for row in range(floors)]
+        front_cols = max(2, min(4, int(w_ // 2)))
+        side_cols = max(2, min(4, int(depth // 2)))
+        front_gap, side_gap = 0.32, 0.32
+        pane_h = 1.7
+        front_w = (w_ - 1.0 - front_gap * (front_cols - 1)) / front_cols
+        side_w = (depth - 1.0 - side_gap * (side_cols - 1)) / side_cols
+
+        for row, z in enumerate(rows_z):
+            for col in range(front_cols):
+                pane_x = x - (front_cols - 1) * (front_w + front_gap) / 2 + col * (front_w + front_gap)
+                for sy in (-1, 1):
+                    pane_y = y + sy * (depth / 2 + 0.055)
+                    dark_windows.append(((pane_x, pane_y, z), (front_w, 0.1, pane_h)))
+                    if rnd.random() < 0.48:
+                        lit_windows[rnd.randrange(3)].append(((pane_x, pane_y + sy * 0.065, z), (front_w * 0.78, 0.035, pane_h * 0.84)))
+            for col in range(side_cols):
+                pane_y = y - (side_cols - 1) * (side_w + side_gap) / 2 + col * (side_w + side_gap)
+                for sx in (-1, 1):
+                    pane_x = x + sx * (w_ / 2 + 0.055)
+                    dark_windows.append(((pane_x, pane_y, z), (0.1, side_w, pane_h)))
+                    if rnd.random() < 0.48:
+                        lit_windows[rnd.randrange(3)].append(((pane_x + sx * 0.065, pane_y, z), (0.035, side_w * 0.78, pane_h * 0.84)))
+        city_mesh(f'HausFensterDunkel{i}', dark_windows, city_glass)
+        for color, pieces in zip(city_lights, lit_windows):
+            city_mesh(f'HausFensterLicht{i}_{color.name[-4:]}', pieces, color)
+
+        if i % 3 == 1:
+            mast_z = hgt + (6.0 if style == 2 else 3.2)
+            B.rod(f'Antenne{i}', (x, y, hgt + 0.6), (x, y, mast_z), 0.09, base, None, seg=8)
+            B.sphere(f'Blink{i}', (x, y, mast_z + 0.35), (0.28, 0.28, 0.28), toon('R_Rot', '#ff4a5a', hi=0.95), None)
     B.sphere('Mond', (-35, 260, 70), (16, 2, 16), toon('R_Mond', '#f6eaff', hi=0.9), None)
     for i in range(5):   # schwebende Autos
         rnd = random.Random(500 + i)

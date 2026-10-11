@@ -107,6 +107,8 @@ def box_uvs(me, mw, mats):
 def lod_ratio(o, tris):
     """Detailstufe fürs Echtzeit-Bild: Hintergrund und Schiff stark vereinfachen, Nahes nur bei sehr vielen Dreiecken."""
     n = o.name
+    if n.startswith(('Hausdetails', 'HausFenster')):
+        return 1.0   # getrennte Fensterkästen würden beim Decimate ungleichmäßig verschwinden
     if tris < 400:
         return 1.0
     if n.startswith(('Palme', 'Wolke', 'Welle', 'Berg', 'Insel')):

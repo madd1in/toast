@@ -126,7 +126,7 @@ raum3d('landeplatz', 'img/raum_landeplatz.jpg', {
   era: 'future', name: 'Landeplatz', floor: 'tile', amb: ['future', 'hum'], fill: '#2a1a48',
   objs: [
     { id: 'landeplatz_raus', name: 'Zurück zum Zukunftsgarten', rect: [902, 140, 58, 246], walk: [930, 400], exit: ['fgarten', 40, 380, 1] },
-    { id: 'raumschiff', name: 'Lieferraumschiff', rect: [388, 11, 558, 283], walk: [640, 368], look: 'Ein grünes Lieferraumschiff. Auf dem Rumpf steht: „Wir liefern überallhin.“ Darunter, kleiner: „Auch nach überallhin.“' },
+    { id: 'raumschiff', name: 'Lieferraumschiff', rect: [388, 11, 558, 294], walk: [640, 368], look: 'Ein grünes Lieferraumschiff. Auf dem Rumpf steht: „Wir liefern überallhin.“ Darunter, kleiner: „Auch nach überallhin.“' },
     { id: 'fracht', name: 'Frachtkisten', rect: [150, 268, 82, 66], walk: [190, 362], look: 'Kisten mit dem Aufdruck „Vorsicht: Inhalt explodiert nur manchmal“.' },
     { id: 'zapfsaeule', name: 'Zapfsäule', rect: [97, 194, 68, 125], walk: [130, 362], look: 'Eine Zapfsäule für Dunkle Materie. Der Preis steht auf „Ja“.' },
     { id: 'skyline', name: 'Skyline', rect: [0, 30, 400, 130], look: 'Die Stadt der Zukunft. Alles leuchtet, nichts ist geöffnet.' },

@@ -139,14 +139,21 @@ def build(SC, B, toon, S):
     for i, (x, w, h) in enumerate(((0.65, 0.5, 0.55), (1.3, 0.42, 0.75), (1.85, 0.46, 0.4))):
         cube(B, f'LukenKiste{i}', (x, ys - 0.2, AXIS + zc - 0.7 + h / 2), (w, 0.1, h), CRATE, S, rot=(tilt, 0, 0), bevel=0.12)
     cube(B, 'LukenGriff', (0.0, ys - 0.1, AXIS + zc), (0.1, 0.06, 0.5), METAL, S, rot=(tilt, 0, 0), bevel=0.3)
-    rc, d, n = Vector((1.2, -2.35, 0.6)), Vector((0, 0.9, -0.435)), Vector((0, 0.435, 0.9))
-    cube(B, 'Rampe', tuple(rc), (1.9, 2.6, 0.12), METAL, S, rot=(-0.45, 0, 0))
-    for i in range(7):
-        c = rc + d * (-1.1 + i * 0.37) + n * 0.095
-        cube(B, f'Warnstreifen{i}', tuple(c), (1.8, 0.17, 0.05), YEL if i % 2 == 0 else DARK, S, rot=(-0.45, 0, 0), bevel=0.05)
-    for i, x in enumerate((0.3, 2.1)):
-        B.rod(f'RampenGeland{i}', (x, -1.98, 1.3), (x, -3.28, 0.62), 0.03, METAL, S, seg=8)
-        B.rod(f'RampenPfosten{i}', (x, -3.28, 0.62), (x, -3.28, 0.2), 0.03, METAL, S, seg=8)
+    ramp_angle = 0.44
+    rc = Vector((1.2, -3.25, 0.74))
+    d = Vector((0, math.cos(ramp_angle), math.sin(ramp_angle)))
+    n = Vector((0, -math.sin(ramp_angle), math.cos(ramp_angle)))
+    cube(B, 'Rampe', tuple(rc), (1.9, 3.0, 0.12), METAL, S, rot=(ramp_angle, 0, 0))
+    for i in range(9):
+        c = rc + d * (-1.2 + i * 0.3) + n * 0.095
+        cube(B, f'Warnstreifen{i}', tuple(c), (1.8, 0.18, 0.05), YEL if i % 2 == 0 else DARK, S, rot=(ramp_angle, 0, 0), bevel=0.05)
+    for side, x in enumerate((0.2, 2.2)):
+        rail_top = rc + d * 1.4 + n * 0.52
+        rail_bottom = rc - d * 1.4 + n * 0.52
+        B.rod(f'RampenGelaender{side}', (x, rail_bottom.y, rail_bottom.z), (x, rail_top.y, rail_top.z), 0.045, METAL, S, seg=10)
+        for post, t in enumerate((-1.2, -0.4, 0.4, 1.2)):
+            foot = rc + d * t + n * 0.08
+            B.rod(f'RampenPfosten{side}_{post}', (x, foot.y, foot.z), (x, foot.y, foot.z + 0.48), 0.035, METAL, S, seg=8)
     # --- Leitwerk: geschwungene Flosse mit heller Spitze und Emblem, dazu kleine Höhenflossen mit Positionslichtern ---
     fin = [(-1.7, 0, AXIS + 1.85), (-2.9, 0, AXIS + 2.9), (-4.5, 0, 6.35), (-5.5, 0, 6.15), (-5.4, 0, AXIS + 0.8), (-4.0, 0, AXIS + 0.3)]
     poly(B, 'Flosse', fin, UPPER, S, solid=0.22)
