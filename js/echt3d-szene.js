@@ -238,7 +238,7 @@ async function ladeRaum(id) {
   H.updateMatrixWorld(true);
   const req = reqGltf ? requisitenAufstellen(scene, camera, reqDef, reqGltf) : null;
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
-  return { scene, camera, data, nodes, sprites, extra, req };
+  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null };
 }
 
 async function ladeHafen() {
@@ -494,6 +494,7 @@ export function pick(gx, gy, id) {
     if (sichtbar && h.distance < dist) { punkt = h.point.clone(); dist = h.distance; break; }
   }
   if (!punkt) return null;
+  if (R.krumm) entbiegen(R.krumm, punkt.clone(), punkt);
   punkt.project(R.home);
   return { x: (punkt.x + 1) / 2 * GW, y: (1 - punkt.y) / 2 * GH };
 }
@@ -501,16 +502,29 @@ export function pick(gx, gy, id) {
 // ---------- Krumme Villa wie in Day of the Tentacle ----------
 // Die Räume der Villa (in allen drei Zeiten) werden beim Laden einmal verbogen: Der Boden bleibt topfeben – Laufen,
 // Springen und Figuren merken nichts –, aber alles darüber kippt mit der Höhe nach außen und eiert in sanften
-// Wellen: Wände hängen schief, Türen werden zu Trapezen, Schränke lehnen sich zur Seite. Die Stärke bleibt so
-// mäßig, dass die Klickflächen der Spiel-Logik weiter auf ihren Gegenständen liegen.
+// Wellen: Wände hängen schief, Türen werden zu Trapezen, Schränke lehnen sich zur Seite. Damit Klicks trotzdem
+// treffen, rechnet entkruemmt() einen Treffer auf der verbogenen Geometrie auf seine ursprüngliche Lage zurück.
 // a: Kippen nach außen (pro Meter Höhe und Meter Abstand zur Mitte), b/c/d: Wellen seitlich, in die Tiefe, nach oben
 const KRUMM = {};
-for (const [id, a] of Object.entries({ lobby: 1, stockwerk: 1, dachboden: 0.8, keller: 0.9, uhrwerk: 0.7, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9 })) {
+// Räume mit Sprungpassagen etwas sanfter, damit Kisten, Stufen und Zahnräder dort bleiben, wo die Physik sie erwartet
+for (const [id, a] of Object.entries({ lobby: 1, stockwerk: 0.7, dachboden: 0.55, keller: 0.9, uhrwerk: 0.55, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9 })) {
   let ph = 0; for (const ch of id) ph = (ph * 31 + ch.charCodeAt(0)) % 628;
-  KRUMM[id] = { a: 0.015 * a, b: 0.03 * a, c: 0.025 * a, d: 0.035 * a, ph: ph / 100 };
+  KRUMM[id] = { a: 0.042 * a, b: 0.075 * a, c: 0.05 * a, d: 0.06 * a, ph: ph / 100 };
+}
+function krummVersatz(k, x, y, z, out) {   // Verschiebung eines Weltpunkts (three.js-Meter); Boden (y = 0) bleibt, wo er ist
+  const h = Math.max(0, Math.min(8, y));
+  if (!h) return out.set(0, 0, 0);
+  return out.set(h * (k.a * x + k.b * Math.sin(0.55 * x + 0.35 * z + k.ph)), h * k.d * Math.sin(0.5 * x - 0.3 * z + k.ph * 0.6), h * k.c * Math.sin(0.4 * x + k.ph * 1.7));
+}
+// Treffer auf der verbogenen Geometrie -> Punkt vor dem Verbiegen (Fixpunkt: q + Versatz(q) = p)
+function entbiegen(k, p, out) {
+  const d = new THREE.Vector3();
+  out.copy(p);
+  for (let i = 0; i < 8; i++) { krummVersatz(k, out.x, out.y, out.z, d); out.copy(p).sub(d); }
+  return out;
 }
 function krummBiegen(scene, k) {
-  const v = new THREE.Vector3(), inv = new THREE.Matrix4(), schon = new Set(), meshes = [];
+  const v = new THREE.Vector3(), dv = new THREE.Vector3(), inv = new THREE.Matrix4(), schon = new Set(), meshes = [];
   scene.updateMatrixWorld(true);
   scene.traverse(o => {
     if (!o.isMesh) return;
@@ -523,13 +537,7 @@ function krummBiegen(scene, k) {
     inv.copy(o.matrixWorld).invert();
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-      const h = Math.max(0, Math.min(8, v.y));
-      if (h > 0) {
-        const x = v.x, z = v.z;
-        v.x += h * (k.a * x + k.b * Math.sin(0.55 * x + 0.35 * z + k.ph));
-        v.z += h * k.c * Math.sin(0.4 * x + k.ph * 1.7);
-        v.y += h * k.d * Math.sin(0.5 * x - 0.3 * z + k.ph * 0.6);
-      }
+      v.add(krummVersatz(k, v.x, v.y, v.z, dv));
       v.applyMatrix4(inv);
       pos.setXYZ(i, v.x, v.y, v.z);
     }
@@ -641,6 +649,21 @@ const RAUM_EXTRAS = {
   },
 };
 
+export function entkruemmt(gx, gy, id) {   // Bildpunkt der Spielkamera -> Spielpunkt vor dem Verbiegen (Klicks, Mauszeiger)
+  const R = rooms[id]; if (!R || !R.ready || !R.krumm || !R.home) return null;
+  _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2);
+  ray.setFromCamera(_n, R.camera);
+  let p = null;
+  for (const h of ray.intersectObjects(R.scene.children, true)) {
+    let ok = true;
+    for (let o = h.object; o; o = o.parent) if (o.visible === false || (o.name || '').startsWith('Figur_')) { ok = false; break; }
+    if (ok) { p = h.point; break; }
+  }
+  if (!p) return null;
+  const q = entbiegen(R.krumm, p, new THREE.Vector3()).project(R.home);
+  return { x: (q.x + 1) / 2 * GW, y: (1 - q.y) / 2 * GH };
+}
+
 // ---------- Hüpfen wie in Psychonauts 2: Plattformen, Schwerkraft, Sprung ----------
 // Sprungflächen in Blender-Weltmetern: [x0, x1, y0, y1, Oberkante].
 // Im Dachboden sind es Kisten, Koffer und Truhe; im Obergeschoss schweben Toaststufen über dem Treppenloch.
@@ -729,6 +752,35 @@ export function bewegungsZiel(a, dx, dy, sek, id = a.room) {
   return [(p.x + 1) * GW / 2, (1 - p.y) * GH / 2];
 }
 
+// ---------- Billboards: gezeichnete Figuren und Dinge ohne 3D-Modell als Bildkarten im Raum ----------
+// Beim freien Drehen der Kamera stünden gemalte Figuren sonst fest im Bild. js/echt3d.js malt sie in eine eigene
+// Leinwand (Füße bei fussX/fussY, k Bildpunkte je Spiel-Einheit); hier steht die Karte am Fußpunkt im Raum und
+// dreht sich um die Hochachse immer zur Kamera.
+const karten = new Map();
+function kartenStellen(R, liste) {
+  const seen = new Set();
+  for (const b of liste || []) {
+    seen.add(b.key);
+    let k = karten.get(b.key);
+    if (!k) {
+      const tex = new THREE.CanvasTexture(b.canvas); tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.08, depthWrite: true, side: THREE.DoubleSide });
+      mat.userData.outlineParameters = { visible: false };
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); mesh.name = 'Figur_Karte_' + b.key;   // „Figur_“: kein Klickziel fürs Entbiegen
+      k = { mesh, tex }; karten.set(b.key, k);
+    }
+    if (k.mesh.parent !== R.scene) R.scene.add(k.mesh);
+    k.tex.image = b.canvas; k.tex.needsUpdate = true;
+    const p = toWorld(R.home, b.x, b.y, new THREE.Vector3()), upm = unitsPerMeter(R.home, p);
+    const w = b.canvas.width / b.k / upm, h = b.canvas.height / b.k / upm;
+    k.mesh.scale.set(w, h, 1);
+    k.mesh.position.set(p.x, p.y + (b.fussY - b.canvas.height / 2) / b.k / upm, p.z);
+    k.mesh.rotation.set(0, Math.atan2(R.camera.position.x - p.x, R.camera.position.z - p.z), 0);
+    k.mesh.visible = true;
+  }
+  for (const [key, k] of karten) if (!seen.has(key) || k.mesh.parent !== R.scene) k.mesh.visible = false;
+}
+
 // ---------- Bild für einen Spiel-Frame ----------
 let lastT = 0;
 const _vis = new Map();
@@ -744,6 +796,7 @@ export function frame(t, actors, pxW, ctx) {
   uhrS = s;
   if (R.extra) R.extra.tick(s, ctx);
   if (R.req) requisitenBewegen(R.req, s, ctx);
+  if (R.home) kartenStellen(R, ctx.karten);
   // Zustände: sichtbar, wenn ein eingeschalteter Zustand es zeigt; ausgeblendet, wenn einer es versteckt
   if (R.data.zustaende) {
     _vis.clear(); const weg = new Set();

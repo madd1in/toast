@@ -86,6 +86,53 @@ if (typeof EGG_DRAW !== 'undefined') {
   const band = ROOMS.labor && ROOMS.labor.objs.find(o => o.id === 'absperrband');
   if (band && band.draw) { const malen = band.draw; band.draw = (c, t) => echt3dHatModell('labor', 'absperrband') ? undefined : malen(c, t); }
 }
+// Krumme Räume: Mauszeiger und Klicks treffen das, was man sieht – der Bildpunkt wird über die verbogene 3D-Geometrie
+// auf die ursprüngliche Lage zurückgerechnet. Figuren, Tiere und gezeichnete Überlagerungen sind nicht verbogen.
+{
+  const hitOhneKrumm = hitScene;
+  let merk = null;
+  hitScene = function (x, y) {
+    const direkt = hitOhneKrumm(x, y);
+    if (y >= SH || !G.state || !ECHT3D.mod || !ECHT3D.mod.entkruemmt || ECHT3D.mod.freiAktiv()) return direkt;
+    const raum = viewRoomId();
+    if (!echt3dOn(ROOMS[raum])) return direkt;
+    const modell = k => !!(ECHT3D.mod.hatRequisit && ECHT3D.mod.hatRequisit(raum, k));
+    if (direkt && (direkt[0] === 'a' || direkt[0] === 'c')) return direkt;
+    if (direkt && direkt[0] === 'e' && !modell(direkt.slice(2))) return direkt;
+    if (direkt && direkt[0] === 'o' && OBJ[direkt.slice(2)] && OBJ[direkt.slice(2)].draw && !modell(direkt.slice(2))) return direkt;
+    if (merk && merk.x === x && merk.y === y && merk.raum === raum && G.t - merk.t < 200) return merk.r;
+    const u = ECHT3D.mod.entkruemmt(x, y, raum);
+    const r = u ? hitOhneKrumm(u.x, u.y) || direkt : direkt;
+    merk = { x, y, raum, t: G.t, r };
+    return r;
+  };
+}
+// Freie Kamera: gemalte Figuren, Tiere und Dinge ohne 3D-Modell werden zu Bildkarten im Raum (js/echt3d-szene.js,
+// kartenStellen); Bildschirm-Effekte, die der Kamera nicht folgen können, blendet js/engine.js dann aus (echt3dFrei)
+function echt3dFrei() { return !!(echt3dAktiv() && ECHT3D.mod.freiAktiv()); }
+const KARTE_K = 1.6, kartenLeinwand = new Map();
+let echt3dMaltKarte = false;
+function echt3dKarte(key, x, y, malen) {
+  let cv = kartenLeinwand.get(key);
+  if (!cv) { cv = document.createElement('canvas'); cv.width = 480; cv.height = 720; kartenLeinwand.set(key, cv); }
+  const g = cv.getContext('2d'), fussX = cv.width / 2, fussY = cv.height - 24;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+  g.setTransform(KARTE_K, 0, 0, KARTE_K, fussX - x * KARTE_K, fussY - y * KARTE_K);
+  const haupt = cx; cx = g; echt3dMaltKarte = true;   // die Zeichenfunktionen malen über das globale cx
+  try { malen(); } catch (e) { /* eine kaputte Karte soll das Bild nicht anhalten */ } finally { cx = haupt; echt3dMaltKarte = false; }
+  return { key, canvas: cv, x, y, k: KARTE_K, fussY };
+}
+function echt3dKarten(room) {
+  if (!echt3dFrei()) return [];
+  const out = [];
+  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && !(ECHT3D.mod.owns(a, room.id) && !echt3dBild(a))) out.push(echt3dKarte('a:' + a.id, a.x, a.y, () => drawActorOhne3D(a, room)));
+  for (const e of eggList(room.id, true)) if (!(ECHT3D.mod.hatRequisit && ECHT3D.mod.hatRequisit(room.id, e.id))) out.push(echt3dKarte('e:' + e.id, e.x, e.y, () => drawEggOhneKarte(e)));
+  for (const c of critterList(room.id)) out.push(echt3dKarte('c:' + c.id, c.x, c.y, () => drawCritterOhneKarte(c, room)));
+  return out;
+}
+const drawEggOhneKarte = drawEgg, drawCritterOhneKarte = drawCritter;
+drawEgg = e => { if (!echt3dFrei()) drawEggOhneKarte(e); };
+drawCritter = (c, room) => { if (!echt3dFrei()) drawCritterOhneKarte(c, room); };
 // Raumbild: im 3D-Raum das Echtzeit-Bild, sonst wie bisher
 const drawBgOhne3D = drawBg;
 drawBg = function (room) {
@@ -93,7 +140,7 @@ drawBg = function (room) {
     echt3dLoad();
     if (echt3dOn(room)) {
       const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible && !echt3dBild(a));
-      const bild = ECHT3D.mod.frame(G.t, acts, Math.min(1920, W * VS * DPR * SSK), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE });
+      const bild = ECHT3D.mod.frame(G.t, acts, Math.min(1920, W * VS * DPR * SSK), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room) });
       if (bild) {
         // Die Dialog-Kamera zoomt die Szene jetzt echt in 3D (Dolly mit Parallax) – deshalb hier die flache
         // 2D-Skalierung des Bildes zurücknehmen; Figuren-Bilder und Effekte oben drüber zoomen weiter wie gehabt
@@ -109,6 +156,8 @@ drawBg = function (room) {
 // Figuren, die die 3D-Szene selbst zeigt, nicht noch einmal als Bild zeichnen – nur die Comic-Zeichen der Mimik darüber
 const drawActorOhne3D = drawActor;
 drawActor = function (a, room) {
+  if (echt3dMaltKarte) return drawActorOhne3D(a, room);   // Bildkarte wird gerade gemalt
+  if (echt3dFrei() && !(ECHT3D.mod.owns(a, room.id) && !echt3dBild(a))) return;   // steht als Bildkarte im Raum
   if (echt3dOn(room) && !echt3dBild(a) && ECHT3D.mod.owns(a, room.id)) {
     const sc = roomScale(room, a.y), frei = ECHT3D.mod.freiAktiv();
     const hoch = (a._z3d || 0) * 104 * sc;   // Höhe über dem Boden (Sprung, Plattform) in Spiel-Einheiten

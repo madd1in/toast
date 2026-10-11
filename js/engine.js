@@ -1954,30 +1954,37 @@ function drawScene() {
   if (G.t < G.shake.until) cx.translate((Math.random() - 0.5) * G.shake.mag * 2, (Math.random() - 0.5) * G.shake.mag * 2);
   camApply();
   drawBg(room);
-  drawSky();
-  drawHolo(room);
-  drawRainbow(room);
-  drawWindowRain(room);
-  drawMeteor(room);
-  drawLobbyBat(room);
-  drawCandles(room);
-  HDS.deco = true;   // Raum-Grafik: handgezeichnete Kanten, Fasen, Holzmaserung
-  try {
-    if (room.dyn) room.dyn(cx, G.t);
-    for (const o of room.objs) if (o.draw && !o.fg && isVisible(o)) o.draw(cx, G.t);
-  } finally { HDS.deco = false; }
-  drawCrystal(room);
+  // Echtzeit-3D mit frei gedrehter Kamera: gemalte Überlagerungen können der Kamera nicht folgen – dann weglassen
+  // (Figuren und Dinge ohne 3D-Modell stehen dann als Bildkarten im Raum, js/echt3d.js)
+  const frei3d = typeof echt3dFrei === 'function' && echt3dFrei();
+  if (!frei3d) {
+    drawSky();
+    drawHolo(room);
+    drawRainbow(room);
+    drawWindowRain(room);
+    drawMeteor(room);
+    drawLobbyBat(room);
+    drawCandles(room);
+    HDS.deco = true;   // Raum-Grafik: handgezeichnete Kanten, Fasen, Holzmaserung
+    try {
+      if (room.dyn) room.dyn(cx, G.t);
+      for (const o of room.objs) if (o.draw && !o.fg && isVisible(o)) o.draw(cx, G.t);
+    } finally { HDS.deco = false; }
+    drawCrystal(room);
+  }
   if (cx.isPix) cx.layer(1);   // Pixel-Modus: Figuren auf eigene Ebene, damit Schilder-Texte dahinter bleiben
   const acts = [...Object.values(ACT).filter(a => a.room === room.id && a.visible), ...critterList(room.id), ...eggList(room.id, true)].sort((p, q) => p.y - q.y);
   for (const a of acts) if (a.egg) drawEgg(a); else if (a.crit) drawCritter(a, room); else drawActor(a, room);
   drawSaber();
-  HDS.deco = true;
-  try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
-  drawSwanFlight();
-  drawEmbers(room);
-  drawSteam(room);
-  drawLabArc(room);
-  if (!cx.isPix) { drawRays(room); drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass) drawForeground(fg); }
+  if (!frei3d) {
+    HDS.deco = true;
+    try { for (const o of room.objs) if (o.draw && o.fg && isVisible(o)) o.draw(cx, G.t); } finally { HDS.deco = false; }
+    drawSwanFlight();
+    drawEmbers(room);
+    drawSteam(room);
+    drawLabArc(room);
+  }
+  if (!cx.isPix) { if (!frei3d) drawRays(room); drawMotes(); const fg = (ROOM_FX[room.id] || {}).fg; if (fg && !G.modernPass && !frei3d) drawForeground(fg); }
   drawSendPortal();
   drawParts(); drawRipples(); drawRain(); drawGlint();
   cx.restore();
@@ -3972,7 +3979,7 @@ function fgSprite(room, i, kind, flip) {
   return c;
 }
 function drawParallaxFg() {
-  if (G.fade >= 1) return;
+  if (G.fade >= 1 || (typeof echt3dFrei === 'function' && echt3dFrei())) return;   // freie 3D-Kamera: Vordergrund-Ausschnitte folgen ihr nicht
   const room = viewRoomId(), cen = (W - VW) / 2, off = cen + (G.view.x - cen) * FG_PAR;   // Vordergrund-Kamera
   const fg = (ROOM_FX[room] || {}).fg;
   if (fg) {   // Gras am unteren Rand, schneller als die Szene
