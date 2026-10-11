@@ -139,3 +139,35 @@ for side in ('L', 'R'):
     g.matrix_parent_inverse.identity()
     g.location, g.scale = (0.6, 0.35, 0.4), (0.45, 0.35, 0.35)
 print('Bernard im Original-Stil:', len([o for o in O if o.name.startswith('RB_Schick')]), 'neue Teile')
+
+# ---- Feinschliff nach den Original-Sprites: Proportionen und Gesicht
+# schmale, abfallende Schultern statt Puffärmel, große Hände und Schuhe, große Ohren, Kopf nach vorn gekippt,
+# Hasenzähne unter der Nase, weite Hosenbeine mit Umschlag
+for side in ('L', 'R'):
+    a = O['RB_Aermel' + side]
+    if 'orig_scale' not in a:
+        a['orig_loc'], a['orig_scale'] = list(a.location), list(a.scale)
+    umformen('RB_Aermel' + side, scale=(a['orig_scale'][0] * 0.78, a['orig_scale'][1] * 0.78, a['orig_scale'][2] * 0.85))
+    h = O['RB_Hand' + side]
+    if 'orig_scale' not in h:
+        h['orig_loc'], h['orig_scale'] = list(h.location), list(h.scale)
+    umformen('RB_Hand' + side, scale=tuple(v * 1.3 for v in h['orig_scale']))
+    sh = O['RB_Schuh' + side]
+    if 'orig_scale' not in sh:
+        sh['orig_loc'], sh['orig_scale'] = list(sh.location), list(sh.scale)
+    umformen('RB_Schuh' + side, loc=(sh['orig_loc'][0] + 0.03, sh['orig_loc'][1], sh['orig_loc'][2]), scale=(sh['orig_scale'][0] * 1.3, sh['orig_scale'][1] * 1.1, sh['orig_scale'][2] * 1.05))
+    ohr = O['RB_Ohr' + side]
+    ohr.scale = tuple(v * 1.35 for v in ohr['orig_scale'])
+    for part in ('Oberschenkel', 'Unterschenkel'):
+        b = O[f'BR_{part}{side}']
+        if 'orig_scale' not in b:
+            b['orig_loc'], b['orig_scale'] = list(b.location), list(b.scale)
+        umformen(f'BR_{part}{side}', scale=(b['orig_scale'][0] * 1.22, b['orig_scale'][1] * 1.22, b['orig_scale'][2]))
+    teil(f'RB_SchickAufschlag{side}', 'zyl', f'BR_Knie{side}', (0.0, 0.0, -0.37), (0.098, 0.098, 0.03), HOSE, seg=16)
+kopf = O[K]
+if 'orig_rot' not in kopf:
+    kopf['orig_rot'] = list(kopf.rotation_euler)
+kopf.rotation_euler = (kopf['orig_rot'][0], kopf['orig_rot'][1] + 0.16, kopf['orig_rot'][2])   # Kopf vorgereckt
+for s_ in (-1, 1):
+    teil(f'RB_SchickZahn{s_}', 'box', K, (0.168, s_ * 0.012, 0.088), (0.006, 0.011, 0.016), WEISS)
+print('Feinschliff Bernard: fertig')

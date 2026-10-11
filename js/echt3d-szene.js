@@ -185,6 +185,7 @@ async function ladeRaum(id) {
     sprites[k] = { o, q0: o.quaternion.clone(), s0: o.scale.clone(), achse };
   }
   const extra = RAUM_EXTRAS[id] ? RAUM_EXTRAS[id](scene, H) : null;
+  if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
   return { scene, camera, data, nodes, sprites, extra };
 }
 
@@ -250,7 +251,8 @@ function addFig(id, root, rig) {
 // ---------- Gelenke der Helden (wie figur_rig.py / figur_frames.py, stufenlos) ----------
 const RIGS = {
   bernard: { P: 'BR_', hz: 0.98, sole: 0.14, thigh: 0.43, shin: 0.41, stride: 0.26, knee: 0.75, abd: 0.06, mouth: 'RB_Mund', eyes: ['RB_PupilleL', 'RB_PupilleR'],
-    rest: { tR: -0.12, tL: -0.12, kR: 0.24, kL: 0.24, lean: 0.11 } },   // Nerd-Haltung wie im Original: Knie leicht eingeknickt, Oberkörper vorgebeugt
+    rest: { tR: -0.12, tL: -0.12, kR: 0.24, kL: 0.24, lean: 0.11 },   // Nerd-Haltung wie im Original: Knie leicht eingeknickt, Oberkörper vorgebeugt
+    gang: { eR: 0.35, eL: 0.35 }, zappel: 'glasses' },   // angewinkelte Arme beim Gehen; im Stand schiebt er ab und zu nervös die Brille hoch
   hoagie: { P: 'HR_', hz: 0.62, sole: 0.16, thigh: 0.24, shin: 0.22, stride: 0.5, knee: 0.9, abd: 0.24, mouth: 'RH_Mund', eyes: ['RH_AugeL', 'RH_AugeR', 'RH_PupilleL', 'RH_PupilleR'] },
   laverne: { P: 'LR_', hz: 0.72, sole: 0.10, thigh: 0.32, shin: 0.30, stride: 0.37, knee: 0.8, abd: 0.08, mouth: 'RL_Mund', eyes: ['RL_AugeL', 'RL_AugeR', 'RL_PupilleL', 'RL_PupilleR'] },
 };
@@ -302,6 +304,11 @@ function applyPose(fig, p) {
   const body = fig.nodes[`${P}Body`]; if (body) body.position.set(0, p.ground === false ? 0 : -drop, 0);
 }
 function walkPose(r, ph) {
+  const p = walkPoseRoh(r, ph);
+  if (r.gang) for (const k in r.gang) p[k] += r.gang[k];
+  return p;
+}
+function walkPoseRoh(r, ph) {
   const s = Math.sin(ph), c = Math.cos(ph), st = r.stride, kn = r.knee;
   return pose(r, { tR: -st * s, tL: st * s, kR: Math.max(0, c) * kn, kL: Math.max(0, -c) * kn, fR: 1 - 0.4 * Math.max(0, c), fL: 1 - 0.4 * Math.max(0, -c),
     aR: -0.12 + 0.4 * s, aL: 0.12 - 0.4 * s, eR: 0.12 + Math.max(0, -s) * 0.5, eL: 0.12 + Math.max(0, s) * 0.5, lean: 0.035 + (r.rest ? r.rest.lean || 0 : 0) });
@@ -427,6 +434,46 @@ export function pick(gx, gy, id) {
   return { x: (punkt.x + 1) / 2 * GW, y: (1 - punkt.y) / 2 * GH };
 }
 
+// ---------- Krumme Villa wie in Day of the Tentacle ----------
+// Die Räume der Villa (in allen drei Zeiten) werden beim Laden einmal verbogen: Der Boden bleibt topfeben – Laufen,
+// Springen und Figuren merken nichts –, aber alles darüber kippt mit der Höhe nach außen und eiert in sanften
+// Wellen: Wände hängen schief, Türen werden zu Trapezen, Schränke lehnen sich zur Seite. Die Stärke bleibt so
+// mäßig, dass die Klickflächen der Spiel-Logik weiter auf ihren Gegenständen liegen.
+// a: Kippen nach außen (pro Meter Höhe und Meter Abstand zur Mitte), b/c/d: Wellen seitlich, in die Tiefe, nach oben
+const KRUMM = {};
+for (const [id, a] of Object.entries({ lobby: 1, stockwerk: 1, dachboden: 0.8, keller: 0.9, uhrwerk: 0.7, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9 })) {
+  let ph = 0; for (const ch of id) ph = (ph * 31 + ch.charCodeAt(0)) % 628;
+  KRUMM[id] = { a: 0.015 * a, b: 0.03 * a, c: 0.025 * a, d: 0.035 * a, ph: ph / 100 };
+}
+function krummBiegen(scene, k) {
+  const v = new THREE.Vector3(), inv = new THREE.Matrix4(), schon = new Set(), meshes = [];
+  scene.updateMatrixWorld(true);
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    for (let p = o; p; p = p.parent) if (p.userData.keinKrumm) return;
+    if (schon.has(o.geometry)) o.geometry = o.geometry.clone();   // geteilte Geometrie: jede Instanz biegt ihre eigene Kopie
+    schon.add(o.geometry); meshes.push(o);
+  });
+  for (const o of meshes) {
+    const g = o.geometry, pos = g.attributes.position; if (!pos) continue;
+    inv.copy(o.matrixWorld).invert();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      const h = Math.max(0, Math.min(8, v.y));
+      if (h > 0) {
+        const x = v.x, z = v.z;
+        v.x += h * (k.a * x + k.b * Math.sin(0.55 * x + 0.35 * z + k.ph));
+        v.z += h * k.c * Math.sin(0.4 * x + k.ph * 1.7);
+        v.y += h * k.d * Math.sin(0.5 * x - 0.3 * z + k.ph * 0.6);
+      }
+      v.applyMatrix4(inv);
+      pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    pos.needsUpdate = true;
+    g.computeBoundingBox(); g.computeBoundingSphere();
+  }
+}
+
 // ---------- Raum-Extras: Teile, die das Spiel selbst bewegt oder dazubaut ----------
 const EXTRA_BEWEGLICH = {
   uhrwerk: /^(Notsteg|Riesenpendel|Kolben|Zahnrad(\d+|[AB]|Tief\d+)|Zifferblatt|Zeiger(Gross|Klein))$/,
@@ -464,7 +511,7 @@ const RAUM_EXTRAS = {
     const pq0 = pendel ? pendel.quaternion.clone() : null;
     if (steg) steg.visible = false;
     const kerzen = []; scene.traverse(o => { if (o.isPointLight) kerzen.push({ o, i0: o.intensity, ph: Math.random() * 9 }); });
-    const kristall = new THREE.Group();
+    const kristall = new THREE.Group(); kristall.userData.keinKrumm = true;   // schwebt genau dort, wo js/uhrwerk.js ihn einsammelt
     const kk = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), leuchtMat(0x9af0ff));
     kk.scale.set(0.75, 1.25, 0.75); kristall.add(kk);
     kristall.add(new THREE.PointLight(0x7fe8ff, 3.2, 3.5, 2));
@@ -754,7 +801,11 @@ export function frame(t, actors, pxW, ctx) {
         const tgt = POSES[k] ? pose(f.rig, POSES[k]) : mix(pose(f.rig, POSES[k + '0']), pose(f.rig, POSES[k + '1']), 0.5 + 0.5 * Math.sin(t * 0.012));
         p0 = mix(p0, tgt, Math.min(1, env * 1.6));
       } else if (a.talking) p0 = mix(pose(f.rig, POSES.talk0), pose(f.rig, POSES.talk1), 0.5 + 0.5 * Math.sin(t * 0.007));
-      else p0.lean += 0.012 * Math.sin(t * 0.0021);   // Atmen
+      else {
+        p0.lean += 0.012 * Math.sin(t * 0.0021);   // Atmen
+        const z = (t + f.id.length * 997) % 7500;   // Ticks im Stand (Bernard: Brille hochschieben)
+        if (f.rig.zappel && z < 1100 && POSES[f.rig.zappel]) p0 = mix(p0, pose(f.rig, POSES[f.rig.zappel]), Math.sin(z / 1100 * Math.PI));
+      }
       if (mf && mf.m && !a.walking) {   // Geste zur Mimik, mit Aus- und Einschwingen (Einzelposen und pendelnde Paare wie ekel0/ekel1)
         const ein = POSES[mf.m.kind], p0p = POSES[mf.m.kind + '0'], p1p = POSES[mf.m.kind + '1'];
         if (ein || (p0p && p1p)) {
