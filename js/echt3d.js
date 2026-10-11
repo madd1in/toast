@@ -82,20 +82,21 @@ drawActor = function (a, room) {
 function toggleEcht3d() {
   G.settings.echt3d = !G.settings.echt3d; saveSettings(); Sound.sfx('warp');
   if (G.settings.echt3d && G.settings.retro) note('Echtzeit-3D läuft nur im Remastered-Grafikmodus.');
-  else note(G.settings.echt3d ? 'Echtzeit-3D (Beta) an – alle Räume und Figuren in 3D; rechts ziehen, rechter Stick oder Wischen dreht, Mausrad/Pinch zoomt, C/RS setzt zurück.' : 'Echtzeit-3D aus – vorgerenderte Grafik.');
+  else note(G.settings.echt3d ? 'Echtzeit-3D an – links/rechts ziehen, rechter Stick oder Wischen dreht; Mausrad/Pinch zoomt, C/RS setzt zurück.' : 'Echtzeit-3D aus – vorgerenderte Grafik.');
 }
 
 // ---------- Freie 3D-Kamera: 360° drehen, neigen und zoomen ----------
 const echt3dAktiv = () => G.settings.echt3d && ECHT3D.rooms[viewRoomId()] && ECHT3D.mod && ECHT3D.mod.ready && !ECHT3D.mod.failed(viewRoomId()) && ECHT3D.mod.hasRoom(viewRoomId()) && !cx.isPix;
 function echt3dSteuerungErlaubt() { return G.screen === 'game' && !G.menu && !G.busy && !G.dialog && !G.inIntro; }
+function echt3dKameraSteuerungErlaubt() { return G.screen === 'game' && !G.menu && !G.inIntro; }
 let echt3dHinweisKamera = false;
 function echt3dZeigeKamerahinweis() {
   if (echt3dHinweisKamera) return;
   echt3dHinweisKamera = true;
-  note('3D-Kamera: Rechtsziehen, rechter Stick oder Wischen dreht; Mausrad oder Pinch zoomt; C, RS-Klick oder zwei Finger setzen zurück.');
+  note('3D-Kamera: Links- oder Rechtsziehen, rechter Stick oder Wischen dreht; Mausrad oder Pinch zoomt; C, RS-Klick oder zwei Finger setzen zurück.');
 }
 function echt3dPadDreh(rx, ry, dt) {
-  if (!echt3dAktiv() || !echt3dSteuerungErlaubt()) return false;
+  if (!echt3dAktiv() || !echt3dKameraSteuerungErlaubt()) return false;
   if (rx || ry) {
     ECHT3D.mod.freiDreh(-rx * dt / 1000 * 1.8, -ry * dt / 1000 * 1.6);
     G.pointer = 'pad';
@@ -104,7 +105,7 @@ function echt3dPadDreh(rx, ry, dt) {
   return true;
 }
 function echt3dPadZurueck() {
-  if (!echt3dAktiv() || !echt3dSteuerungErlaubt() || !ECHT3D.mod.freiAktiv()) return false;
+  if (!echt3dAktiv() || !echt3dKameraSteuerungErlaubt() || !ECHT3D.mod.freiAktiv()) return false;
   ECHT3D.mod.freiZurueck();
   return true;
 }
@@ -150,7 +151,7 @@ function drawEcht3dParkour() {
   let dreh = null, geste = null;
   const finger = new Map(), parkourFinger = new Map();
   const aktiv = echt3dAktiv;
-  const steuerungErlaubt = echt3dSteuerungErlaubt;
+
   const raumKlickAt = (p, right = true) => {
     if (p.y > SH || G.menu || G.busy || G.dialog || G.screen !== 'game') return false;
     G.mouse.x = p.x; G.mouse.y = p.y;
@@ -183,16 +184,17 @@ function drawEcht3dParkour() {
   cv.addEventListener('contextmenu', e => e.preventDefault());
   cv.addEventListener('pointerdown', e => {
     if (!aktiv()) return;
-    if (e.pointerType === 'mouse' && e.button === 2) {
+    if (e.pointerType === 'mouse' && (e.button === 0 || e.button === 2)) {
       const p = toLogical(e);
-      if (!steuerungErlaubt() || p.y > SH) return;
-      dreh = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      if (!echt3dKameraSteuerungErlaubt() || p.y > SH) return;
+      G.pointer = 'mouse'; G.mouse.x = p.x; G.mouse.y = p.y; firstInteraction();
+      dreh = { id: e.pointerId, button: e.button, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, moved: false };
       try { cv.setPointerCapture(e.pointerId); } catch {}
       stopEvent(e); return;
     }
     if (e.pointerType === 'touch') {
       let p = toLogical(e);
-      if (p.y > SH || !steuerungErlaubt()) return;
+      if (p.y > SH || !echt3dKameraSteuerungErlaubt()) return;
       stopEvent(e);
       if (G.pointer !== 'touch') { G.pointer = 'touch'; resize(); p = toLogical(e); }
       G.mouse.x = p.x; G.mouse.y = p.y;
@@ -213,7 +215,7 @@ function drawEcht3dParkour() {
         g.timer = setTimeout(() => {
           if (geste !== g || g.mode !== 'single' || g.moved || !finger.has(g.id)) return;
           g.long = true;
-          if (g.free) raumKlickAt(g.p, true);
+          if (g.free) { if (!raumKlickAt(g.p, true)) onClick(g.p.x, g.p.y, true); }
           else onClick(g.p.x, g.p.y, true);
         }, 480);
       } else if (geste.mode === 'single') {
@@ -225,12 +227,22 @@ function drawEcht3dParkour() {
       }
       return;
     }
-    if (e.pointerType !== 'mouse' || e.button !== 0 || !ECHT3D.mod.freiAktiv() || G.busy || G.dialog || G.menu || G.screen !== 'game') return;
-    const p = toLogical(e);
-    if (p.y > SH || !raumKlickAt(p, true)) return;
-    stopEvent(e);
   }, true);
   cv.addEventListener('pointermove', e => {
+    if (dreh && dreh.id === e.pointerId) {
+      if (!aktiv() || !echt3dKameraSteuerungErlaubt()) { dreh = null; return; }
+      const r = cv.getBoundingClientRect();
+      const totalX = e.clientX - dreh.sx, totalY = e.clientY - dreh.sy;
+      const distance = Math.hypot(totalX * W / r.width, totalY * H / r.height);
+      if (!dreh.moved && distance <= 5) return;
+      stopEvent(e);
+      const dx = dreh.moved ? e.clientX - dreh.x : totalX;
+      const dy = dreh.moved ? e.clientY - dreh.y : totalY;
+      ECHT3D.mod.freiDreh(-dx * 0.0045, -dy * 0.0035);
+      dreh.moved = true; dreh.x = e.clientX; dreh.y = e.clientY;
+      echt3dZeigeKamerahinweis();
+      return;
+    }
     const pf = parkourFinger.get(e.pointerId);
     if (pf) {
       stopEvent(e);
@@ -238,7 +250,7 @@ function drawEcht3dParkour() {
       return;
     }
     if (!geste || !finger.has(e.pointerId)) return;
-    if (!aktiv() || !steuerungErlaubt()) { stopEvent(e); abbruchTouch(); return; }
+    if (!aktiv() || !echt3dKameraSteuerungErlaubt()) { stopEvent(e); abbruchTouch(); return; }
     stopEvent(e);
     const point = finger.get(e.pointerId);
     point.x = e.clientX; point.y = e.clientY; point.p = toLogical(e);
@@ -264,7 +276,15 @@ function drawEcht3dParkour() {
     if (geste.multiMoved) echt3dZeigeKamerahinweis();
   }, true);
   cv.addEventListener('pointerup', e => {
-    if (dreh && dreh.id === e.pointerId) dreh = null;
+    if (dreh && dreh.id === e.pointerId) {
+      const drag = dreh; dreh = null; stopEvent(e);
+      if (!drag.moved) {
+        const p = toLogical(e); G.mouse.x = p.x; G.mouse.y = p.y;
+        if (drag.button === 0 && ECHT3D.mod.freiAktiv() && raumKlickAt(p, true)) return;
+        onClick(p.x, p.y, drag.button === 2);
+      }
+      return;
+    }
     if (parkourFinger.has(e.pointerId)) {
       stopEvent(e); parkourFinger.delete(e.pointerId);
       if (![...parkourFinger.values()].some(f => f.kind === 'laufen')) echt3dVirtualStick = { x: 0, y: 0, aktiv: false };
@@ -279,7 +299,7 @@ function drawEcht3dParkour() {
       geste = null;
       const p = toLogical(e);
       G.mouse.x = p.x; G.mouse.y = p.y;
-      if (!g.moved && g.free) raumKlickAt(p, true);
+      if (!g.moved && g.free) { if (!raumKlickAt(p, true)) onClick(p.x, p.y, false); }
       else if (!g.moved && !g.long) onClick(p.x, p.y, false);
       return;
     }
@@ -296,21 +316,14 @@ function drawEcht3dParkour() {
     }
     if (finger.has(e.pointerId)) { stopEvent(e); abbruchTouch(); }
   }, true);
-  window.addEventListener('pointerup', e => { if (dreh && dreh.id === e.pointerId) dreh = null; });
-  window.addEventListener('pointermove', e => {
-    if (!dreh || dreh.id !== e.pointerId) return;
-    if (!aktiv() || !steuerungErlaubt()) { dreh = null; return; }
-    ECHT3D.mod.freiDreh(-(e.clientX - dreh.x) * 0.0045, -(e.clientY - dreh.y) * 0.0035);
-    dreh = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    echt3dZeigeKamerahinweis(); e.preventDefault();
-  });
+  window.addEventListener('blur', () => { dreh = null; });
   cv.addEventListener('wheel', e => {
-    if (!aktiv() || !steuerungErlaubt() || toLogical(e).y > SH) return;
+    if (!aktiv() || !echt3dKameraSteuerungErlaubt() || toLogical(e).y > SH) return;
     e.preventDefault();
     ECHT3D.mod.freiZoom(e.deltaY * 0.0035);
   }, { passive: false });
   window.addEventListener('keydown', e => {
-    if (aktiv() && steuerungErlaubt() && (e.key === 'c' || e.key === 'C') && ECHT3D.mod.freiAktiv()) {
+    if (aktiv() && echt3dKameraSteuerungErlaubt() && (e.key === 'c' || e.key === 'C') && ECHT3D.mod.freiAktiv()) {
       e.stopImmediatePropagation(); e.preventDefault(); ECHT3D.mod.freiZurueck();
     }
   }, true);

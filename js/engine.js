@@ -26,7 +26,7 @@ const ERA = {
   future: { label: 'Zukunft', bg: '#5e2a86', theme: 'future', col: '#c07dff' },
 };
 const HOME_ERA = { bernard: 'present', hoagie: 'past', laverne: 'future' };
-const SAVE_KEY = 'tentakel-toast-save-v1', SET_KEY = 'tentakel-toast-settings-v1', ACH_KEY = 'tentakel-toast-erfolge-v1';
+const SAVE_KEY = 'tentakel-toast-save-v1', SET_KEY = 'tentakel-toast-settings-v1', ACH_KEY = 'tentakel-toast-erfolge-v1', ECHT3D_DEFAULT_KEY = 'tentakel-toast-echt3d-default-v1';
 const SLOT_KEY = 'tentakel-toast-platz-', SLOTS = 3;
 
 const G = {
@@ -35,7 +35,7 @@ const G = {
   busy: 0, speech: null, dialog: null, menu: null, note: null, caption: null, viewRoom: null,
   fade: 0, fadeFrom: 0, fadeTarget: 0, fadeStart: 0, fadeDur: 1, fadeRes: null, fadeMode: 'iris', irisX: W / 2, irisY: SH / 2, warpLabel: '', warpCol: '#ffd23a',
   mouse: { x: W / 2, y: SH / 2 }, pointer: 'mouse', flash: {}, fast: false, skipAll: false,
-  settings: { music: true, voice: false, babble: true, fullscreen: true, retro: false, lang: 'de' }, titleBtns: [], menuBtns: [], saved: null,
+  settings: { music: true, voice: false, babble: true, fullscreen: true, retro: false, echt3d: true, lang: 'de' }, titleBtns: [], menuBtns: [], saved: null,
   reveal: 0, fly: [], shake: { until: 0, mag: 0 }, ach: {}, achToast: null, nextBlip: 0, fsTried: false,
   parts: [], ripples: [], quality: 1, fpsAvg: 16.7, fpsGate: 0,
   motes: [], moteKind: null, storm: null, neon: null, bark: null, barkNext: 0, idleSince: 0, lastClick: null,
@@ -1469,7 +1469,7 @@ function menuItems() {
     { id: 'ui', label: 'Bedienung: ' + (G.settings.ui === 'classic' ? 'Klassisch (Verben)' : 'Modern (minimal)') },
     { id: 'hotspots', label: 'Hotspot-Hilfe: ' + (G.settings.hotspots ? 'an' : 'aus') },
     { id: 'retro', label: 'Grafik: ' + (G.settings.retro ? 'Klassisch (Pixel)' : 'Remastered') },
-    typeof toggleEcht3d === 'function' && { id: 'echt3d', label: 'Echtzeit-3D (Beta): ' + (G.settings.echt3d ? 'an' : 'aus') },
+    typeof toggleEcht3d === 'function' && { id: 'echt3d', label: '3D-Räume & freie Kamera: ' + (G.settings.echt3d ? 'an' : 'aus') },
     fsAvailable && { id: 'fs', label: 'Vollbild: ' + (isFullscreen() ? 'an' : 'aus') },
     back,
   ].filter(Boolean);
@@ -1668,6 +1668,13 @@ function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /*
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(G.settings)); } catch (e) { /* ok */ } }
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(SET_KEY) || 'null'); if (s) Object.assign(G.settings, s); } catch (e) { /* ok */ }
+  try {
+    if (localStorage.getItem(ECHT3D_DEFAULT_KEY) !== '1') {
+      G.settings.echt3d = true;
+      saveSettings();
+      localStorage.setItem(ECHT3D_DEFAULT_KEY, '1');
+    }
+  } catch (e) { G.settings.echt3d = true; }
   if (G.settings.lang && G.settings.lang !== 'de') setLang(G.settings.lang, false);
   Sound.setMusic(G.settings.music); Sound.setRetro(!!G.settings.retro); Sound.setParty(!!G.settings.party); Sound.setLite(G.settings.audioLite); Voice.on = G.settings.voice;
 }
@@ -2226,7 +2233,7 @@ const HELP = [
   'Inventar: Maus an den unteren Rand oder I · Gegenstand anklicken, dann Ziel oder Gesicht',
   'Maus: Verb anklicken, dann Gegenstand oder Person', 'Rechtsklick: Standard-Aktion · ohne Verb: hinlaufen',
   'Doppelklick/-tipp: rennen · Ausgänge sofort benutzen', 'Touch: tippen · lange drücken = Standard-Aktion',
-  'Echtzeit-3D: rechts ziehen, rechter Stick oder Wischen dreht · Mausrad/Pinch zoomt', 'Kamera zurück: C · RS-Klick · zwei Finger tippen',
+  '3D-Kamera: links/rechts ziehen, rechter Stick oder Wischen dreht · Mausrad/Pinch zoomt', 'Kamera zurück: C · RS-Klick · zwei Finger tippen',
   'Sprungpassagen: WASD/Linker Stick laufen · Leertaste/A springen · Mobil: Steuerkreis und SPRINGEN',
   'Controller: linker Stick = Zeiger · Steuerkreuz = von Ziel zu Ziel', 'A Aktion · X Standard · B Zurück · Y Tipp · rechter Stick: 3D-Kamera',
   'RS-Klick setzt die 3D-Kamera zurück · LB/RB Figur · LT/RT Verb · LS Klo-Post', 'Ansicht/Tab/Leertaste: Hotspots · F Vollbild · F1/P Pixel-Grafik',
