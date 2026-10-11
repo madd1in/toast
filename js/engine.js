@@ -1427,7 +1427,7 @@ function pollPad(dt) {
     if (down(0) || down(9)) { G.saved = null; G.hasSaves = anySave(); G.screen = 'title'; music(); }
   } else if (G.screen === 'game') {
     if (down(0) && !(typeof echt3dPadSpringen === 'function' && echt3dPadSpringen())) onClick(G.mouse.x, G.mouse.y, false);
-    if (down(2)) onClick(G.mouse.x, G.mouse.y, true);
+    if (down(2)) { if (typeof echt3dParkourAktiv === 'function' && echt3dParkourAktiv() && !hitScene(G.mouse.x, G.mouse.y)) echt3dBenutzen(); else onClick(G.mouse.x, G.mouse.y, true); }   // X: im 3D das Nächste benutzen
     if (down(1)) onBack();
     if (down(3) && !G.busy && !G.menu) showHint();
     if (down(4) && !G.busy && !G.menu && !G.dialog) cycleChar(-1);
@@ -3543,9 +3543,14 @@ function drawTip(x, y, inSc) {
 function navTargetsModern() {
   if (G.coin) return G.coin.items.map(b => [b.x + b.w / 2, b.y + b.h / 2]);
   if (G.dialog) { const { y0, lh } = dialogLayout(); return G.dialog.opts.map((o, i) => [80, y0 + i * lh - 6]); }
-  const T = [], room = ROOMS[viewRoomId()], add = (x, y) => { const [sx, sy] = toScreen(x, y); if (sx > 4 && sx < W - 4 && sy < H - 70) T.push([sx, sy]); };
+  const frei = typeof echt3dFrei === 'function' && echt3dFrei();   // gedrehte 3D-Kamera: Ziele dort, wo man sie gerade sieht
+  const T = [], room = ROOMS[viewRoomId()], add = (x, y, a) => {
+    let p = [x, y];
+    if (frei) { const q = a ? echt3dKopf(a, room, a.h * roomScale(room, a.y) * 0.55) : echt3dBildVonSpiel(x, y); if (!q) return; p = q; }
+    const [sx, sy] = toScreen(...p); if (sx > 4 && sx < W - 4 && sy < H - 70) T.push([sx, sy]);
+  };
   for (const o of room.objs) if (isVisible(o)) add(...hotspotCenter(o));
-  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) add(a.x, a.y - a.h * roomScale(room, a.y) * 0.55);
+  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId()) add(a.x, a.y - a.h * roomScale(room, a.y) * 0.55, a);
   for (const b of HUD.btns) T.push([b.x + b.w / 2, b.y + b.h / 2]);
   T.push([HUD.bag.x + HUD.bag.w / 2, HUD.bag.y + HUD.bag.h / 2]);
   for (const p of HUD.ports) T.push([p.x, p.y]);

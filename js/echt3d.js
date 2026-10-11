@@ -12,6 +12,14 @@ const ECHT3D = {
   rooms: { hafen: 1, landeplatz: 1, keller: 1, lobby: 1, labor: 1, konferenz: 1, gasthaus: 1, garten1776: 1, fgarten: 1, vorraum: 1, thron: 1, testkammer: 1, mars: 1, stockwerk: 1, dachboden: 1, uhrwerk: 1 },
 };
 const ECHT3D_XBOX = /xbox/i.test(navigator.userAgent || '');   // Konsole: kleineres 3D-Bild, ohne Schatten (js/echt3d-szene.js)
+// Bildrate halten: das 3D-Bild wird kleiner gerechnet, wenn die Bilder zu lange dauern, und wieder größer, wenn Luft ist
+const ECHT3D_Q = { k: 1, ema: 16, letzt: 0 };
+function echt3dBreite(voll) {
+  const jetzt = performance.now(), d = ECHT3D_Q.letzt ? Math.min(120, jetzt - ECHT3D_Q.letzt) : 16; ECHT3D_Q.letzt = jetzt;
+  ECHT3D_Q.ema += (d - ECHT3D_Q.ema) * 0.05;
+  if (ECHT3D_Q.ema > 30) ECHT3D_Q.k = Math.max(0.5, ECHT3D_Q.k - 0.004); else if (ECHT3D_Q.ema < 19) ECHT3D_Q.k = Math.min(1, ECHT3D_Q.k + 0.002);
+  return Math.max(480, Math.round(voll * ECHT3D_Q.k / 160) * 160);   // in Stufen, damit der Renderer nicht dauernd neu anlegt
+}
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
 function echt3dOn(room) { return echt3dWanted(room) && !!ECHT3D.mod && ECHT3D.mod.ready && !(ECHT3D.mod.verloren && ECHT3D.mod.verloren()) && !ECHT3D.mod.failed(room.id) && ECHT3D.mod.hasRoom(room.id); }
 // Kann dieses Gerät WebGL 2? (three.js braucht es; manche Konsolen-Browser und alte Grafikchips nicht)
@@ -133,6 +141,7 @@ let echt3dUmgerechnet = false;
 // Freie Kamera: gemalte Figuren, Tiere und Dinge ohne 3D-Modell werden zu Bildkarten im Raum (js/echt3d-szene.js,
 // kartenStellen); Bildschirm-Effekte, die der Kamera nicht folgen können, blendet js/engine.js dann aus (echt3dFrei)
 function echt3dFrei() { return !!(echt3dAktiv() && ECHT3D.mod.freiAktiv()); }
+function echt3dBildVonSpiel(x, y) { return echt3dFrei() && ECHT3D.mod.bildVonSpiel ? ECHT3D.mod.bildVonSpiel(x, y) : null; }
 function echt3dKopf(a, room, hoehePx) { return echt3dFrei() && a.room === room.id && ECHT3D.mod.kopfPunkt ? ECHT3D.mod.kopfPunkt(a.x, a.y, hoehePx, room.id) : null; }
 const KARTE_K = 1.6, kartenLeinwand = new Map();
 let echt3dMaltKarte = false;
@@ -172,7 +181,7 @@ drawBg = function (room) {
     echt3dLoad();
     if (echt3dOn(room)) {
       const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible && !echt3dBild(a));
-      const bild = ECHT3D.mod.frame(G.t, acts, Math.min(ECHT3D_XBOX ? 1280 : 1920, W * VS * DPR * SSK), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room) });
+      const bild = ECHT3D.mod.frame(G.t, acts, echt3dBreite(Math.min(ECHT3D_XBOX ? 1280 : 1920, W * VS * DPR * SSK)), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room) });
       if (bild) {
         // Die Dialog-Kamera zoomt die Szene jetzt echt in 3D (Dolly mit Parallax) – deshalb hier die flache
         // 2D-Skalierung des Bildes zurücknehmen; Figuren-Bilder und Effekte oben drüber zoomen weiter wie gehabt
@@ -227,7 +236,7 @@ function echt3dZeigeKamerahinweis() {
 function echt3dPadDreh(rx, ry, dt) {
   if (!echt3dAktiv() || !echt3dKameraSteuerungErlaubt()) return false;
   if (rx || ry) {
-    ECHT3D.mod.freiDreh(-rx * dt / 1000 * 1.8, -ry * dt / 1000 * 1.6);
+    ECHT3D.mod.freiDreh(-rx * dt / 1000 * 1.8, ry * dt / 1000 * 1.6);   // Stick hoch = Blick hoch
     G.pointer = 'pad';
     echt3dZeigeKamerahinweis();
   }

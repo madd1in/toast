@@ -503,11 +503,34 @@ function kameraFahren(R, t, actors) {
         posD.copy(mid).addScaledVector(n, Math.max(5.0, len * 1.4 + 3.4)); posD.y = Math.min(I.y1 - m, 2.05);
         zielD.copy(mid); zielD.y = 1.35;
       } else {
-        const weite = Math.max(2.2, 6.2 * (1 + o.dist / 6)), hoch = Math.max(0.7, Math.min(I.y1 - m, 2.3 + o.pitch * 3));
+        const weite = weiteAuto(o), hoch = Math.max(0.7, Math.min(I.y1 - m, 2.7, 2.3 + o.pitch * 3));
         posD.set(0, hoch, weite).applyAxisAngle(_yA, o.yaw).add(R.fokus);
         zielD.copy(R.fokus);
       }
       posD.set(Math.max(I.x0 + m, Math.min(I.x1 - m, posD.x)), posD.y, Math.max(I.z0 + m, Math.min(I.z1 - m, posD.z)));   // an den Wänden entlang statt hindurch
+      // Kameraarm mit Kollision: steht etwas zwischen Figur und Kamera (Wand, Decke, Rohre, Möbel), rückt sie davor.
+      // Ist der Blick so stark verstellt, sucht die Auto-Kamera seitlich einen freien Winkel und schwenkt dorthin.
+      R.armN = (R.armN || 0) + 1;
+      if (R.armN % 3 === 0 || !R.armFrei) {
+        R.armFrei = armFrei(R, zielD, posD);
+        // wirksame Entfernung: Raumgrenze (schon in posD) und Hindernisse; zu nah = Blick verstellt
+        const wirk = Math.min(posD.distanceTo(zielD), R.armFrei), wunsch = weiteAuto(o);
+        if (!gp && autoKamera && wirk < wunsch * 0.6 && R.armN % 12 === 0 && performance.now() - (R.handT || 0) > 2500) {
+          const probe = y => {
+            const test = new THREE.Vector3(0, posD.y - R.fokus.y, wunsch).applyAxisAngle(_yA, y).add(R.fokus);
+            test.set(Math.max(I.x0 + m, Math.min(I.x1 - m, test.x)), test.y, Math.max(I.z0 + m, Math.min(I.z1 - m, test.z)));
+            return Math.min(test.distanceTo(zielD), armFrei(R, zielD, test));
+          };
+          let best = o.yaw, bestL = wirk;
+          for (const dy of [0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.6, -2.6]) {
+            const y = o.yaw + dy, l = probe(y);
+            if (l > bestL + 0.4) { bestL = l; best = y; }
+          }
+          R.yawZiel = best;
+        }
+      }
+      if (R.yawZiel != null && !gp && autoKamera) { o.yaw += (R.yawZiel - o.yaw) * Math.min(1, dtk / 700); if (Math.abs(R.yawZiel - o.yaw) < 0.02) R.yawZiel = null; }
+      if (R.armFrei && posD.distanceTo(zielD) > R.armFrei) posD.sub(zielD).setLength(R.armFrei).add(zielD);
       if (!R.glatt) R.glatt = { p: posD.clone(), z: zielD.clone() };
       const k = Math.min(1, dtk / (gp ? 420 : 260));
       R.glatt.p.lerp(posD, k); R.glatt.z.lerp(zielD, k);
@@ -519,6 +542,19 @@ function kameraFahren(R, t, actors) {
   R.kT = t;
 }
 
+const armRay = new THREE.Raycaster();
+const weiteAuto = o => Math.max(2.2, 6.2 * (1 + o.dist / 6));
+function armFrei(R, von, bis) {   // freie Länge des Kameraarms von der Figur zur Kamera (mindestens 2 m)
+  const dir = bis.clone().sub(von), lang = dir.length();
+  if (lang < 0.4) return lang;
+  dir.divideScalar(lang); armRay.set(von, dir); armRay.far = lang;
+  for (const h of armRay.intersectObjects(R.scene.children, true)) {
+    let ok = h.distance > 0.35;
+    for (let q = h.object; q && ok; q = q.parent) if (q.visible === false || (q.name || '').startsWith('Figur_')) ok = false;
+    if (ok) return Math.max(2.0, h.distance - 0.3);
+  }
+  return lang;
+}
 // Gesprächspartner der gesteuerten Figur: wer gerade spricht (oder im Dialog steht), im selben Raum
 function gespraechsPartner(R) {
   if (typeof G === 'undefined' || !G.state || typeof curId !== 'function') return null;
@@ -536,6 +572,20 @@ let autoKamera = true;
 export function autoKameraAn() { return autoKamera; }
 export function autoKameraUmschalten() { autoKamera = !autoKamera; const o = orbit(letzterRaum); if (!autoKamera && o) { o.zurueck = true; o.rueckT0 = null; } return autoKamera; }
 // Bildpunkt (Szenen-Koordinaten der aktuellen Kamera) für einen Punkt in Kopfhöhe – Sprechblasen folgen so jeder Kamera
+export function bildVonSpiel(gx, gy, id) {   // Spiel-Punkt (Bühnenansicht) -> Bildpunkt der aktuellen Kamera, für das Steuerkreuz
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home || !freiAktiv()) return null;
+  _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2); ray.setFromCamera(_n, R.home);
+  let p = null;
+  for (const h of ray.intersectObjects(R.scene.children, true)) {
+    let ok = true;
+    for (let q = h.object; q && ok; q = q.parent) if (q.visible === false || (q.name || '').startsWith('Figur_')) ok = false;
+    if (ok) { p = h.point.clone(); break; }
+  }
+  if (!p) return null;
+  p.project(R.camera);
+  if (p.z > 1 || Math.abs(p.x) > 1.05 || Math.abs(p.y) > 1.05) return null;
+  return [(p.x + 1) / 2 * GW, (1 - p.y) / 2 * GH];
+}
 export function kopfPunkt(gx, gy, hoehePx, id) {
   const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home || !freiAktiv()) return null;
   const p = toWorld(R.home, gx, gy, new THREE.Vector3()), upm = unitsPerMeter(R.home, p);
@@ -550,6 +600,7 @@ function orbit(id) { const R = rooms[id]; if (!R) return null; return R.orbit ||
 export function freiAktiv() { const R = rooms[letzterRaum]; const o = R && R.orbit; return !!(o && (Math.abs(o.yaw) > 2e-3 || Math.abs(o.pitch) > 2e-3 || Math.abs(o.dist) > 2e-3)); }
 export function freiDreh(dx, dy, id) {
   const o = orbit(id || letzterRaum); if (!o) return;
+  const R0 = rooms[id || letzterRaum]; if (R0) { R0.handT = performance.now(); R0.yawZiel = null; }
   o.zurueck = false; o.rueckT0 = null;
   o.yaw = ((o.yaw + dx + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
   o.pitch = Math.max(-1.35, Math.min(1.35, o.pitch + dy));
@@ -654,7 +705,54 @@ function raumSchliessen(scene, cam, id) {
   }
   if (zKante < z1 - 0.05) flaeche(bw, z1 - zKante, B, new THREE.Vector3(bx, -0.012, (zKante + z1) / 2), 0, -Math.PI / 2);
   scene.add(huelle);
-  return { x0, x1, z0, z1, y1 };
+  const deko = vorderwandDeko(id, x0, x1, z1, y1);
+  scene.add(deko);
+  return { x0, x1, z0, z1, y1, deko };
+}
+// Möbel und Dinge an der Vorderwand, damit die Rückseite des Raums nicht leer ist (je Raum ein Thema).
+// Nur bei gedrehter Kamera sichtbar – in der Bühnenansicht stünden sie sonst vor der Kamera.
+function vorderwandDeko(id, x0, x1, z, y1) {
+  const g = new THREE.Group(); g.name = 'Vorderwanddeko';
+  const M = c => toonMat(c), holz = M(0x6a4428), holzD = M(0x4a2e1a), metall = M(0x8a92a8);
+  const box = (w, h, d, mat, x, y, dz = 0, rot = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); b.position.set(x, y, z - d / 2 - 0.02 - dz); b.rotation.y = rot; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
+  const zyl = (r0, r1, h, mat, x, y, dz) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, 14), mat); c.position.set(x, y, z - dz); c.castShadow = true; g.add(c); return c; };
+  const kugel = (r, mat, x, y, dz) => { const k = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat); k.position.set(x, y, z - dz); g.add(k); return k; };
+  const bild = (x, y, w, h, farbe) => { box(w + 0.12, h + 0.12, 0.05, M(0xc8a04a), x, y); box(w, h, 0.03, M(farbe), x, y, 0.02); };
+  const glas = [0x5aff8a, 0xff5ab8, 0x5ac8ff, 0xffd23a, 0xb88aff].map(c => { const m = new THREE.MeshBasicMaterial({ color: c }); m.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: true }; return m; });
+  const xs = t => x0 + (x1 - x0) * t;
+  if (id === 'labor') {
+    for (const [t, w] of [[0.18, 2.4], [0.72, 2.6]]) {   // Labortische mit Kolben
+      box(w, 0.08, 0.9, metall, xs(t), 0.95); box(0.08, 0.95, 0.85, metall, xs(t) - w / 2 + 0.1, 0.47); box(0.08, 0.95, 0.85, metall, xs(t) + w / 2 - 0.1, 0.47);
+      for (let i = 0; i < 5; i++) { const x = xs(t) - w / 2 + 0.3 + i * (w - 0.6) / 4; zyl(0.06, 0.12, 0.26, glas[i % 5], x, 1.12, 0.45); kugel(0.05, glas[(i + 2) % 5], x, 1.3, 0.45); }
+    }
+    zyl(0.35, 0.45, 1.6, metall, xs(0.45), 0.8, 0.6);   // Tesla-Spule
+    for (let i = 0; i < 6; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 8, 20), M(0xc87a3a)); r.rotation.x = Math.PI / 2; r.position.set(xs(0.45), 1.7 + i * 0.16, z - 0.6); g.add(r); }
+    kugel(0.32, glas[2], xs(0.45), 2.75, 0.6);
+    box(1.8, 1.0, 0.04, M(0x1e3a2e), xs(0.45), 2.2);   // Kreidetafel
+    for (const t of [0.05, 0.95]) {   // Regale mit Gläsern
+      box(0.5, Math.min(2.4, y1 - 0.3), 0.4, holzD, xs(t), Math.min(1.2, (y1 - 0.3) / 2));
+      for (let k = 0; k < 3; k++) for (let i = 0; i < 3; i++) zyl(0.07, 0.07, 0.2, glas[(i + k) % 5], xs(t) - 0.12 + i * 0.12, 0.5 + k * 0.7, 0.2);
+    }
+    for (let i = 0; i < 3; i++) zyl(0.08, 0.08, x1 - x0 - 0.4, metall, (x0 + x1) / 2, Math.min(y1 - 0.4, 3.4) - i * 0.25, 0.25 + i * 0.1).rotation.z = Math.PI / 2;   // Rohre
+  } else if (['lobby', 'stockwerk', 'gasthaus', 'konferenz', 'thron', 'vorraum'].includes(id)) {
+    box(2.2, Math.min(2.6, y1 - 0.3), 0.45, holzD, xs(0.15), Math.min(1.3, (y1 - 0.3) / 2));   // Bücherregal
+    const buch = [0x8a2a2a, 0x2a4a8a, 0x2a6a3a, 0xc8a04a, 0x5a2a6a];
+    for (let k = 0; k < 4; k++) for (let i = 0; i < 9; i++) box(0.16, 0.36, 0.3, M(buch[(i + k) % 5]), xs(0.15) - 0.9 + i * 0.22, 0.35 + k * 0.6, 0.05);
+    box(1.8, 1.1, 0.5, M(0x5a4a5a), xs(0.5), 0.55);   // Kamin mit Feuer
+    box(1.1, 0.7, 0.1, M(0x1a0a10), xs(0.5), 0.45, 0.45);
+    const feuer = new THREE.MeshBasicMaterial({ color: 0xff9a2a }); feuer.userData.outlineParameters = { visible: false };
+    for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4, 8), feuer); f.position.set(xs(0.5) - 0.25 + i * 0.25, 0.32, z - 0.42); g.add(f); }
+    const pl = new THREE.PointLight(0xff9a3a, 4, 5, 2); pl.position.set(xs(0.5), 0.8, z - 1.0); g.add(pl);
+    bild(xs(0.5), 2.0, 1.2, 0.8, 0x3a2a5a); bild(xs(0.82), 1.8, 0.8, 1.0, 0x2a4a3a);
+    for (const t of [0.7, 0.92]) { box(0.8, 0.5, 0.8, M(0x8a2a3a), xs(t), 0.25, 0.4); box(0.8, 0.8, 0.18, M(0x8a2a3a), xs(t), 0.65, 0.05); }   // Sessel
+    zyl(0.22, 0.16, 0.45, M(0xa05a3a), xs(0.35), 0.22, 0.4); kugel(0.38, M(0x3a8a4a), xs(0.35), 0.7, 0.4);   // Topfpflanze
+  } else {
+    for (let i = 0; i < 4; i++) box(0.8, 0.8, 0.8, holz, xs(0.12) + (i % 2) * 0.85, 0.4 + Math.floor(i / 2) * 0.8, 0.3, (i % 3 - 1) * 0.08);   // Kisten
+    box(1.6, 2.0, 0.5, holzD, xs(0.5), 1.0);   // Schrank
+    bild(xs(0.8), 1.8, 1.0, 0.7, 0x3a2a4a);
+    for (let i = 0; i < 2; i++) zyl(0.3, 0.3, 0.9, M(0x7a5a3a), xs(0.88) + i * 0.7, 0.45, 0.4);   // Fässer
+  }
+  return g;
 }
 export function laufflaeche3d(id) {   // Lauffläche über den ganzen Boden in Spiel-Koordinaten (Projektion der Spielkamera)
   const R = rooms[id]; if (!R || !R.ready || !R.innen || !R.home) return null;
@@ -989,6 +1087,7 @@ export function frame(t, actors, pxW, ctx) {
   if (R.extra) R.extra.tick(s, ctx);
   if (R.req) requisitenBewegen(R.req, s, ctx);
   if (R.home) kartenStellen(R, ctx.karten);
+  if (R.innen && R.innen.deko) R.innen.deko.visible = freiAktiv();
   // Zustände: sichtbar, wenn ein eingeschalteter Zustand es zeigt; ausgeblendet, wenn einer es versteckt
   if (R.data.zustaende) {
     _vis.clear(); const weg = new Set();
