@@ -16,6 +16,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 export let ready = false;
 const GW = 960, GH = 440;   // Spiel-Einheiten des Raumbilds
 const INK = [0.04, 0.012, 0.07];
+const V = '?v=' + (globalThis.TT_VER || 0);   // Versions-Anhang für Modelle und Raumdaten (Browser-Cache nach Updates)
 const nm = o => ((o && o.userData && o.userData.name) || (o && o.name) || '').replace(/\.\d+$/, '');   // Originalname (der Loader entfernt Punkte)
 let renderer, effect, GRAD, BASE = 'img/3d/', loader;
 const rooms = {};   // id -> { scene, camera, sun, nodes, sprites, data, anim, ready, loading, failed }
@@ -117,7 +118,7 @@ export async function init(base = 'img/3d/') {
   GRAD.minFilter = GRAD.magFilter = THREE.NearestFilter; GRAD.needsUpdate = true;
   loader = new GLTFLoader();
   const ids = [...HELDEN, 'guybrush', 'jack'];
-  const glbs = await Promise.all(ids.map(n => loader.loadAsync(BASE + n + '.glb')));
+  const glbs = await Promise.all(ids.map(n => loader.loadAsync(BASE + n + '.glb' + V)));
   ids.forEach((id, i) => addFig(id, glbs[i].scene, RIGS[id] || null));
   ready = true;
 }
@@ -148,7 +149,7 @@ function sonne(scene, dir, farbe, staerke, schatten) {
 }
 
 async function ladeRaum(id) {
-  const [gltf, data] = await Promise.all([loader.loadAsync(BASE + id + '.glb'), fetch(BASE + id + '.json').then(r => r.json())]);
+  const [gltf, data] = await Promise.all([loader.loadAsync(BASE + id + '.glb' + V), fetch(BASE + id + '.json' + V).then(r => r.json())]);
   const scene = new THREE.Scene(), H = gltf.scene;
   const [hor, top] = data.himmel && data.himmel.length ? data.himmel : ['#3a2a50', '#140828'];
   scene.background = himmel(top, hor);
@@ -190,7 +191,7 @@ async function ladeRaum(id) {
 }
 
 async function ladeHafen() {
-  const hafen = await loader.loadAsync(BASE + 'hafen.glb'), scene = new THREE.Scene(), H = hafen.scene;
+  const hafen = await loader.loadAsync(BASE + 'hafen.glb' + V), scene = new THREE.Scene(), H = hafen.scene;
   scene.background = himmel('#3a8ad0', '#9ad8f0');
   grundlicht(scene, 0xdff2ff, 0x6a5a40, 1.15);   // wie in raum_build.py: Sonne (0.95, 0.15, 0.65), weiches Grundlicht
   const e = new THREE.Euler(0.95, 0.15, 0.65, 'ZYX'), d = new THREE.Vector3(0, 0, -1).applyEuler(e);

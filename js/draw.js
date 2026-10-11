@@ -1088,7 +1088,7 @@ const PORTRAIT = { bernard: [8, -186, 0.86], hoagie: [8, -154, 0.92], laverne: [
 function loadImg(src, tries = 3) {
   const im = new Image();
   im.onerror = () => { if (--tries > 0) setTimeout(() => { im.src = `${src}?r=${tries}`; }, 700); };
-  im.src = src;
+  im.src = typeof TT_VER !== 'undefined' && !/^(data:|blob:|https?:)/.test(src) ? `${src}${src.includes('?') ? '&' : '?'}v=${TT_VER}` : src;   // Versions-Anhang: nach Updates kein altes Bild aus dem Cache
   return im;
 }
 const imgOk = im => im.complete && im.naturalWidth > 0;

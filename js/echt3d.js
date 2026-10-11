@@ -17,7 +17,7 @@ function echt3dLoad() {
   if (ECHT3D.mod || ECHT3D.loading || ECHT3D.failed) return;
   ECHT3D.loading = true;
   note('Echtzeit-3D wird geladen …');
-  import('./echt3d-szene.js')
+  import(`./echt3d-szene.js?v=${typeof TT_VER !== 'undefined' ? TT_VER : 0}`)
     .then(m => m.init().then(() => { ECHT3D.mod = m; note('Echtzeit-3D (Beta) ist bereit.'); }))
     .catch(e => { ECHT3D.failed = true; console.error('Echtzeit-3D', e); note('Echtzeit-3D konnte nicht geladen werden – es bleibt beim vorgerenderten Bild.'); })
     .finally(() => { ECHT3D.loading = false; });
