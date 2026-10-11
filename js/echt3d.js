@@ -12,14 +12,28 @@ const ECHT3D = {
   rooms: { hafen: 1, landeplatz: 1, keller: 1, lobby: 1, labor: 1, konferenz: 1, gasthaus: 1, garten1776: 1, fgarten: 1, vorraum: 1, thron: 1, testkammer: 1, mars: 1, stockwerk: 1, dachboden: 1, uhrwerk: 1 },
 };
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
-function echt3dOn(room) { return echt3dWanted(room) && !!ECHT3D.mod && ECHT3D.mod.ready && !ECHT3D.mod.failed(room.id) && ECHT3D.mod.hasRoom(room.id); }
+function echt3dOn(room) { return echt3dWanted(room) && !!ECHT3D.mod && ECHT3D.mod.ready && !(ECHT3D.mod.verloren && ECHT3D.mod.verloren()) && !ECHT3D.mod.failed(room.id) && ECHT3D.mod.hasRoom(room.id); }
+// Kann dieses Gerät WebGL 2? (three.js braucht es; manche Konsolen-Browser und alte Grafikchips nicht)
+function echt3dWebgl2() {
+  try { const c = document.createElement('canvas'), g = c.getContext('webgl2'); if (g) { const x = g.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); return true; } } catch (e) { /* kein WebGL */ }
+  return false;
+}
 function echt3dLoad() {
   if (ECHT3D.mod || ECHT3D.loading || ECHT3D.failed) return;
+  if (!echt3dWebgl2()) {
+    ECHT3D.failed = true;
+    note('Echtzeit-3D braucht WebGL 2 – dieser Browser bietet es nicht. Es bleibt beim vorgerenderten Bild.');
+    return;
+  }
   ECHT3D.loading = true;
   note('Echtzeit-3D wird geladen …');
   import(`./echt3d-szene.js?v=${typeof TT_VER !== 'undefined' ? TT_VER : 0}`)
     .then(m => m.init().then(() => { ECHT3D.mod = m; note('Echtzeit-3D (Beta) ist bereit.'); }))
-    .catch(e => { ECHT3D.failed = true; console.error('Echtzeit-3D', e); note('Echtzeit-3D konnte nicht geladen werden – es bleibt beim vorgerenderten Bild.'); })
+    .catch(e => {
+      ECHT3D.failed = true; console.error('Echtzeit-3D', e);
+      const grund = String((e && e.message) || e || '').slice(0, 90);   // der eigentliche Grund hilft beim Nachbessern
+      note(`Echtzeit-3D konnte nicht geladen werden (${grund || 'unbekannter Fehler'}) – es bleibt beim vorgerenderten Bild.`);
+    })
     .finally(() => { ECHT3D.loading = false; });
 }
 // Figuren, die trotz 3D-Modell als Bild bleiben: Laverne im Tentakel-Kostüm

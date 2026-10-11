@@ -53,7 +53,7 @@ raum3d('dachboden', 'img/raum_dachboden.jpg', {
       look: 'Eine Seemannstruhe. Drin: Wolldecken, ein totales Durcheinander und der Geruch von zwanzig Jahren Vorsicht.' },
     { id: 'kisten', name: 'Kistenstapel', rect: [692, 263, 280, 76], walk: [790, 396],
       look: 'Kisten, Kisten, Kisten. Eine ist beschriftet mit „GUT-O-MAT – ERSATZTEILE (HOFFENTLICH NIE BENÖTIGT)“. Wir haben sie benötigt. Wir haben sie SEHR benötigt.' },
-    { id: 'baum', name: 'Weihnachtsbaum', rect: [49, 183, 156, 120], walk: [130, 400],
+    { id: 'weihnachtsbaum', name: 'Weihnachtsbaum', rect: [49, 183, 156, 120], walk: [130, 400],
       look: 'Ein Weihnachtsbaum von 1987. Er ist so trocken, dass er schon wieder stolz darauf ist. An der Spitze steckt noch ein Stern aus Aluminiumfolie.' },
     { id: 'spinne', name: 'Spinne', rect: [866, 100, 46, 32], walk: [830, 380],
       look: 'Eine Kreuzspinne vom Dienst. Sie hat hier oben mehr Bodenfläche verwaltet als manche Hausmeister. Wir nennen beide einfach Regine.' },
@@ -158,5 +158,5 @@ multi(['open', 'pick'], 'o:kisten', async () => {
   await s('Ich wühle durch die Ersatzteilkiste: drei Sicherungen, ein Relais, eine Anleitung mit dem Titel „SO NICKT DER GUT-O-MAT“.');
   await s('An der Anleitung klebt ein Zettel von Dr. Fred: „Wer das liest, hat den Gut-O-Mat kaputtgekriegt. Ich wusste es.“');
 });
-multi(['push', 'pull'], 'o:baum', async () => { Sound.sfx('rustle'); await s('Der Baum raschelt bedrohlich. Ich mache einen Schritt zurück. Wir haben eine Vereinbarung: Er bleibt stehen, ich komme nie wieder mit Kerzen.'); });
+multi(['push', 'pull'], 'o:weihnachtsbaum', async () => { Sound.sfx('rustle'); await s('Der Baum raschelt bedrohlich. Ich mache einen Schritt zurück. Wir haben eine Vereinbarung: Er bleibt stehen, ich komme nie wieder mit Kerzen.'); });
 RULES['talk o:spinne'] = line('„Guten Tag, Regine.“ Regine sagt nichts. Regine webt. Regine hat das Sagen.');

@@ -14,6 +14,8 @@ import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export let ready = false;
+let kontextWeg = false;   // Grafikkontext vom Gerät entzogen (z. B. Konsole im Hintergrund): dann zurück zum vorgerenderten Bild
+export function verloren() { return kontextWeg; }
 const GW = 960, GH = 440;   // Spiel-Einheiten des Raumbilds
 const INK = [0.04, 0.012, 0.07];
 const V = '?v=' + (globalThis.TT_VER || 0);   // Versions-Anhang für Modelle und Raumdaten (Browser-Cache nach Updates)
@@ -107,12 +109,21 @@ function himmel(top, unten) {
 // ---------- Aufbau: Renderer und Figuren; Räume kommen beim ersten Besuch dazu ----------
 export async function init(base = 'img/3d/') {
   BASE = base;
-  const canvas = document.createElement('canvas');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: false });
+  // Renderer: erst mit voller Qualität, sonst sparsam (Xbox, ältere Grafikchips) – ohne Kantenglättung und Schatten
+  let canvas = null, sparsam = false;
+  for (const opt of [{ antialias: true, powerPreference: 'high-performance' }, { antialias: false, powerPreference: 'low-power' }]) {
+    try {
+      canvas = document.createElement('canvas');
+      renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true, alpha: false, failIfMajorPerformanceCaveat: false, ...opt });
+      break;
+    } catch (e) { console.warn('Echtzeit-3D: Renderer', opt, e); renderer = null; sparsam = true; }
+  }
+  if (!renderer) throw new Error('WebGL-Renderer ließ sich nicht starten');
   renderer.setPixelRatio(1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !sparsam;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); kontextWeg = true; console.warn('Echtzeit-3D: WebGL-Kontext verloren'); });
   effect = new OutlineEffect(renderer, { defaultThickness: 0.0032, defaultColor: INK, defaultAlpha: 1 });
   GRAD = new THREE.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, THREE.RedFormat);
   GRAD.minFilter = GRAD.magFilter = THREE.NearestFilter; GRAD.needsUpdate = true;
@@ -702,6 +713,29 @@ function toonMat(farbe) {
 function leuchtMat(farbe) { const m = new THREE.MeshBasicMaterial({ color: farbe }); m.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: true }; return m; }
 const _zA = new THREE.Vector3(0, 0, 1);
 const RAUM_EXTRAS = {
+  // Zukunftsgarten: Astgabeln, Wurzelstumpf und Laubpolster als Kletterweg den Apfelbaum hinauf zur Laterne
+  fgarten(scene) {
+    const holz = toonMat(0x6a4226), laub = toonMat(0x4aa83a), laubH = toonMat(0x7ad85a), weg = new THREE.Group();
+    const stamm = bl(3.06, 11.47, 0);
+    KLETTERBAUM.forEach(([x, y, h], i) => {
+      const p = bl(x, y, h);
+      if (i === 0) {   // Wurzelstumpf
+        const st = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, h, 10), holz); st.position.set(p.x, h / 2, p.z); st.castShadow = true; weg.add(st);
+      } else {   // Ast vom Stamm zur Plattform
+        const a = new THREE.Vector3(stamm.x, Math.max(0.3, h - 0.55), stamm.z), d = p.clone().setY(h - 0.12).sub(a), len = Math.max(0.3, d.length());
+        const ast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.16, len, 8), holz);
+        ast.position.copy(a).addScaledVector(d, 0.5); ast.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); ast.castShadow = true; weg.add(ast);
+      }
+      const polster = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.42, 0.14, 12), i ? laub : holz);
+      polster.position.set(p.x, h - 0.07, p.z); polster.castShadow = polster.receiveShadow = true; weg.add(polster);
+      if (i) for (let k = 0; k < 3; k++) {   // Blätterbüschel am Rand
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), k % 2 ? laub : laubH), w = k * 2.1 + i;
+        b.position.set(p.x + Math.cos(w) * 0.42, h + 0.02, p.z + Math.sin(w) * 0.42); b.scale.set(1, 0.6, 1); weg.add(b);
+      }
+    });
+    scene.add(weg);
+    return { tick() { weg.visible = typeof flagOn === 'function' && flagOn('tree'); } };
+  },
   // Uhrwerk: Zahnräder drehen sich, die Zeiger laufen rückwärts, der Kolben pumpt, das Riesenpendel schwingt,
   // die Kerzen flackern; der Notsteg (nur fürs vorgerenderte Bild) verschwindet, ein echter Kristall schwebt
   uhrwerk(scene, H) {
@@ -801,6 +835,9 @@ export function entkruemmt(gx, gy, id) {   // Bildpunkt der Spielkamera -> Spiel
 // ---------- Hüpfen wie in Psychonauts 2: Plattformen, Schwerkraft, Sprung ----------
 // Sprungflächen in Blender-Weltmetern: [x0, x1, y0, y1, Oberkante].
 // Im Dachboden sind es Kisten, Koffer und Truhe; im Obergeschoss schweben Toaststufen über dem Treppenloch.
+// Kletterbaum im Zukunftsgarten (Rätsel: die Energiezelle aus der Laterne holen): Blender-x, -y und Oberkante in Metern
+export const KLETTERBAUM = [[3.95, 10.75, 0.55], [3.85, 11.55, 1.2], [3.06, 11.45, 2.0], [2.05, 11.75, 2.75], [1.2, 11.95, 3.4]];
+export const ZELLE_WELT = [0.97, 12.5, 4.43];
 const STOCKWERK_STUFEN = [
   [6.65, 7.8, 8.05, 9.25, 0.28], [5.35, 6.5, 8.55, 9.75, 0.58],
   [4.05, 5.2, 9.05, 10.25, 0.9], [2.75, 3.9, 9.55, 10.75, 0.56],
@@ -809,6 +846,7 @@ export const PLATTFORMEN = {
   dachboden: [[2.4, 3.5, 14.8, 15.6, 0.62], [-4.5, -2.3, 14.8, 16.0, 1.28], [4.4, 7.4, 12.9, 14.7, 1.06], [-0.1, 1.4, 15.0, 16.2, 0.84], [-6.7, -5.7, 14.3, 15.3, 0.26]],
   stockwerk: STOCKWERK_STUFEN,
   uhrwerk: [[-2.45, -0.75, 9.35, 11.05, 0.45], [-0.6, 0.6, 9.0, 10.2, kolbenOben], [0.82, 2.58, 9.72, 11.48, 0.8]],   // Zahnrad A, Hubkolben (Höhe läuft mit), Zahnrad B
+  fgarten: KLETTERBAUM.map(([x, y, h]) => [x - 0.42, x + 0.42, y - 0.42, y + 0.42, () => (typeof flagOn === 'function' && flagOn('tree') ? h : -99)]),   // erst, wenn der Baum gewachsen ist
 };
 const SPRUNGLOCH = { stockwerk: [[2.7, 8.35, 7.0, 11.3]], uhrwerk: [[-2.6, 2.8, 5.0, 20.0]] };
 function imSprungloch(id, x, y) { return (SPRUNGLOCH[id] || []).some(p => x >= p[0] && x <= p[1] && y >= p[2] && y <= p[3]); }
@@ -1103,4 +1141,9 @@ export function raumInfo(id) {   // Fehlersuche: Innenmaße und Kameralage
   const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
   const c = R.camera.position;
   return { innen: R.innen, kamera: [c.x, c.y, c.z].map(v => +v.toFixed(2)), ziel: R.ziel && [R.ziel.x, R.ziel.y, R.ziel.z].map(v => +v.toFixed(2)) };
+}
+export function spielPunkt(bx, by, id) {   // Blender-Bodenpunkt -> Spiel-Koordinaten der Bühnenkamera (für Rätsel und Tests)
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home) return null;
+  const v = bl(bx, by, 0).project(R.home);
+  return [(v.x + 1) / 2 * GW, (1 - v.y) / 2 * GH];
 }

@@ -71,7 +71,7 @@ raum3d('uhrwerk', 'img/raum_uhrwerk.jpg', {
       look: 'Ein Kandelaber mit drei Kerzen. In solchen Gemäuern haut man auf Kerzen. Das weiß jeder, der je mit einer Peitsche durch ein Schloss gelaufen ist.' },
     { id: 'kandelaber2', name: 'Kandelaber', rect: [743, 183, 68, 158], walk: [770, 358],
       look: 'Noch ein Kandelaber. Die Kerzen flackern, obwohl hier kein Wind geht. Das ist entweder Physik oder Atmosphäre.' },
-    { id: 'banner', name: 'Rote Banner', rect: [0, 0, 60, 120], walk: [60, 356],
+    { id: 'uhr_banner', name: 'Rote Banner', rect: [0, 0, 60, 120], walk: [60, 356],
       look: 'Blutrote Banner mit einem Wappen. Das Wappen zeigt … einen Toaster. Mit Fledermausflügeln. Familie Edison, Zweig „Gruft“.' },
     { id: 'abgrund', name: 'Abgrund', rect: [300, 372, 400, 68],
       look: () => imEcht3d('uhrwerk')
@@ -172,7 +172,7 @@ multi(['push', 'pull', 'use', 'pick'], 'o:kandelaber2', async () => {
   Sound.sfx('whoosh'); await wait(160); Sound.sfx('coin');
   await s('Ich schlage auf die Kerze. Heraus fällt eine Münze. Sie rollt in den Abgrund. Natürlich tut sie das.');
 });
-RULES['talk o:banner'] = line('„Hallo, Toaster mit Flügeln.“ Er antwortet nicht. Aber ich habe das Gefühl, er beobachtet mich.');
+RULES['talk o:uhr_banner'] = line('„Hallo, Toaster mit Flügeln.“ Er antwortet nicht. Aber ich habe das Gefühl, er beobachtet mich.');
 
 // ---------- Lobby: die Standuhr wird zur Tür ----------
 {
