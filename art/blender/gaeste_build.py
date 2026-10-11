@@ -255,12 +255,66 @@ def build_salad(SC, B, R):
 def build_bender(SC, B, R):
     MET, DARK, VIS = toon('G_BenderMetall', '#9aa6b8', hi=0.75), toon('G_BenderDunkel', '#5a6474'), toon('G_BenderVisier', '#2a2e38', hi=0.6)
     YEL = toon('G_BenderAuge', '#fff7c8')
+    WESTE = toon('G_BenderAmazonWeste', '#1676b8', hi=0.4)
+    BAND = toon('G_BenderAmazonWarnband', '#ffd23a', hi=0.8)
+    PATCH = toon('G_BenderAmazonPatch', '#16344d', hi=0.3)
+    LOGO = toon('G_BenderAmazonSchrift', '#f6f7fb', hi=0.3)
+    ORANGE = toon('G_BenderAmazonPfeil', '#ff9900', hi=0.75)
     for k, y in (('L', 1), ('R', -1)):
         B.rod(f'Bd_Bein{k}', (0, y * 0.09, 0.62), (0, y * 0.09, 0.08), 0.045, MET, R, seg=16)
         for j in range(5):
             B.torus(f'Bd_Ring{k}{j}', (0, y * 0.09, 0.16 + j * 0.1), 0.046, 0.008, DARK, R, seg=20, sseg=6)
         B.cone(f'Bd_Fuss{k}', 0.0, 0.1, 0.09, 0.06, MET, R, xy=(0.02, y * 0.09), bevel=0.01)
     B.cone('Bd_Rumpf', 0.58, 1.18, 0.24, 0.22, MET, R, bevel=0.03)
+    def weste_schale(name, z0, z1, mat, abstand=0.025):
+        bm = bmesh.new()
+        unten, oben = [], []
+        a0, a1, seg = 0.5, 2 * math.pi - 0.5, 40
+        for z, ring in ((z0, unten), (z1, oben)):
+            r = 0.24 - (z - 0.58) / 0.6 * 0.02 + abstand
+            for i in range(seg + 1):
+                a = a0 + (a1 - a0) * i / seg
+                ring.append(bm.verts.new((r * math.cos(a), r * math.sin(a), z)))
+        for i in range(seg):
+            bm.faces.new((unten[i], unten[i + 1], oben[i + 1], oben[i]))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        return B.obj(name, bm, mat, R, (0, 0, 0), smooth=True, solid=0.012)
+
+    weste_schale('Bd_Weste', 0.66, 1.1, WESTE)
+    weste_schale('Bd_WesteBandUnten', 0.71, 0.75, BAND, 0.032)
+    weste_schale('Bd_WesteBandOben', 1.045, 1.085, BAND, 0.032)
+    weste_schale('Bd_WesteKragen', 1.085, 1.125, WESTE, 0.03)
+    for i, a in enumerate((0.5, 2 * math.pi - 0.5)):
+        def randpunkt(z):
+            r = 0.24 - (z - 0.58) / 0.6 * 0.02 + 0.039
+            return (r * math.cos(a), r * math.sin(a), z)
+        B.rod(f'Bd_WesteKante{i}', randpunkt(0.67), randpunkt(1.1), 0.012, BAND, R, seg=10)
+
+    badge = bmesh.new()
+    bmesh.ops.create_cube(badge, size=1)
+    B.obj('Bd_AmazonBrustschild', badge, PATCH, R, (0.246, 0, 1.045), scale=(0.018, 0.22, 0.1), smooth=False, bevel=0.012)
+    txt = bpy.data.curves.new('Bd_AmazonText', 'FONT')
+    txt.body, txt.size, txt.align_x, txt.align_y, txt.extrude = 'amazon', 0.053, 'CENTER', 'CENTER', 0.001
+    txt.materials.append(LOGO)
+    word = bpy.data.objects.new('Bd_AmazonText', txt)
+    SC.collection.objects.link(word)
+    word.parent = R
+    word.location, word.rotation_euler = (0.258, 0, 1.06), (math.pi / 2, 0, math.pi / 2)
+    smile = bpy.data.curves.new('Bd_AmazonSmile', 'CURVE')
+    smile.dimensions, smile.resolution_u = '3D', 12
+    smile.bevel_depth, smile.bevel_resolution = 0.0045, 2
+    spline = smile.splines.new('BEZIER')
+    path = [(-0.07, 1.018), (0, 1.002), (0.07, 1.016)]
+    spline.bezier_points.add(len(path) - 1)
+    for point, (y, z) in zip(spline.bezier_points, path):
+        point.co = (0.259, y, z)
+        point.handle_left_type = point.handle_right_type = 'AUTO'
+    smile_obj = bpy.data.objects.new('Bd_AmazonSmile', smile)
+    SC.collection.objects.link(smile_obj)
+    smile_obj.parent = R
+    smile.materials.append(ORANGE)
+    for i, z in enumerate((1.008, 1.027)):
+        B.rod(f'Bd_AmazonPfeil{i}', (0.26, 0.055, z), (0.26, 0.079, 1.02), 0.0045, ORANGE, R, seg=8)
     B.cone('Bd_Klappe', 0.72, 1.02, 0.01, 0.01, DARK, R, xy=(0.215, 0), bevel=0)
     B.sphere('Bd_Tuer', (0.21, 0, 0.87), (0.02, 0.12, 0.13), DARK, R)
     B.cone('Bd_Hals', 1.16, 1.26, 0.08, 0.08, MET, R, bevel=0.01)

@@ -1,6 +1,6 @@
 # Lieferraumschiff (Verbeugung vor dem Futurama-Lieferschiff) als Modell für Landeplatz und Marsgesicht (raum_build.py).
 # Rumpf als Drehkörper (glatte Pillenform, zweifarbig: helles Oberdeck, dunklere Unterseite, rote Nahtlinie), Nasen- und Heckkappe,
-# Glaskuppel, helle Schrift „WIR LIEFERN ÜBERALLHIN“, offene Luke mit warmem Licht und Kisten, Rampe mit Warnstreifen und Geländer,
+# Glaskuppel, Amazon-Wortzeichen mit orangefarbenem Pfeil, offene Luke mit warmem Licht und Kisten, Rampe mit Warnstreifen und Geländer,
 # zwei Seitentriebwerke an Pylonen, geschwungenes Leitwerk mit Emblem, Höhenflossen, Landebeine mit Füßen, Lüftungsschlitze,
 # Scheinwerfer und Positionslichter. Die Nase zeigt nach +x, die Kamera schaut von -y darauf; die Wurzel S gibt Ort und Drehung vor.
 import bpy, bmesh, math
@@ -65,6 +65,7 @@ def build(SC, B, toon, S):
     METAL, DARK, ORANGE = toon('R_Metall', '#9aa0b8', hi=0.75), toon('R_Dunkel', '#241a38'), toon('R_Feuer', '#ffb04a', hi=0.95)
     WARM, CRATE, YEL = toon('R_SchiffLicht', '#ffe9a8', hi=1.0), toon('R_SchiffKiste', '#b8782e', hi=0.2), toon('R_Warnung', '#ffd23a', hi=0.4)
     TXT = toon('R_SchiffSchrift', '#f4efdc', hi=0.2)
+    AMAZON = toon('R_AmazonOrange', '#ff9900', hi=0.7)
 
     # --- Rumpf: Oberdeck hell, Unterseite dunkler, dazu rote Nahtlinie, Nasen- und Heckkappe ---
     revolve(B, 'SchiffOben', HULL, UPPER, S, loc=(0, 0, AXIS), arc=(0, math.pi))
@@ -74,22 +75,47 @@ def build(SC, B, toon, S):
     revolve(B, 'SchiffNaht', [(x, r_at(x) * 1.012) for x in [-5.0 + 0.5 * i for i in range(20)]], RED, S, loc=(0, 0, AXIS), arc=(math.pi - 0.04, math.pi + 0.04))
     for i, x in enumerate((-3.9, 3.6)):   # Querfugen
         B.torus(f'SchiffFuge{i}', (x, 0, AXIS), r_at(x) * 1.004, 0.012, GREEND, S, rot=(0, math.pi / 2, 0), seg=56, sseg=5)
-    # --- Schrift auf dem Oberdeck, der Wand angeschmiegt, ohne Freestyle-Kontur ---
+    # --- Amazon-Wortzeichen auf der Rumpfseite, mit orangefarbenem Smile-Pfeil ---
     zt = 0.85
-    delta = math.asin(zt / r_at(0.3))
+    logo_x, logo_z = -1.4, zt
+    delta = math.asin(logo_z / r_at(0.3))
     cd = bpy.data.curves.get('SchiffText') or bpy.data.curves.new('SchiffText', 'FONT')
-    cd.body, cd.size, cd.align_x, cd.align_y, cd.extrude = 'WIR LIEFERN\nÜBERALLHIN', 0.5, 'CENTER', 'CENTER', 0.01
-    cd.space_line = 0.85
+    cd.body, cd.size, cd.align_x, cd.align_y, cd.extrude = 'amazon', 0.76, 'CENTER', 'CENTER', 0.01
     cd.materials.clear()
     cd.materials.append(TXT)
     t = bpy.data.objects.new('SchiffText', cd)
     SC.collection.objects.link(t)
     t.parent = S
-    t.location, t.rotation_euler = (-1.4, side_y(0.3, zt) - 0.03, AXIS + zt), (math.pi / 2 - delta, 0, 0)   # Wand am dicksten bei x ≈ 0: dort anliegen, links schwebt die Schrift minimal
+    t.location, t.rotation_euler = (logo_x, side_y(0.3, logo_z) - 0.035, AXIS + logo_z), (math.pi / 2 - delta, 0, 0)
     t.visible_shadow = False   # sonst wirft die Schrift je nach Sonnenstand einen Doppelgänger auf den Rumpf
     nk = bpy.data.collections.get('Ohne_Kontur')
     if nk is not None:
         nk.objects.link(t)
+    smile = bpy.data.curves.new('AmazonPfeil', 'CURVE')
+    smile.dimensions = '3D'
+    smile.resolution_u = 16
+    smile.bevel_depth, smile.bevel_resolution = 0.035, 3
+    spline = smile.splines.new('BEZIER')
+    smile_points = [(-2.65, 0.38), (-1.48, 0.12), (-0.28, 0.31)]
+    spline.bezier_points.add(len(smile_points) - 1)
+    for point, (x, dz) in zip(spline.bezier_points, smile_points):
+        point.co = (x, side_y(x, dz) - 0.055, AXIS + dz)
+        point.handle_left_type = point.handle_right_type = 'AUTO'
+    pfeil = bpy.data.objects.new('AmazonPfeil', smile)
+    SC.collection.objects.link(pfeil)
+    pfeil.parent = S
+    smile.materials.append(AMAZON)
+    pfeil.visible_shadow = False
+    end = smile_points[-1]
+    tip = (end[0] + 0.18, side_y(end[0] + 0.18, end[1] + 0.12) - 0.055, AXIS + end[1] + 0.12)
+    for i, dz in enumerate((end[1] - 0.12, end[1] + 0.08)):
+        x = end[0] - 0.22
+        start = (x, side_y(x, dz) - 0.055, AXIS + dz)
+        arrow = B.rod(f'AmazonPfeilspitze{i}', start, tip, 0.035, AMAZON, S, seg=10)
+        if nk is not None:
+            nk.objects.link(arrow)
+    if nk is not None:
+        nk.objects.link(pfeil)
     # --- Glaskuppel mit Rahmen, Scheinwerfer an der Nase ---
     B.sphere('Kuppel', (3.9, 0, AXIS + 1.7), (1.75, 1.0, 0.72), GLASS, S)
     B.torus('KuppelRahmen', (3.9, 0, AXIS + 1.42), 1.0, 0.05, METAL, S, scale=(1.75, 1.0, 1.0), seg=40, sseg=6)
