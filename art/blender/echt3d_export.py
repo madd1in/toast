@@ -276,8 +276,8 @@ for w in WHAT:
         SC = bpy.data.scenes['Raum_hafen']
         objs = [o for o in SC.objects if not o.name.startswith(('Vogel_', 'V_')) and o.type != 'CAMERA' and o.type != 'LIGHT']
         export('hafen', objs, cam=SC.camera)
-    elif w in ('hoagie', 'laverne', 'bernard'):
-        root = bpy.data.objects[{'hoagie': 'HRig', 'laverne': 'LRig', 'bernard': 'BRig'}[w]]
+    elif w in ('hoagie', 'laverne', 'bernard', 'drfred', 'gertrude', 'hancock'):   # Figuren mit Gelenken (figur_rig.py)
+        root = bpy.data.objects[{'hoagie': 'HRig', 'laverne': 'LRig', 'bernard': 'BRig', 'drfred': 'FRig', 'gertrude': 'GRig', 'hancock': 'KRig'}[w]]
         export(w, tree(root))
     else:   # Gäste: ganzes Modell der Gast-Szene in Grundhaltung
         SC = bpy.data.scenes['Gast3D_' + w]

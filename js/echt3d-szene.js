@@ -148,8 +148,57 @@ function sonne(scene, dir, farbe, staerke, schatten) {
   return s;
 }
 
+// ---------- Requisiten: echte 3D-Modelle für Dinge, die im vorgerenderten Bild nur gezeichnet sind ----------
+// boden: Spiel-Punkt auf dem Boden (x, y wie im Spiel); welt: Blender-Meter; wand: Bildpunkt auf einer Ebene in Tiefe d.
+// Sichtbarkeit und Effekte kommen pro Bild aus js/echt3d.js (ctx.sprites['req_' + Schlüssel]).
+export const REQUISITEN = {
+  labor: { datei: 'req_labor', teile: {
+    hamster: { wurzel: 'Req_Hamster', boden: [186, 362] },
+    mumie: { wurzel: 'Req_Mumie', boden: [682, 344] },
+    saber: { wurzel: 'Req_Saber', boden: [344, 336] },
+    clawd: { wurzel: 'Req_Clawd', wand: [572, 168, 12.45] },
+    absperrband: { wurzel: 'Req_Absperrband', welt: [1.83, 12.0, 1.18] },
+  } },
+};
+export function hatRequisit(raum, key) { const r = rooms[raum]; return !!(r && r.ready && r.req && r.req[key]); }
+function requisitenAufstellen(scene, cam, def, gltf) {
+  const H = gltf.scene, out = {};
+  prep(H, { cast: true, receive: true });
+  H.updateMatrixWorld(true);
+  for (const [key, t] of Object.entries(def.teile)) {
+    const o = find(H, t.wurzel); if (!o) continue;
+    const p = new THREE.Vector3();
+    if (t.boden) toWorld(cam, t.boden[0], t.boden[1], p);
+    else if (t.welt) p.copy(bl(...t.welt));
+    else if (t.wand) {
+      _n.set(t.wand[0] / GW * 2 - 1, 1 - t.wand[1] / GH * 2); ray.setFromCamera(_n, cam);
+      ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), t.wand[2]), p);
+    }
+    scene.attach(o); o.position.copy(p);
+    const teile = {}; o.traverse(c => { const n = nm(c); if (/^Req_(HamsterRad|HamsterTier|BandEnde|MumieAugen|SaberKlinge|Clawd)$/.test(n)) teile[n] = { o: c, q0: c.quaternion.clone(), p0: c.position.clone(), s0: c.scale.clone() }; });
+    out[key] = { o, teile };
+  }
+  return out;
+}
+function requisitenBewegen(req, s, ctx) {
+  for (const [key, r] of Object.entries(req)) {
+    const st = ctx.sprites && ctx.sprites['req_' + key] ? ctx.sprites['req_' + key]() : {};
+    r.o.visible = st.vis !== false;
+    if (!r.o.visible) continue;
+    const T = r.teile;
+    if (T.Req_HamsterRad) T.Req_HamsterRad.o.quaternion.copy(T.Req_HamsterRad.q0).multiply(_q.setFromAxisAngle(_zA, -s * (st.schnell ? 14 : 5)));
+    if (T.Req_HamsterTier) T.Req_HamsterTier.o.position.y = T.Req_HamsterTier.p0.y + Math.abs(Math.sin(s * (st.schnell ? 28 : 12))) * 0.012;
+    if (T.Req_BandEnde) T.Req_BandEnde.o.quaternion.copy(T.Req_BandEnde.q0).multiply(_q.setFromAxisAngle(_zA, Math.sin(s * 3.1) * 0.25));
+    if (T.Req_MumieAugen) T.Req_MumieAugen.o.position.x = T.Req_MumieAugen.p0.x + Math.sin(s * 0.7) * 0.025 * (Math.sin(s * 0.23) > 0 ? 1 : 0);
+    if (T.Req_SaberKlinge) { const k = 1 + Math.sin(s * 40) * 0.04; T.Req_SaberKlinge.o.scale.set(T.Req_SaberKlinge.s0.x * k, T.Req_SaberKlinge.s0.y, T.Req_SaberKlinge.s0.z * k); }
+    if (key === 'clawd') { r.o.position.y = (r.y0 = r.y0 ?? r.o.position.y) + Math.sin(s * 2.2) * 0.03 + (st.hops ? Math.abs(Math.sin(s * 9)) * 0.08 : 0); r.o.rotation.y = Math.sin(s * 0.9) * 0.2; }
+  }
+}
+
 async function ladeRaum(id) {
-  const [gltf, data] = await Promise.all([loader.loadAsync(BASE + id + '.glb' + V), fetch(BASE + id + '.json' + V).then(r => r.json())]);
+  const reqDef = REQUISITEN[id];
+  const [gltf, data, reqGltf] = await Promise.all([loader.loadAsync(BASE + id + '.glb' + V), fetch(BASE + id + '.json' + V).then(r => r.json()),
+    reqDef ? loader.loadAsync(BASE + reqDef.datei + '.glb' + V).catch(e => { console.error('Echtzeit-3D Requisiten', id, e); return null; }) : null]);
   const scene = new THREE.Scene(), H = gltf.scene;
   const [hor, top] = data.himmel && data.himmel.length ? data.himmel : ['#3a2a50', '#140828'];
   scene.background = himmel(top, hor);
@@ -186,8 +235,10 @@ async function ladeRaum(id) {
     sprites[k] = { o, q0: o.quaternion.clone(), s0: o.scale.clone(), achse };
   }
   const extra = RAUM_EXTRAS[id] ? RAUM_EXTRAS[id](scene, H) : null;
+  H.updateMatrixWorld(true);
+  const req = reqGltf ? requisitenAufstellen(scene, camera, reqDef, reqGltf) : null;
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
-  return { scene, camera, data, nodes, sprites, extra };
+  return { scene, camera, data, nodes, sprites, extra, req };
 }
 
 async function ladeHafen() {
@@ -255,6 +306,8 @@ const RIGS = {
     rest: { tR: -0.12, tL: -0.12, kR: 0.24, kL: 0.24, lean: 0.11 },   // Nerd-Haltung wie im Original: Knie leicht eingeknickt, Oberkörper vorgebeugt
     gang: { eR: 0.35, eL: 0.35 }, zappel: 'glasses' },   // angewinkelte Arme beim Gehen; im Stand schiebt er ab und zu nervös die Brille hoch
   hoagie: { P: 'HR_', hz: 0.62, sole: 0.16, thigh: 0.24, shin: 0.22, stride: 0.5, knee: 0.9, abd: 0.24, mouth: 'RH_Mund', eyes: ['RH_AugeL', 'RH_AugeR', 'RH_PupilleL', 'RH_PupilleR'] },
+  drfred: { P: 'FR_', hz: 0.62, sole: 0.10, thigh: 0.26, shin: 0.26, stride: 0.3, knee: 0.8, abd: 0.18, mouth: 'RDrFred_Mund', eyes: ['RF_PupilleL', 'RF_PupilleR'],
+    rest: { lean: 0.08 }, gang: { eR: 0.3, eL: 0.3 } },   // der verrückte Professor: leicht vorgebeugt, Arme angewinkelt
   laverne: { P: 'LR_', hz: 0.72, sole: 0.10, thigh: 0.32, shin: 0.30, stride: 0.37, knee: 0.8, abd: 0.08, mouth: 'RL_Mund', eyes: ['RL_AugeL', 'RL_AugeR', 'RL_PupilleL', 'RL_PupilleR'] },
 };
 function pose(rig, kw) {
@@ -328,10 +381,18 @@ function unitsPerMeter(camera, p) {   // Spiel-Einheiten pro Meter Höhe an dies
 }
 
 // Figuren, die die 3D-Szene selbst zeigt: die Helden überall (außer beim Klettern), die Gäste im Hafen
+// Nebenfiguren mit 3D-Modell: werden erst geladen, wenn sie das erste Mal in einem 3D-Raum stehen
+const SPAETER = new Set(['drfred', 'sam', 'max']), laedt = new Set();
+function figurLaden(kind) {
+  if (laedt.has(kind)) return;
+  laedt.add(kind);
+  loader.loadAsync(BASE + kind + '.glb' + V).then(g => addFig(kind, g.scene, RIGS[kind] || null), e => console.error('Echtzeit-3D Figur', kind, e));
+}
 export function owns(a, roomId) {
   const f = figs[a.kind];
+  if (!f && SPAETER.has(a.kind)) figurLaden(a.kind);
   if (!f || !rooms[roomId] || !rooms[roomId].ready || a.climb) return false;
-  return f.rig ? true : roomId === 'hafen';
+  return f.rig || SPAETER.has(a.kind) ? true : roomId === 'hafen';
 }
 
 // ---------- Kamera-Choreografie: damit das echte 3D zur Geltung kommt ----------
@@ -680,6 +741,7 @@ export function frame(t, actors, pxW, ctx) {
   if (R.anim) hafenAnim(R.anim, s);
   uhrS = s;
   if (R.extra) R.extra.tick(s, ctx);
+  if (R.req) requisitenBewegen(R.req, s, ctx);
   // Zustände: sichtbar, wenn ein eingeschalteter Zustand es zeigt; ausgeblendet, wenn einer es versteckt
   if (R.data.zustaende) {
     _vis.clear(); const weg = new Set();

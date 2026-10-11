@@ -37,6 +37,12 @@ const ECHT3D_TEILE = {
   },
   uhrtuer: () => ({ offen: flagOn('uhrGang') ? 1 : 0, seit: Date.now() - ((G.state && G.state.flags.uhrGangT) || 0) }),   // Lobby: Standuhr als Geheimtür (js/uhrwerk.js)
   uhrKristall: () => ({ vis: !(G.state && G.state.crystals.uhrwerk) }),
+  // Requisiten im Labor (js/echt3d-szene.js, REQUISITEN): sichtbar wie die gezeichneten Fassungen, mit denselben Effekten
+  req_hamster: () => ({ vis: echt3dEiDa('hamster'), schnell: !!(G.eggFx && G.eggFx.hamster && G.t - G.eggFx.hamster < 4000) }),
+  req_mumie: () => ({ vis: echt3dEiDa('mumie') }),
+  req_saber: () => ({ vis: echt3dEiDa('saber') && !(G.saber && G.t - G.saber.t0 < G.saber.dur) }),
+  req_clawd: () => ({ vis: echt3dEiDa('clawd'), hops: !!(G.eggFx && G.eggFx.clawd && G.t - G.eggFx.clawd < 2500) }),
+  req_absperrband: () => ({ vis: !!G.state && !flagOn('tatortFrei') && !flagOn('toast') }),
   clown: t => {
     if (flagOn('clownPlatt')) return { vis: false };
     let rot = Math.sin(t * 0.0013) * 0.025, sx = 1, sy = 1;
@@ -49,6 +55,19 @@ const ECHT3D_TEILE = {
     return { rot, sx, sy };
   },
 };
+function echt3dEiDa(id) { const e = typeof EGGS !== 'undefined' && EGGS[id]; return !!e && (!e.when || e.when()); }
+// Gezeichnete Überlagerungen, die im Echtzeit-3D ein echtes Modell haben, dort nicht mehr malen (Klickflächen bleiben)
+function echt3dHatModell(raum, key) { return !!(ECHT3D.mod && ECHT3D.mod.hatRequisit && echt3dOn(ROOMS[raum]) && ECHT3D.mod.hatRequisit(raum, key)); }
+if (typeof EGG_DRAW !== 'undefined') {
+  for (const id of ['hamster', 'mumie', 'saber', 'clawd']) {
+    const kind = EGGS[id] && EGGS[id].kind, malen = kind && EGG_DRAW[kind];
+    if (malen) EGG_DRAW[kind] = (c, e, t) => echt3dHatModell(e.room, e.id) ? undefined : malen(c, e, t);
+  }
+}
+{
+  const band = ROOMS.labor && ROOMS.labor.objs.find(o => o.id === 'absperrband');
+  if (band && band.draw) { const malen = band.draw; band.draw = (c, t) => echt3dHatModell('labor', 'absperrband') ? undefined : malen(c, t); }
+}
 // Raumbild: im 3D-Raum das Echtzeit-Bild, sonst wie bisher
 const drawBgOhne3D = drawBg;
 drawBg = function (room) {
