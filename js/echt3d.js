@@ -280,7 +280,7 @@ function drawEcht3dParkour() {
       const drag = dreh; dreh = null; stopEvent(e);
       if (!drag.moved) {
         const p = toLogical(e); G.mouse.x = p.x; G.mouse.y = p.y;
-        if (drag.button === 0 && ECHT3D.mod.freiAktiv() && raumKlickAt(p, true)) return;
+        if (ECHT3D.mod.freiAktiv() && raumKlickAt(p, true)) return;
         onClick(p.x, p.y, drag.button === 2);
       }
       return;
