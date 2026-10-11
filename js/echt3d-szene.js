@@ -256,7 +256,8 @@ function pose(rig, kw) {
   return Object.assign({ aR: -0.12, aL: 0.12, eR: 0.12, eL: 0.12, xR: -ab, xL: ab, tR: 0, tL: 0, kR: 0, kL: 0, fR: 1, fL: 1, lean: 0, roll: 0 }, kw);
 }
 const POSES = {   // Blender-Werte aus figur_frames.py
-  talk0: { aR: -0.7, eR: 0.65 }, talk1: { aR: -0.18, eR: 0.6 },
+  talk0: { aR: -1.0, eR: 0.95, aL: 0.7, eL: 0.9, lean: 0.08, roll: 0.06 },
+  talk1: { aR: -0.2, eR: 0.55, aL: 1.25, eL: 0.75, lean: -0.04, roll: -0.06 },
   reach: { aR: -1.35, eR: 0.15 }, pick: { aR: -0.9, eR: 0.2, aL: 0.3, tR: -0.75, tL: -0.75, kR: 1.5, kL: 1.5, lean: 0.32 },
   pull: { aR: -1.1, eR: 0.5, lean: -0.1, tR: -0.25, tL: -0.25, kR: 0.5, kL: 0.5 }, wave: { xR: -2.45, aR: 0.15, eR: 0.3 },
   pour: { aR: -1.25, eR: 0.7, aL: -1.05, eL: 0.6, lean: 0.06 }, eat: { aR: -1.85, eR: 0.0, xR: 0.74 }, think: { aR: -1.61, eR: 0.15, xR: 0.89 },
@@ -578,7 +579,7 @@ export function frame(t, actors, pxW, ctx) {
       const m = f.nodes[f.rig.mouth];
       if (m) {   // Mund: Silbentakt beim Reden; bei Staunen/Ekel fällt die Kinnlade richtig herunter
         const b = f.base[f.rig.mouth].s, ki = mf ? (mf.kinn || 0) : 0;
-        const offen = a.talking ? 1 + 2.2 * Math.abs(Math.sin(t * 0.018)) : 1;
+        const offen = a.talking ? 1 + 3.0 * Math.abs(Math.sin(t * 0.018)) : 1;
         m.scale.set(b.x * (1 + ki * 0.25), b.y * Math.max(offen, 1 + 3.6 * ki), b.z);
       }
       f.blinkT -= dt; const blink = f.blinkT < 0;

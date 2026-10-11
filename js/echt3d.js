@@ -86,7 +86,7 @@ function toggleEcht3d() {
 }
 
 // ---------- Freie 3D-Kamera: 360° drehen, neigen und zoomen ----------
-const echt3dAktiv = () => G.settings.echt3d && ECHT3D.rooms[viewRoomId()] && ECHT3D.mod && ECHT3D.mod.ready && !ECHT3D.mod.failed(viewRoomId()) && ECHT3D.mod.hasRoom(viewRoomId()) && !cx.isPix;
+const echt3dAktiv = () => G.screen === 'game' && !!G.state && G.settings.echt3d && ECHT3D.rooms[viewRoomId()] && ECHT3D.mod && ECHT3D.mod.ready && !ECHT3D.mod.failed(viewRoomId()) && ECHT3D.mod.hasRoom(viewRoomId()) && !cx.isPix;
 function echt3dSteuerungErlaubt() { return G.screen === 'game' && !G.menu && !G.busy && !G.dialog && !G.inIntro; }
 function echt3dKameraSteuerungErlaubt() { return G.screen === 'game' && !G.menu && !G.inIntro; }
 let echt3dHinweisKamera = false;
@@ -346,6 +346,7 @@ function drawEcht3dParkour() {
   window.addEventListener('keyup', e => tasten.delete(e.key.toLowerCase()));
   window.addEventListener('blur', () => { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; });
   setInterval(() => {
+    if (G.screen !== 'game' || !G.state) { tasten.clear(); letzterKurs = null; echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; return; }
     const raum = viewRoomId(), kurs = aktiv() && G.screen === 'game' && ECHT3D_PARKOUR.has(raum) ? raum : null;
     if (kurs && kurs !== letzterKurs) note(kurs === 'stockwerk'
       ? 'Sprungpassage: über die Buttertoast-Stufen durch die Treppenlücke. Fehltritte setzen dich aufs letzte Brett zurück.'

@@ -310,8 +310,8 @@ function arm(c, px, py, ang, sleeve, sleeveLen, skin, len, w, hr = 5.5, bend = 0
 function knee(a, side) { return a.walking || a.climb ? Math.max(0, side * Math.cos(a.phase || 0)) * (a.climb ? 1.4 : a.run ? 1.1 : 0.8) : 0; }
 function elbow(a, side) { return 0.12 + (a.walking ? Math.max(0, side * Math.cos(a.phase || 0)) * 0.55 : 0) + (a.talking && side > 0 ? 0.5 : 0); }
 // beim Reden gestikuliert der vordere Arm
-function talkArm(a, t) { return a.talking ? Math.sin(t * 0.0075 + (a.seed || 0) * 2) * 0.32 - 0.32 : 0; }
-function nod(a, t) { return a.talking ? Math.sin(t * 0.013) * 1.3 : 0; }
+function talkArm(a, t) { return a.talking ? Math.sin(t * 0.0085 + (a.seed || 0) * 2) * 0.62 - 0.18 : 0; }
+function nod(a, t) { return a.talking ? Math.sin(t * 0.014 + (a.seed || 0)) * 3.4 + Math.sin(t * 0.028 + (a.seed || 0) * 0.5) * 1.1 : 0; }
 // Aktions-Posen (Greifen, Aufheben, Graben, Essen, Seil ziehen, Gießen, Hebel): Überschreibungen für Arme, Knie, Hocke
 function pose(a, t) {
   const p = a.pose; if (!p) return null;
@@ -339,7 +339,8 @@ function pose(a, t) {
 function poseAng(base, po, key) { return po && po[key] != null ? base * (1 - po.mix) + po[key] * po.mix : base; }
 // Oberkörper beim Gehen leicht nach vorn neigen (Drehpunkt in der Hüfte)
 function lean(c, a, hipY) {
-  const po = a.pose && pose(a, G.t), l = (a.walking ? (a.run ? 0.08 : 0.035) : 0) + (po && po.lean ? po.lean * po.mix : 0);
+  const po = a.pose && pose(a, G.t), talk = a.talking ? Math.sin(G.t * 0.006 + (a.seed || 0)) * 0.07 : 0;
+  const l = (a.walking ? (a.run ? 0.08 : 0.035) : 0) + (po && po.lean ? po.lean * po.mix : 0) + talk;
   if (l) { c.translate(0, hipY); c.rotate(l); c.translate(0, -hipY); }
 }
 // Hocke aus der Kniebeugung: Oberschenkel kippt um -b/2 nach vorn, Unterschenkel zurück – die Hüfte sinkt genau so weit, dass der Fuß am Boden bleibt
@@ -353,7 +354,11 @@ function mouthOpen(a, t) {
   if (syllables(a)) return !!a.talking && t - a.vowelT >= 0 && t - a.vowelT < 68;
   return !!a.talking && Math.floor(t / 115) % 2 === 0;
 }
-function mouthK(a, t) { return syllables(a) && t - a.vowelT < 68 ? MOUTH[a.vowel] || MOUTH[0] : MOUTH[0].map(() => 1); }
+function mouthK(a, t) {
+  const shape = syllables(a) && t - a.vowelT < 68 ? MOUTH[a.vowel] || MOUTH[0] : MOUTH[0].map(() => 1);
+  const emphasis = a.talking ? 1.32 : 1;
+  return shape.map(k => k * emphasis);
+}
 function blinking(a, t) { return ((t + (a.seed || 0) * 1777) % 3900) < 130; }
 // Pupille – oder ein geschlossenes Lid, wenn die Figur gerade blinzelt
 function pupil(c, a, t, x, y, r) {
@@ -427,8 +432,8 @@ function mood(a, t) {
   else if (a.pose && !a.pose.fidget) m = -0.35;
   if (a.pose && a.pose.kind === 'think') q = 1;
   if (typeof G !== 'undefined' && G.flash && G.flash[a.id] && G.t - G.flash[a.id] < 1600) m = 1.3;
-  const wob = m > 0 && a.talking ? Math.sin(t * 0.02) * 0.8 : 0;
-  return { lift: m * 3.4 + wob, worry: m < 0 ? -m : 0, q };
+  const wob = a.talking ? Math.sin(t * 0.018 + (a.seed || 0)) * 2.1 : 0;
+  return { lift: m * 5.2 + wob, worry: m < 0 ? -m * 1.25 : 0, q };
 }
 // Augenbrauen-Paar: Mittelpunkte der Augen x1/x2, Höhe y, Breite w
 function brows(c, a, t, x1, x2, y, w, col, lw) {

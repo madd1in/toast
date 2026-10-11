@@ -40,7 +40,7 @@ Sound.onSfx(n => {
 function mimikForm(a, t) {
   let sx = 1, sy = 1, lift = 0, rot = 0, jx = 0, pop = 0, kinn = 0, k = 0;
   const m = a.mimik;
-  if (a.talking) { const b = Math.sin(t * 0.021 + (a.seed || 0) * 5); sy += b * 0.026; sx -= b * 0.016; }   // federt im Silbentakt
+  if (a.talking) { const b = Math.sin(t * 0.021 + (a.seed || 0) * 5); sy += b * 0.058; sx -= b * 0.034; rot += b * 0.012; }   // deutliches Silben-Squash-&-Stretch mit lebendigem Oberkörper
   if (m) {
     k = (t - m.t0) / MIMIK_DAUER[m.kind];
     if (k < 0 || k >= 1) a.mimik = null;
