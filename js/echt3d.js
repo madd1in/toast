@@ -9,7 +9,7 @@
 // ============================================================
 const ECHT3D = {
   mod: null, loading: false, failed: false,
-  rooms: { hafen: 1, landeplatz: 1, keller: 1, lobby: 1, labor: 1, konferenz: 1, gasthaus: 1, garten1776: 1, fgarten: 1, vorraum: 1, thron: 1, testkammer: 1, mars: 1, stockwerk: 1, dachboden: 1 },
+  rooms: { hafen: 1, landeplatz: 1, keller: 1, lobby: 1, labor: 1, konferenz: 1, gasthaus: 1, garten1776: 1, fgarten: 1, vorraum: 1, thron: 1, testkammer: 1, mars: 1, stockwerk: 1, dachboden: 1, uhrwerk: 1 },
 };
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
 function echt3dOn(room) { return echt3dWanted(room) && !!ECHT3D.mod && ECHT3D.mod.ready && !ECHT3D.mod.failed(room.id) && ECHT3D.mod.hasRoom(room.id); }
@@ -35,6 +35,8 @@ const ECHT3D_TEILE = {
     if (G.treeGrowT) { const x = Math.max(0, Math.min(1, (G.t - G.treeGrowT) / 1800)); k = x < 1 ? (1 - Math.pow(1 - x, 3)) * (1 + Math.sin(x * Math.PI) * 0.08) : 1; }
     return { vis: k > 0.001, sx: Math.max(0.001, k), sy: Math.max(0.001, k) };
   },
+  uhrtuer: () => ({ offen: flagOn('uhrGang') ? 1 : 0, seit: Date.now() - ((G.state && G.state.flags.uhrGangT) || 0) }),   // Lobby: Standuhr als Geheimtür (js/uhrwerk.js)
+  uhrKristall: () => ({ vis: !(G.state && G.state.crystals.uhrwerk) }),
   clown: t => {
     if (flagOn('clownPlatt')) return { vis: false };
     let rot = Math.sin(t * 0.0013) * 0.025, sx = 1, sy = 1;
@@ -71,9 +73,18 @@ drawBg = function (room) {
 const drawActorOhne3D = drawActor;
 drawActor = function (a, room) {
   if (echt3dOn(room) && !echt3dBild(a) && ECHT3D.mod.owns(a, room.id)) {
-    if (typeof mimikDeko === 'function') {
+    const sc = roomScale(room, a.y), frei = ECHT3D.mod.freiAktiv();
+    const hoch = (a._z3d || 0) * 104 * sc;   // Höhe über dem Boden (Sprung, Plattform) in Spiel-Einheiten
+    if (typeof mimikDeko === 'function' && !frei) {   // Comic-Zeichen nur in der Spielkamera – beim freien Drehen säßen sie daneben
       const f = mimikForm(a, G.t);
-      if (f.m) { const sc = roomScale(room, a.y); cx.save(); cx.translate(a.x, a.y); cx.scale(sc * (a.dir < 0 ? -1 : 1), sc); mimikDeko(cx, a, G.t, f); cx.restore(); }
+      if (f.m) { cx.save(); cx.translate(a.x, a.y - hoch); cx.scale(sc * (a.dir < 0 ? -1 : 1), sc); mimikDeko(cx, a, G.t, f); cx.restore(); }
+    }
+    const zq = a._zischT3d ? (performance.now() - a._zischT3d) / 380 : 1;
+    if (zq < 1 && !frei) {   // Losflitzen: Speed-Linien hinter der Figur
+      cx.save(); cx.globalAlpha = Math.sin(zq * Math.PI) * 0.85; cx.strokeStyle = '#ffffff'; cx.lineWidth = 2.4; cx.lineCap = 'round';
+      const hinten = a.dir < 0 ? 1 : -1;
+      for (let i = 0; i < 4; i++) { const y = a.y - hoch - (30 + i * 26) * sc, x = a.x + hinten * (26 + (i % 2) * 10) * sc; cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x + hinten * (40 + zq * 30) * sc, y); cx.stroke(); }
+      cx.restore();
     }
     return;
   }
@@ -109,8 +120,34 @@ function echt3dPadZurueck() {
   ECHT3D.mod.freiZurueck();
   return true;
 }
-const ECHT3D_PARKOUR = new Set(['dachboden', 'stockwerk']);
-function echt3dParkourAktiv() { return echt3dAktiv() && ECHT3D_PARKOUR.has(viewRoomId()) && echt3dSteuerungErlaubt(); }
+// Direktsteuerung wie in Psychonauts 2: in JEDEM Echtzeit-3D-Raum laufen (WASD/Pfeile, linker Stick, Touch-Stick) und
+// springen (Leertaste, A, Touch-Knopf); E bzw. A über einem Hotspot benutzt das Nächste. Klicken bleibt wie gehabt.
+// Die Räume mit echten Sprungpassagen bekommen beim Betreten einen eigenen Hinweis.
+const ECHT3D_PARKOUR = new Set(['dachboden', 'stockwerk', 'uhrwerk']);
+function echt3dParkourAktiv() { return echt3dAktiv() && echt3dSteuerungErlaubt(); }
+// nächster Hotspot in Reichweite der Figur (Spiel-Einheiten am Boden), für E / A
+function echt3dNaechsterHotspot() {
+  const p = me(), room = ROOMS[viewRoomId()]; if (!p || !room) return null;
+  let best = null, bd = 150;
+  for (const o of room.objs) {
+    if (!isVisible(o)) continue;
+    const w = typeof o.walk === 'function' ? o.walk() : o.walk || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10];
+    const d = Math.hypot(w[0] - p.x, (w[1] - p.y) * 1.6);
+    if (d < bd) { bd = d; best = o; }
+  }
+  for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId() && a.talk) {
+    const d = Math.hypot(a.x - p.x, (a.y - p.y) * 1.6) - 30;
+    if (d < bd) { bd = d; best = { npc: a }; }
+  }
+  return best;
+}
+function echt3dBenutzen() {
+  const h = echt3dNaechsterHotspot();
+  if (!h) { note('Hier ist nichts in Reichweite. Lauf näher an etwas heran.'); return; }
+  if (h.npc) return runSentence('talk', 'a:' + h.npc.id);
+  const k = 'o:' + h.id;
+  return runSentence(defaultVerb(k) || 'look', k);
+}
 function echt3dSetzBewegungsziel(a, dx, dy, sek) {
   if (!a || a.room !== viewRoomId() || !ECHT3D.mod || !ECHT3D.mod.bewegungsZiel) return false;
   const kraft = Math.hypot(dx, dy); if (kraft < 0.025) return false;
@@ -128,6 +165,7 @@ function echt3dPadBewegen(x, y, dt) {
 }
 function echt3dPadSpringen() {
   if (!echt3dParkourAktiv()) return false;
+  if (G.pointer === 'pad' && G.mouse.x >= 0 && hitScene(G.mouse.x, G.mouse.y)) return false;   // Cursor auf einem Hotspot: A klickt
   ECHT3D.mod.huepfen(me());
   return true;
 }
@@ -170,7 +208,7 @@ function drawEcht3dParkour() {
   const mitte = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
   const zweiFinger = () => geste && geste.ids.slice(0, 2).map(id => finger.get(id)).filter(Boolean);
   const parkourKnopf = p => {
-    if (!ECHT3D_PARKOUR.has(viewRoomId()) || (!COARSE && G.pointer !== 'touch')) return null;
+    if (!COARSE && G.pointer !== 'touch') return null;
     const y = SH - 66, r = 54;
     if (Math.hypot(p.x - 92, p.y - y) <= r) return 'laufen';
     if (Math.hypot(p.x - (W - 92), p.y - y) <= r) return 'springen';
@@ -329,35 +367,62 @@ function drawEcht3dParkour() {
   }, true);
 }
 
-// ---------- Jump'n'Run-Abschnitte: Kistenparcours und Toaststufen ----------
+// ---------- Direktsteuerung und Jump'n'Run-Abschnitte (Toaststufen, Kistenparcours, Uhrwerk) ----------
 {
   const tasten = new Set();
   const aktiv = echt3dAktiv;
-  let letzterKurs = null;
+  let letzterRaum = null, standSeit = 0, hinweisDirekt = false;
   window.addEventListener('keydown', e => {
-    if (!aktiv() || !echt3dSteuerungErlaubt() || !ECHT3D_PARKOUR.has(viewRoomId())) return;
+    if (!aktiv() || !echt3dSteuerungErlaubt()) return;
     const k = e.key.toLowerCase();
     if (k === ' ') {
       if (G.screen === 'game' && !G.busy && !G.dialog) { e.stopImmediatePropagation(); e.preventDefault(); ECHT3D.mod.huepfen(me()); }
+      return;
+    }
+    if (k === 'e' && !e.repeat) {
+      if (G.screen === 'game' && !G.busy && !G.dialog) { e.stopImmediatePropagation(); e.preventDefault(); echt3dBenutzen(); }
       return;
     }
     if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { tasten.add(k); e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
   window.addEventListener('keyup', e => tasten.delete(e.key.toLowerCase()));
   window.addEventListener('blur', () => { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; });
+  const KURS = {
+    stockwerk: 'Sprungpassage: über die Buttertoast-Stufen durch die Treppenlücke. Fehltritte setzen dich aufs letzte Brett zurück.',
+    dachboden: 'Kistenparcours: lauf mit WASD, spring mit Leertaste und hol dir den Chrono-Kristall oben auf dem Stapel.',
+    uhrwerk: 'Uhrwerk: Zahnrad – Kolben – Zahnrad. Spring im richtigen Takt und duck dich nicht vorm Pendel weg … sondern drum herum!',
+  };
   setInterval(() => {
-    if (G.screen !== 'game' || !G.state) { tasten.clear(); letzterKurs = null; echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; return; }
-    const raum = viewRoomId(), kurs = aktiv() && G.screen === 'game' && ECHT3D_PARKOUR.has(raum) ? raum : null;
-    if (kurs && kurs !== letzterKurs) note(kurs === 'stockwerk'
-      ? 'Sprungpassage: über die Buttertoast-Stufen durch die Treppenlücke. Fehltritte setzen dich aufs letzte Brett zurück.'
-      : 'Kistenparcours: lauf mit WASD, spring mit Leertaste und hol dir den Chrono-Kristall oben auf dem Stapel.');
-    letzterKurs = kurs;
+    if (G.screen !== 'game' || !G.state) { tasten.clear(); letzterRaum = null; echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; return; }
+    const raum = viewRoomId(), drei = aktiv();
+    if (drei && raum !== letzterRaum) {
+      if (KURS[raum]) note(KURS[raum]);
+      else if (!hinweisDirekt) { hinweisDirekt = true; note('Echtzeit-3D: WASD oder linker Stick laufen, Leertaste/A springt, E benutzt das Nächste. Ziehen dreht die Kamera um dich.'); }
+    }
+    letzterRaum = drei ? raum : null;
     const p = me();
-    if (p && p._respawned3d) { p._respawned3d = false; if (G.pointer === 'touch' && navigator.vibrate) navigator.vibrate(35); note('Daneben! Du bist am letzten Sprungbrett wieder aufgetaucht.'); }
-    if (!kurs || !echt3dSteuerungErlaubt()) { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; }
-    if (!aktiv() || !kurs || !p || p.room !== raum) return;
-    const dx = (tasten.has('d') || tasten.has('arrowright') ? 1 : 0) - (tasten.has('a') || tasten.has('arrowleft') ? 1 : 0) + (kurs && echt3dVirtualStick.aktiv ? echt3dVirtualStick.x : 0);
-    const dy = (tasten.has('s') || tasten.has('arrowdown') ? 1 : 0) - (tasten.has('w') || tasten.has('arrowup') ? 1 : 0) + (kurs && echt3dVirtualStick.aktiv ? echt3dVirtualStick.y : 0);
+    if (p && p._gebonkt3d) {   // vom Riesenpendel erwischt: BONK, Schreck-Take, Rumble
+      p._gebonkt3d = false;
+      Sound.sfx('boulder'); Sound.sfx('rubber'); shake(320, 6); rumble(260, 0.7, 0.9);
+      if (typeof mimikStart === 'function') mimikStart(p, 'schreck');
+      note('BOOOING! Das Pendel hat dich erwischt.');
+    }
+    if (p && p._respawned3d) {
+      p._respawned3d = false;
+      if (G.pointer === 'touch' && navigator.vibrate) navigator.vibrate(35);
+      if (typeof mimikStart === 'function') mimikStart(p, 'schwindel');
+      Sound.sfx('chirp');
+      note('Daneben! Du bist am letzten Sprungbrett wieder aufgetaucht – mit Sternchen um den Kopf.');
+    }
+    if (p && p._zischT3d && p._zischT3d !== p._zischGesehen) {   // Losflitzen: Staubwolke und Zisch (nur nach einer Pause, sonst nervt es)
+      p._zischGesehen = p._zischT3d;
+      if (performance.now() - standSeit > 700) { Sound.sfx('whoosh', panX(p.x)); puff(p.x - p.dir * 14, p.y - 4, '#e8dcc8', 6, { vy: 30, vx: -p.dir * 90, r: 3, max: 420, spread: 8 }); }
+    }
+    if (p && !p.walking) standSeit = standSeit || performance.now(); else standSeit = 0;
+    if (!drei || !echt3dSteuerungErlaubt()) { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; }
+    if (!drei || !p || p.room !== raum) return;
+    const dx = (tasten.has('d') || tasten.has('arrowright') ? 1 : 0) - (tasten.has('a') || tasten.has('arrowleft') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.x : 0);
+    const dy = (tasten.has('s') || tasten.has('arrowdown') ? 1 : 0) - (tasten.has('w') || tasten.has('arrowup') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.y : 0);
     if (dx || dy) echt3dSetzBewegungsziel(p, dx, dy, 0.09);
   }, 90);
 }

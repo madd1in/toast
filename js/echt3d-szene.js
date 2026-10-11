@@ -169,7 +169,8 @@ async function ladeRaum(id) {
   for (const s of Object.values(data.sprites || {})) for (const n of s.teile) beweglich.add(n);
   prep(H, { cast: false, receive: true, ohne: new Set(data.ohneKontur || []) });
   H.traverse(o => { if (o.isMesh && beweglich.has(nm(o))) o.castShadow = true; });
-  const stat = mergeStatic(H, n => beweglich.has(n));
+  const extraRe = EXTRA_BEWEGLICH[id];
+  const stat = mergeStatic(H, n => beweglich.has(n) || !!(extraRe && extraRe.test(n)));
   scene.add(H); scene.add(stat);
   sprungToastStufen(scene, id);
   const nodes = new Map();
@@ -183,7 +184,8 @@ async function ladeRaum(id) {
     const achse = new THREE.Vector3(0, 0, -1).applyQuaternion(pq.invert()).normalize();
     sprites[k] = { o, q0: o.quaternion.clone(), s0: o.scale.clone(), achse };
   }
-  return { scene, camera, data, nodes, sprites };
+  const extra = RAUM_EXTRAS[id] ? RAUM_EXTRAS[id](scene, H) : null;
+  return { scene, camera, data, nodes, sprites, extra };
 }
 
 async function ladeHafen() {
@@ -247,13 +249,14 @@ function addFig(id, root, rig) {
 
 // ---------- Gelenke der Helden (wie figur_rig.py / figur_frames.py, stufenlos) ----------
 const RIGS = {
-  bernard: { P: 'BR_', hz: 0.98, sole: 0.14, thigh: 0.43, shin: 0.41, stride: 0.26, knee: 0.75, abd: 0.06, mouth: 'RB_Mund', eyes: ['RB_PupilleL', 'RB_PupilleR'] },
+  bernard: { P: 'BR_', hz: 0.98, sole: 0.14, thigh: 0.43, shin: 0.41, stride: 0.26, knee: 0.75, abd: 0.06, mouth: 'RB_Mund', eyes: ['RB_PupilleL', 'RB_PupilleR'],
+    rest: { tR: -0.12, tL: -0.12, kR: 0.24, kL: 0.24, lean: 0.11 } },   // Nerd-Haltung wie im Original: Knie leicht eingeknickt, Oberkörper vorgebeugt
   hoagie: { P: 'HR_', hz: 0.62, sole: 0.16, thigh: 0.24, shin: 0.22, stride: 0.5, knee: 0.9, abd: 0.24, mouth: 'RH_Mund', eyes: ['RH_AugeL', 'RH_AugeR', 'RH_PupilleL', 'RH_PupilleR'] },
   laverne: { P: 'LR_', hz: 0.72, sole: 0.10, thigh: 0.32, shin: 0.30, stride: 0.37, knee: 0.8, abd: 0.08, mouth: 'RL_Mund', eyes: ['RL_AugeL', 'RL_AugeR', 'RL_PupilleL', 'RL_PupilleR'] },
 };
 function pose(rig, kw) {
   const ab = rig.abd;
-  return Object.assign({ aR: -0.12, aL: 0.12, eR: 0.12, eL: 0.12, xR: -ab, xL: ab, tR: 0, tL: 0, kR: 0, kL: 0, fR: 1, fL: 1, lean: 0, roll: 0 }, kw);
+  return Object.assign({ aR: -0.12, aL: 0.12, eR: 0.12, eL: 0.12, xR: -ab, xL: ab, tR: 0, tL: 0, kR: 0, kL: 0, fR: 1, fL: 1, lean: 0, roll: 0 }, rig.rest || {}, kw);
 }
 const POSES = {   // Blender-Werte aus figur_frames.py
   talk0: { aR: -1.0, eR: 0.95, aL: 0.7, eL: 0.9, lean: 0.08, roll: 0.06 },
@@ -276,6 +279,9 @@ const POSES = {   // Blender-Werte aus figur_frames.py
   ekel0: { xR: -0.8, aR: -2.3, eR: 1.3, lean: -0.12 },
   ekel1: { xR: -0.95, aR: -2.55, eR: 0.9, lean: -0.12 },
   peinlich: { aR: -1.9, eR: 1.5, xR: 0.5, lean: 0.06 },
+  // Schwindel nach dem Absturz: Arme baumeln, der Oberkörper eiert im Kreis, die Knie wackeln
+  schwindel0: { xR: -0.5, aR: 0.35, eR: 0.2, xL: 0.5, aL: -0.35, eL: 0.2, kR: 0.3, kL: 0.1, lean: 0.14, roll: 0.16 },
+  schwindel1: { xR: -0.3, aR: 0.2, eR: 0.3, xL: 0.3, aL: -0.2, eL: 0.3, kR: 0.1, kL: 0.3, lean: -0.06, roll: -0.16 },
 };
 function mix(a, b, k) { const o = {}; for (const key in a) o[key] = typeof a[key] === 'number' ? a[key] + (b[key] - a[key]) * k : a[key]; return o; }
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -298,7 +304,7 @@ function applyPose(fig, p) {
 function walkPose(r, ph) {
   const s = Math.sin(ph), c = Math.cos(ph), st = r.stride, kn = r.knee;
   return pose(r, { tR: -st * s, tL: st * s, kR: Math.max(0, c) * kn, kL: Math.max(0, -c) * kn, fR: 1 - 0.4 * Math.max(0, c), fL: 1 - 0.4 * Math.max(0, -c),
-    aR: -0.12 + 0.4 * s, aL: 0.12 - 0.4 * s, eR: 0.12 + Math.max(0, -s) * 0.5, eL: 0.12 + Math.max(0, s) * 0.5, lean: 0.035 });
+    aR: -0.12 + 0.4 * s, aL: 0.12 - 0.4 * s, eR: 0.12 + Math.max(0, -s) * 0.5, eL: 0.12 + Math.max(0, s) * 0.5, lean: 0.035 + (r.rest ? r.rest.lean || 0 : 0) });
 }
 
 // ---------- Spiel-Koordinaten <-> Welt ----------
@@ -367,15 +373,19 @@ function kameraFahren(R, t, actors) {
   const o = R.orbit;
   if (o && (o.zurueck || Math.abs(o.yaw) > 1e-4 || Math.abs(o.pitch) > 1e-4 || Math.abs(o.dist) > 1e-4)) {
     if (o.zurueck) {
-      if (o.rueckT0 == null) { o.rueckT0 = t; o.start = { yaw: o.yaw, pitch: o.pitch, dist: o.dist }; }
+      if (o.rueckT0 == null) { o.rueckT0 = t; o.start = { yaw: o.yaw, pitch: o.pitch, dist: o.dist, w: o.w || 0 }; }
       const k = Math.min(1, (t - o.rueckT0) / 650), e = 1 - Math.pow(1 - k, 3);
-      o.yaw = o.start.yaw * (1 - e); o.pitch = o.start.pitch * (1 - e); o.dist = o.start.dist * (1 - e);
-      if (k >= 1) { o.yaw = o.pitch = o.dist = 0; o.zurueck = false; o.rueckT0 = null; }
-    }
-    if (!R.ziel) { R.ziel = toWorld(R.home, 480, 300, new THREE.Vector3()); R.basis = R.home.position.clone().sub(R.ziel); R.basisLen = Math.max(2, R.basis.length()); }
+      o.yaw = o.start.yaw * (1 - e); o.pitch = o.start.pitch * (1 - e); o.dist = o.start.dist * (1 - e); o.w = o.start.w * (1 - e);
+      if (k >= 1) { o.yaw = o.pitch = o.dist = o.w = 0; o.zurueck = false; o.rueckT0 = null; }
+    } else o.w = Math.min(1, (o.w || 0) + 0.04);
+    if (!R.zielHome) { R.zielHome = toWorld(R.home, 480, 300, new THREE.Vector3()); R.ziel = R.zielHome.clone(); R.basis = R.home.position.clone().sub(R.zielHome); R.basisLen = Math.max(2, R.basis.length()); }
+    // Folgekamera wie in Psychonauts: der Drehpunkt gleitet zur gesteuerten Figur (auf Brusthöhe) und folgt ihr
+    R.ziel.copy(R.zielHome);
+    if (R.fokus) { _an.copy(R.fokus); R.ziel.lerp(_an, 0.85 * (o.w || 0)); }
     const pitchAxis = _rt.set(1, 0, 0).applyQuaternion(R.home.quaternion).applyAxisAngle(_yA, o.yaw);
+    const ran = 1 - 0.55 * (o.w || 0) * Math.min(1, Math.abs(o.yaw) / 1.1);   // je weiter gedreht, desto näher an die Figur – sonst stünde die Kamera vor der Seitenwand
     _ab.copy(R.basis).applyAxisAngle(_yA, o.yaw).applyAxisAngle(pitchAxis, o.pitch)
-      .multiplyScalar(1 + o.dist / R.basisLen);
+      .multiplyScalar(Math.max(0.3, ran + o.dist / R.basisLen));
     cam.position.copy(R.ziel).add(_ab);
     if (cam.position.y < 0.45) cam.position.y = 0.45;
     cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, R.ziel, _yA));
@@ -417,6 +427,109 @@ export function pick(gx, gy, id) {
   return { x: (punkt.x + 1) / 2 * GW, y: (1 - punkt.y) / 2 * GH };
 }
 
+// ---------- Raum-Extras: Teile, die das Spiel selbst bewegt oder dazubaut ----------
+const EXTRA_BEWEGLICH = {
+  uhrwerk: /^(Notsteg|Riesenpendel|Kolben|Zahnrad(\d+|[AB]|Tief\d+)|Zifferblatt|Zeiger(Gross|Klein))$/,
+  lobby: /^L_Uhr$/,
+};
+// Uhrwerk-Takt (Sekunden): Kolben-Oberkante und Pendelwinkel – Bild und Sprungphysik nutzen dieselben Formeln
+let uhrS = 0;   // Spielzeit des letzten Bildes in Sekunden – Takt für Bild und Physik
+const kolbenOben = s =>0.75 + 0.4 * Math.sin(s * Math.PI * 2 / 3.4);
+const pendelWinkel = s => 0.78 * Math.sin(s * Math.PI * 2 / 2.8);
+const PENDEL = { x: 0.8, y: 10.0, z: 6.0, l: 4.8 };
+function pendelBob(s) {   // Mittelpunkt der Pendelscheibe in Blender-Metern und Schwungrichtung (±1)
+  const w = pendelWinkel(s);
+  return [PENDEL.x + PENDEL.l * Math.sin(w), PENDEL.y, PENDEL.z - PENDEL.l * Math.cos(w), Math.cos(s * Math.PI * 2 / 2.8) >= 0 ? 1 : -1];
+}
+function toonMat(farbe) {
+  const m = new THREE.MeshToonMaterial({ color: farbe, gradientMap: GRAD });
+  m.userData.outlineParameters = { thickness: 0.004, color: INK, alpha: 1, visible: true };
+  return m;
+}
+function leuchtMat(farbe) { const m = new THREE.MeshBasicMaterial({ color: farbe }); m.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: true }; return m; }
+const _zA = new THREE.Vector3(0, 0, 1);
+const RAUM_EXTRAS = {
+  // Uhrwerk: Zahnräder drehen sich, die Zeiger laufen rückwärts, der Kolben pumpt, das Riesenpendel schwingt,
+  // die Kerzen flackern; der Notsteg (nur fürs vorgerenderte Bild) verschwindet, ein echter Kristall schwebt
+  uhrwerk(scene, H) {
+    const knoten = n => { let r = null; H.traverse(o => { if (!r && nm(o) === n) r = o; }); return r; };
+    const raeder = [];
+    H.traverse(o => {
+      const m = /^Zahnrad(\d+|[AB]|Tief\d+)$/.exec(nm(o)); if (!m) return;
+      const v = /[AB]/.test(m[1]) ? 0.5 : /Tief/.test(m[1]) ? 0.9 : 0.35;
+      raeder.push({ o, q0: o.quaternion.clone(), v: raeder.length % 2 ? -v : v });
+    });
+    const zeiger = ['ZeigerGross', 'ZeigerKlein'].map(knoten).filter(Boolean).map((o, i) => ({ o, q0: o.quaternion.clone(), v: i ? 0.05 : 0.6 }));
+    const kolben = knoten('Kolben'), pendel = knoten('Riesenpendel'), steg = knoten('Notsteg');
+    const pq0 = pendel ? pendel.quaternion.clone() : null;
+    if (steg) steg.visible = false;
+    const kerzen = []; scene.traverse(o => { if (o.isPointLight) kerzen.push({ o, i0: o.intensity, ph: Math.random() * 9 }); });
+    const kristall = new THREE.Group();
+    const kk = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), leuchtMat(0x9af0ff));
+    kk.scale.set(0.75, 1.25, 0.75); kristall.add(kk);
+    kristall.add(new THREE.PointLight(0x7fe8ff, 3.2, 3.5, 2));
+    kristall.position.copy(bl(1.7, 10.6, 2.3)); scene.add(kristall);
+    return {
+      tick(s, ctx) {
+        for (const r of raeder) r.o.quaternion.copy(r.q0).multiply(_q.setFromAxisAngle(_yA, s * r.v));
+        for (const z of zeiger) z.o.quaternion.copy(z.q0).multiply(_q.setFromAxisAngle(_zA, s * z.v));   // rückwärts!
+        if (kolben) kolben.position.y = kolbenOben(s);
+        if (pendel) pendel.quaternion.copy(pq0).multiply(_q.setFromAxisAngle(_zA, pendelWinkel(s)));
+        const sp = ctx.sprites && ctx.sprites.uhrKristall ? ctx.sprites.uhrKristall() : { vis: true };
+        kristall.visible = sp.vis !== false;
+        kristall.rotation.y = s * 1.6; kristall.position.y = 2.3 + Math.sin(s * 3.5) * 0.07;
+        for (const k of kerzen) k.o.intensity = k.i0 * (0.85 + 0.15 * Math.sin(s * 17 + k.ph) * Math.sin(s * 7.3 + k.ph * 2));
+      },
+    };
+  },
+  // Lobby: die Standuhr schwingt als Geheimtür auf (Scharnier rechts), dahinter Gang mit Kerzenschein;
+  // dazu die Treppe ins Obergeschoss hinter dem Empfang, an der Rückwand entlang nach links hinauf
+  lobby(scene, H) {
+    let uhr = null; H.traverse(o => { if (!uhr && nm(o) === 'L_Uhr') uhr = o; });
+    const teile = {};
+    if (uhr) {
+      uhr.updateMatrixWorld(true);
+      const p = new THREE.Vector3().setFromMatrixPosition(uhr.matrixWorld);
+      const angel = new THREE.Group(); angel.position.set(p.x + 0.43, 0, p.z); scene.add(angel); angel.attach(uhr);
+      const gang = new THREE.Group(); gang.visible = false;
+      const loch = new THREE.Mesh(new THREE.BoxGeometry(0.86, 2.75, 0.06), toonMat(0x0c0610));
+      loch.position.set(p.x, 1.375, p.z - 0.38); gang.add(loch);
+      for (let i = 0; i < 4; i++) {
+        const st = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.07, 0.16), toonMat(i % 2 ? 0x3a2416 : 0x4a2e1a));
+        st.position.set(p.x, 0.12 + i * 0.3, p.z - 0.3); gang.add(st);
+      }
+      const schein = new THREE.PointLight(0xffa040, 4, 3.5, 2); schein.position.set(p.x, 0.6, p.z - 0.1); gang.add(schein);
+      scene.add(gang);
+      Object.assign(teile, { angel, gang, schein });
+    }
+    const holz = toonMat(0x6a4a30), holzH = toonMat(0x755539), holzD = toonMat(0x4a3220), treppe = new THREE.Group();
+    for (let i = 0; i < 15; i++) {
+      const x = -4.35 - i * 0.31, h = 0.28 * (i + 1);
+      const st = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 1.15), i % 2 ? holz : holzH);
+      st.position.copy(bl(x, 12.6, h - 0.05)); st.castShadow = st.receiveShadow = true; treppe.add(st);
+      const wange = new THREE.Mesh(new THREE.BoxGeometry(0.31, h - 0.1, 0.08), holzD);
+      wange.position.copy(bl(x, 12.02, (h - 0.1) / 2)); treppe.add(wange);
+      if (i % 2 === 0) { const stab = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.9, 6), holzD); stab.position.copy(bl(x, 12.06, h + 0.4)); treppe.add(stab); }
+    }
+    const lauf = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.07, 0.09), holz);
+    lauf.position.copy(bl(-6.52, 12.06, 2.95)); lauf.rotation.z = -Math.atan2(0.28, 0.31); treppe.add(lauf);
+    const pfosten = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.25, 0.12), holzD); pfosten.position.copy(bl(-4.2, 12.06, 0.62)); treppe.add(pfosten);
+    const knauf = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toonMat(0xc8a04a)); knauf.position.copy(bl(-4.2, 12.06, 1.3)); treppe.add(knauf);
+    scene.add(treppe);
+    return {
+      tick(s, ctx) {
+        if (!teile.angel) return;
+        const st = ctx.sprites && ctx.sprites.uhrtuer ? ctx.sprites.uhrtuer() : { offen: 0, seit: 1e9 };
+        const k = st.offen ? Math.min(1, st.seit / 700) : 0;
+        const e = k < 1 ? 1 - Math.pow(1 - k, 3) + Math.sin(k * Math.PI) * 0.12 : 1;   // Cartoon-Überschwinger beim Aufschwingen
+        teile.angel.rotation.y = 1.25 * e;
+        teile.gang.visible = !!st.offen;
+        teile.schein.intensity = 3.4 + Math.sin(s * 15) * 0.5;
+      },
+    };
+  },
+};
+
 // ---------- Hüpfen wie in Psychonauts 2: Plattformen, Schwerkraft, Sprung ----------
 // Sprungflächen in Blender-Weltmetern: [x0, x1, y0, y1, Oberkante].
 // Im Dachboden sind es Kisten, Koffer und Truhe; im Obergeschoss schweben Toaststufen über dem Treppenloch.
@@ -427,8 +540,9 @@ const STOCKWERK_STUFEN = [
 export const PLATTFORMEN = {
   dachboden: [[2.4, 3.5, 14.8, 15.6, 0.62], [-4.5, -2.3, 14.8, 16.0, 1.28], [4.4, 7.4, 12.9, 14.7, 1.06], [-0.1, 1.4, 15.0, 16.2, 0.84], [-6.7, -5.7, 14.3, 15.3, 0.26]],
   stockwerk: STOCKWERK_STUFEN,
+  uhrwerk: [[-2.45, -0.75, 9.35, 11.05, 0.45], [-0.6, 0.6, 9.0, 10.2, kolbenOben], [0.82, 2.58, 9.72, 11.48, 0.8]],   // Zahnrad A, Hubkolben (Höhe läuft mit), Zahnrad B
 };
-const SPRUNGLOCH = { stockwerk: [[2.7, 8.35, 7.0, 11.3]] };
+const SPRUNGLOCH = { stockwerk: [[2.7, 8.35, 7.0, 11.3]], uhrwerk: [[-2.6, 2.8, 5.0, 20.0]] };
 function imSprungloch(id, x, y) { return (SPRUNGLOCH[id] || []).some(p => x >= p[0] && x <= p[1] && y >= p[2] && y <= p[3]); }
 function sprungToastStufen(scene, id) {
   if (id !== 'stockwerk') return;
@@ -449,14 +563,22 @@ function sprungToastStufen(scene, id) {
 const G3D = 18.0, SPRUNG_V0 = 6.8;   // Sprunghöhe ≈ 1,3 m: reicht für Kisten und die Toaststufen
 function plattformHoehe(id, x, y, z) {
   let h = imSprungloch(id, x, y) ? -4 : 0;
-  for (const p of PLATTFORMEN[id] || []) if (x >= p[0] - 0.25 && x <= p[1] + 0.25 && y >= p[2] - 0.25 && y <= p[3] + 0.25 && p[4] <= z + 0.3) h = Math.max(h, p[4]);
+  const s = uhrS;
+  for (const p of PLATTFORMEN[id] || []) {
+    const top = typeof p[4] === 'function' ? p[4](s) : p[4];
+    if (x >= p[0] - 0.25 && x <= p[1] + 0.25 && y >= p[2] - 0.25 && y <= p[3] + 0.25 && top <= z + 0.3) h = Math.max(h, top);
+  }
   return h;
 }
-export function huepfen(a) {   // Sprung zünden – nur, wenn die Figur steht (Boden oder Plattform)
-  if ((a._vz3d || 0) !== 0) return false;
-  a._vz3d = SPRUNG_V0;
-  a._jumpT3d = performance.now();
+export function huepfen(a) {   // Sprung zünden – nur, wenn die Figur steht; Tom-&-Jerry-Anlauf: erst 90 ms in die Hocke
+  if ((a._vz3d || 0) !== 0 || a._vorT3d || a._schub3d) return false;
+  a._vorT3d = performance.now();
   return true;
+}
+function sprungAbheben(a, now) {
+  if (!a._vorT3d || now - a._vorT3d < 90) return;
+  a._vorT3d = null; a._vz3d = SPRUNG_V0; a._jumpT3d = now;
+  a._z3d = Math.max(a._z3d || 0, 0.0002);   // in der Luft: ab jetzt rechnet die Schwerkraft
 }
 export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py = Blender-Weltposition der Figur
   let z = a._z3d || 0, vz = a._vz3d || 0;
@@ -467,12 +589,14 @@ export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py 
   z += vz * sek;
   const boden = plattformHoehe(id, px, py, z);
   if (z <= boden && vz <= 0) {
+    if (vz < -2.2) { a._landT3d = performance.now(); a._landV3d = Math.min(1, -vz / 9); }   // Platsch: Squash bei der Landung
     z = boden; a._vz3d = 0;
     if (z > 0.02) a._checkpoint3d = [a.x, a.y, z];
   } else a._vz3d = vz;
   a._z3d = z;
   if (z < -2.4 && a._checkpoint3d) {
     const [x, y, h] = a._checkpoint3d;
+    a._schub3d = null; a._vorT3d = null;
     a.x = x; a.y = y; a.target = null; a.walking = false; a.run = false;
     if (a._res) { const done = a._res; a._res = null; done(false); }
     a._z3d = h; a._vz3d = 0; a._respawned3d = true;
@@ -506,6 +630,8 @@ export function frame(t, actors, pxW, ctx) {
   if (!R.home) kameraLoesen(R);
   kameraFahren(R, t, actors);
   if (R.anim) hafenAnim(R.anim, s);
+  uhrS = s;
+  if (R.extra) R.extra.tick(s, ctx);
   // Zustände: sichtbar, wenn ein eingeschalteter Zustand es zeigt; ausgeblendet, wenn einer es versteckt
   if (R.data.zustaende) {
     _vis.clear(); const weg = new Set();
@@ -540,13 +666,70 @@ export function frame(t, actors, pxW, ctx) {
     const mf = typeof mimikForm === 'function' ? mimikForm(a, t) : null;
     f.holder.position.copy(p);
     if (mf && (mf.lift || mf.jx)) { const upm = unitsPerMeter(R.home, p); if (mf.lift) f.holder.position.y += mf.lift / upm; if (mf.jx) f.holder.position.x += mf.jx / upm; }   // Sprung und Zittern in Spiel-Pixeln
-    if (f.rig && a.id === curId() && ((a._vz3d || 0) !== 0 || (a._z3d || 0) > 0.0001 || imSprungloch(ctx.id, p.x, p.z))) {   // gesteuerte Figur: Sprung, Plattform oder Treppenloch
-      const z = schwerkraft(a, dt, ctx.id, p.x, p.z);
+    const ich = !!f.rig && a.id === curId(), now = performance.now();
+    if (ich) {
+      sprungAbheben(a, now);
+      if (a._schub3d) {   // vom Pendel erwischt: im hohen Bogen quer durch den Raum (Tom & Jerry lässt grüßen)
+        const sb = a._schub3d;
+        if (now - sb.t0 > 900) a._schub3d = null;
+        else {
+          p.x += sb.vx * Math.min(0.05, dt / 1000);
+          const q = p.clone().project(R.home);
+          a.x = Math.max(16, Math.min(944, (q.x + 1) * GW / 2)); a.y = (1 - q.y) * GH / 2; a.target = null; a.walking = false;
+          p.copy(toWorld(R.home, a.x, a.y, _v));
+          f.holder.position.copy(p);
+        }
+      }
+    }
+    if (ich && ((a._vz3d || 0) !== 0 || (a._z3d || 0) > 0.0001 || imSprungloch(ctx.id, p.x, -p.z))) {   // gesteuerte Figur: Sprung, Plattform oder Loch
+      const z = schwerkraft(a, dt, ctx.id, p.x, -p.z);
       if (a._respawned3d) { p.copy(toWorld(R.home, a.x, a.y, _v)); f.holder.position.copy(p); }
       if (z > 0.0001) f.holder.position.y += z;
       else if (z < -0.0001) f.holder.position.y += z;
     }
-    f.holder.scale.set(mf ? mf.sx : 1, mf ? mf.sy : 1, mf ? mf.sx : 1);
+    if (ich) {
+      a._pos3d = [p.x, -p.z, a._z3d || 0];   // Blender-Weltlage für Sammelobjekte (js/uhrwerk.js)
+      const fz = Math.max(0, a._z3d || 0) + 0.95;   // Folgekamera: weich hinterher, Höhe gedämpft (Sprünge wackeln nicht)
+      if (!R.fokus) R.fokus = new THREE.Vector3(p.x, fz, p.z);
+      R.fokus.x += (p.x - R.fokus.x) * Math.min(1, dt / 160); R.fokus.z += (p.z - R.fokus.z) * Math.min(1, dt / 160); R.fokus.y += (fz - R.fokus.y) * Math.min(1, dt / 400);
+      if (ctx.id === 'uhrwerk' && !a._schub3d && now - (a._bonkT3d || 0) > 1600) {   // das Riesenpendel trifft
+        const [bx, by, bz, dir] = pendelBob(uhrS), z = a._z3d || 0;
+        if (Math.abs(p.x - bx) < 0.62 && Math.abs(-p.z - by) < 0.85 && Math.abs(z + 0.9 - bz) < 0.95) {
+          a._bonkT3d = now; a._schub3d = { vx: dir * 5.5, t0: now }; a._vz3d = 5.2; a._z3d = Math.max(z, 0.0002); a._vorT3d = null;
+          if (a._res) { const done = a._res; a._res = null; done(false); }
+          a._gebonkt3d = true;   // js/echt3d.js: BONK, Schreck-Take, Sternchen
+        }
+      }
+    }
+    // Cartoon-Verformung: Mimik × Sprung-Hocke × Strecken im Steigen × Platsch bei der Landung × federnder Gang
+    let sx = mf ? mf.sx : 1, sy = mf ? mf.sy : 1, kipp = 0;
+    if (ich) {
+      if (a._vorT3d) { const q = Math.min(1, (now - a._vorT3d) / 90); sy *= 1 - 0.3 * q; sx *= 1 + 0.22 * q; }
+      else if ((a._vz3d || 0) > 0.5) { const q = Math.min(1, a._vz3d / SPRUNG_V0); sy *= 1 + 0.24 * q; sx *= 1 - 0.14 * q; }
+      if (a._landT3d) {
+        const q = (now - a._landT3d) / 360;
+        if (q < 1) { const w = Math.exp(-q * 4) * Math.cos(q * 15) * (0.22 + 0.32 * (a._landV3d || 0)); sy *= 1 - w; sx *= 1 + w * 0.85; }
+        else a._landT3d = null;
+      }
+    }
+    if (a.walking && f.rig) {
+      const b = Math.abs(Math.sin(f.walkPh));
+      f.holder.position.y += b * (a.run ? 0.085 : 0.045);
+      sy *= 1 + (b - 0.5) * 0.07; sx *= 1 - (b - 0.5) * 0.045;
+      if (!f.lief) { f.zischT = now; if (ich && a.run) a._zischT3d = now; }   // Losflitzen: erst Rückenlage mit wirbelnden Beinen, dann Vorlage
+    }
+    f.lief = a.walking;
+    if (f.zischT && a.run) {
+      const q = (now - f.zischT) / 420;
+      if (q < 1) {
+        const zurueck = q < 0.3 ? Math.sin(q / 0.3 * Math.PI / 2) : Math.max(0, 1 - (q - 0.3) / 0.12);
+        const vor = q < 0.3 ? 0 : Math.sin(Math.min(1, (q - 0.3) / 0.12) * Math.PI / 2) * (1 - (q - 0.3) / 0.7);
+        kipp = -0.3 * zurueck + 0.24 * vor;
+        if (q < 0.3) f.walkPh += dt * 0.06;   // Beine wirbeln auf der Stelle
+      }
+      else f.zischT = null;
+    }
+    f.holder.scale.set(sx, sy, sx);
     // Blickrichtung: beim Gehen zum Ziel, sonst leicht zur Kamera gedreht wie die Sprites
     let want = a.dir < 0 ? -Math.PI + 0.56 : -0.56;
     if (a.walking && a.target) {
@@ -556,17 +739,22 @@ export function frame(t, actors, pxW, ctx) {
     }
     let dy = want - f.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     f.yaw += dy * Math.min(1, dt / 120);
-    f.holder.rotation.set(0, f.yaw, mf && mf.rot ? -mf.rot : 0, 'YXZ');   // Mimik-Neigung nach vorn (Wut) oder hinten (Verlegenheit)
+    const dreh = a._schub3d ? (now - a._schub3d.t0) * 0.03 : 0;   // getroffen: Figur wirbelt um sich selbst
+    f.holder.rotation.set(0, f.yaw + dreh, (mf && mf.rot ? -mf.rot : 0) - kipp, 'YXZ');   // Mimik-Neigung, Losflitzen
     if (f.rig) {
       let p0 = pose(f.rig, {});
-      if (Math.abs(a._vz3d || 0) > 0.15) p0 = pose(f.rig, { aR: -2.3, eR: 0.24, aL: 2.3, eL: 0.24, tR: -0.52, tL: -0.52, kR: 0.88, kL: 0.88, lean: -0.1 });
+      if (a._vorT3d) p0 = pose(f.rig, { aR: 0.5, eR: 0.4, aL: -0.5, eL: 0.4, tR: -0.7, tL: -0.7, kR: 1.3, kL: 1.3, lean: 0.25 });   // Hocke, Arme nach hinten
+      else if ((a._vz3d || 0) < -3.2 || a._schub3d) {   // freier Fall: Arme rudern wie Windmühlen, Beine strampeln
+        const w = t * 0.03;
+        p0 = pose(f.rig, { aR: -1.6 + Math.sin(w) * 1.4, eR: 0.3, aL: 1.6 + Math.sin(w + 1.6) * 1.4, eL: 0.3, xR: -1.2, xL: 1.2, tR: Math.sin(w * 1.3) * 0.7, tL: -Math.sin(w * 1.3) * 0.7, kR: 0.6, kL: 0.6, lean: -0.15 });
+      } else if (Math.abs(a._vz3d || 0) > 0.15) p0 = pose(f.rig, { aR: -2.3, eR: 0.24, aL: 2.3, eL: 0.24, tR: -0.52, tL: -0.52, kR: 0.88, kL: 0.88, lean: -0.1 });
       else if (a.walking) p0 = walkPose(f.rig, f.walkPh);
       else if (a.pose && (POSES[a.pose.kind] || POSES[a.pose.kind + '0'])) {
         const k = a.pose.kind, el = (t - a.pose.t0) / Math.max(1, a.pose.dur), env = Math.sin(Math.min(1, el) * Math.PI);
         const tgt = POSES[k] ? pose(f.rig, POSES[k]) : mix(pose(f.rig, POSES[k + '0']), pose(f.rig, POSES[k + '1']), 0.5 + 0.5 * Math.sin(t * 0.012));
         p0 = mix(p0, tgt, Math.min(1, env * 1.6));
       } else if (a.talking) p0 = mix(pose(f.rig, POSES.talk0), pose(f.rig, POSES.talk1), 0.5 + 0.5 * Math.sin(t * 0.007));
-      else p0.lean = 0.012 * Math.sin(t * 0.0021);   // Atmen
+      else p0.lean += 0.012 * Math.sin(t * 0.0021);   // Atmen
       if (mf && mf.m && !a.walking) {   // Geste zur Mimik, mit Aus- und Einschwingen (Einzelposen und pendelnde Paare wie ekel0/ekel1)
         const ein = POSES[mf.m.kind], p0p = POSES[mf.m.kind + '0'], p1p = POSES[mf.m.kind + '1'];
         if (ein || (p0p && p1p)) {

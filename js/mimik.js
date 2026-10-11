@@ -11,7 +11,7 @@
 //  Rätsel gelöst = Freudensprung, Fehlschlag = Schreck.
 //  Alles als Verformung und 2D-Zeichnung über den vorhandenen Figurenbildern, in HD wie im Pixel-Modus.
 // ============================================================
-const MIMIK_DAUER = { schreck: 1600, wut: 2100, freude: 1700, staunen: 1400, peinlich: 1800, ekel: 1500 };
+const MIMIK_DAUER = { schreck: 1600, wut: 2100, freude: 1700, staunen: 1400, peinlich: 1800, ekel: 1500, schwindel: 2400 };
 function mimikVon(text) {
   const s = String(text || '').replace(/^[„"“*\s…]+/, '');
   const laut = (s.match(/\b[A-ZÄÖÜ]{3,}\b/g) || []).filter(w => !/^(GUT|BÖSE|LILA|KLO|CHRONO|KAFFEE|UNITREE|EHRENGAST|DR|ED|FRED)$/.test(w)).length;
@@ -20,6 +20,7 @@ function mimikVon(text) {
   if (/(\?!|!\?)/.test(s) || /^(HUCH|Huch|OH NEIN|Oh nein|AAAH|AHH+|Hilfe|VORSICHT|Oh\. Oh)/.test(s)) return 'schreck';
   if (/^(JAAA|JA!|Juhu|JUHU|Hurra|HURRA|Wunderbar|Großartig|Hervorragend|Exzellent|Perfekt|FERTIG|Erfolg|Bravo|WOOO|Yeah|YES|ENDLICH|Endlich|Haha|Prima|Toll!|Super!|Geschafft|Jippie)/.test(s)) return 'freude';
   if (/^(Whoa|Wow|WOW|Wahnsinn|Donnerwetter|Ooh|Uiii|Oha|Aha|Alter!)/.test(s)) return 'staunen';
+  if (/^(Autsch|AUTSCH|Aua|AUA|Uff|Mir ist schwindelig|Sterne)/.test(s)) return 'schwindel';
   if (/^(Igitt|Bäh|Ih+h|Würg)|widerlich|ekelhaft/.test(s)) return 'ekel';
   if (laut >= 2) return /!/.test(s) ? 'schreck' : 'staunen';
   return null;
@@ -77,6 +78,10 @@ function mimikForm(a, t) {
       rot = -0.055 * Math.min(1, k * 3) + Math.sin(t * 0.05) * 0.012;
       sy = 1 - 0.03 * Math.min(1, k * 3); sx = 1.01;
       kinn = 0.35 * Math.sin(k * Math.PI);
+    } else if (m.kind === 'schwindel') {   // nach dem Bonk: der Körper eiert im Kreis, die Knie geben nach, langsam klart es auf
+      const weg = 1 - k * 0.6;
+      rot = Math.sin(t * 0.011) * 0.11 * weg; jx = Math.cos(t * 0.011) * 4 * weg;
+      sy = 1 - 0.06 * weg + Math.sin(t * 0.022) * 0.025 * weg; sx = 1 + 0.03 * weg;
     } else if (m.kind === 'peinlich') {   // in sich zusammensinken, wie ein Luftballon ohne Luft
       sy = 1 - 0.11 * Math.sin(Math.min(1, k * 2.6) * Math.PI / 2); sx = 1.05; rot = -0.05;
     }
@@ -95,6 +100,27 @@ function mimikAugen(c, a, pop, kinn) {
     E(c, x + r * 0.22, y + r * 0.08 + (kinn > 0.4 ? r * 0.18 : 0), r * 0.36, r * 0.42, '#16121e', 0);   // bei Staunen schauen die Pupillen aufs gefallene Kinn
     E(c, x + r * 0.05, y - r * 0.38, r * 0.2, r * 0.16, 'rgba(255,255,255,0.95)', 0);
   }
+}
+// Spiralaugen beim Schwindel (wie nach einem Bratpfannen-Treffer)
+function mimikSpirale(c, a, t) {
+  const F = a._fig;
+  if (!F || F.length < 12) return;
+  for (const i of [10, 8]) {
+    const x = F[i], y = F[i + 1];
+    E(c, x, y, 6.5, 6.5, '#ffffff', 1.6);
+    c.save(); c.strokeStyle = '#16121e'; c.lineWidth = 1.4; c.beginPath();
+    for (let w = 0; w < 14; w++) { const ang = w * 0.6 + t * 0.012 * (i === 10 ? 1 : -1), r = w * 0.42; c[w ? 'lineTo' : 'moveTo'](x + Math.cos(ang) * r, y + Math.sin(ang) * r); }
+    c.stroke(); c.restore();
+  }
+}
+// kleiner gelber Vogel, der um den Kopf kreist
+function voegelchen(c, x, y, s, t) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  E(c, 0, 0, 5, 4.2, '#ffd23a', 1.3); E(c, 3.2, -3.2, 3.2, 3, '#ffd23a', 1.3);
+  P(c, [5.8, -3.2, 8.4, -2.4, 5.8, -1.8], '#ff8a2a', 0.8);
+  E(c, 3.8, -3.8, 0.8, 0.9, '#16121e', 0);
+  P(c, [-2, -1, -5, -4 + Math.sin(t * 0.04) * 3, -3.5, 1], '#ffe680', 1);
+  c.restore();
 }
 // Kinnlade: aufgerissener Mund beim Staunen (Anker F[6]/F[7] aus figuren3d.js)
 function mimikMund(c, a, kinn, pop) {
@@ -182,6 +208,13 @@ function mimikDeko(c, a, t, f) {
     c.save(); c.translate(sx * 0.65 + 5, top + 32); c.rotate(-0.25 + Math.sin(t * 0.03) * 0.3);   // wedelnde Hand direkt vor der Nase
     E(c, 0, 0, 7.5, 5.5, '#f2c8a0', 1.6); for (let i = 0; i < 4; i++) L(c, [i * 3.6 - 5.4, -3, i * 3.6 - 5.4 + Math.sin(t * 0.05 + i) * 2, -10], 2.4, '#f2c8a0');
     c.restore();
+  } else if (m.kind === 'schwindel') {   // Sternchen und Vögelchen kreisen um den Kopf
+    c.save(); c.globalAlpha = Math.min(1, (1 - k) * 3);
+    for (let i = 0; i < 5; i++) {
+      const w = t * 0.006 + i / 5 * Math.PI * 2, x = sx * 0.3 + Math.cos(w) * 32, y = top + 6 + Math.sin(w) * 8;
+      if (i % 2) voegelchen(c, x, y, 0.9, t); else stern(c, x, y, 5.5, '#ffe066');
+    }
+    c.restore();
   } else if (m.kind === 'peinlich') {   // sechs Schweißtropfen als Fontäne, Wangen glühen blau
     for (let i = 0; i < 6; i++) {
       const q = (k * 1.6 + i / 6) % 1, ang = -1.25 + i * 0.28, d = 12 + Math.sin(q * Math.PI) * 30;
@@ -200,7 +233,7 @@ for (const kind of Object.keys(CHAR)) {
     const f = mimikForm(a, t);
     if (f.sx === 1 && f.sy === 1 && !f.lift && !f.rot && !f.jx && !f.m) return drawn(c, a, t);
     c.save(); c.translate(f.jx, -f.lift); c.rotate(f.rot); c.scale(f.sx, f.sy);
-    try { drawn(c, a, t); mimikAugen(c, a, f.pop, f.kinn); mimikMund(c, a, f.kinn, f.pop); } finally { c.restore(); }
+    try { drawn(c, a, t); mimikAugen(c, a, f.pop, f.kinn); mimikMund(c, a, f.kinn, f.pop); if (f.m && f.m.kind === 'schwindel') mimikSpirale(c, a, t); } finally { c.restore(); }
     mimikDeko(c, a, t, f);
   };
 }

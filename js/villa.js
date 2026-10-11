@@ -5,7 +5,7 @@
 //  verschlossenen Türen, Treppenabgang, Leiter zum Dachboden) und der Dachboden selbst (Kisten, Teleskop,
 //  Weihnachtsbaum, Truhe, Spinnweben). Beide Räume sind Blender-Bauten (art/blender/raum_build.py:
 //  build_stockwerk, build_dachboden) – vorgerendert und als Echtzeit-3D (img/3d/), jeweils mit Chrono-Kristall.
-//  Die Treppe in der Lobby ist ein gemalter Anbau (wie der Aufzug im Vorraum); im Echtzeit-3D bleibt es beim Hotspot.
+//  Die Treppe in der Lobby ist im vorgerenderten Bild ein gemalter Anbau; im Echtzeit-3D baut js/echt3d-szene.js sie echt auf.
 // ============================================================
 
 // ---------- Obergeschoss: Diele ----------
@@ -75,7 +75,7 @@ ROOMS.lobby.objs.push({
   id: 'treppe_hoch', name: 'Treppe hinauf', rect: [60, 138, 130, 118], walk: [125, 372], dv: 'walk', exit: ['stockwerk', 820, 368, -1],
   look: 'Eine breite Holztreppe ins Obergeschoss. Die dritte Stufe knarzt – aus Prinzip. Und die achte auch. Es ist eine sehr prinzipienfreudige Treppe.',
   draw(c) {
-    if (typeof in3d === 'function' && in3d()) return;   // im Echtzeit-3D bleibt es beim Hotspot (die Szene hat keine Treppe)
+    if (typeof echt3dOn === 'function' && echt3dOn(ROOMS.lobby)) return;   // im Echtzeit-3D steht eine echte Treppe in der Szene (js/echt3d-szene.js)
     c.save();
     for (let i = 0; i < 7; i++) {   // Stufen leicht perspektivisch nach oben
       const y = 350 - i * 28, x0 = 62 + i * 6, w = 128 - i * 9;

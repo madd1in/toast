@@ -31,7 +31,7 @@ def comic(im):
 
 if __name__ == '__main__':
     import os
-    for name in ('hafen', 'landeplatz', 'keller', 'mars', 'mars_froh'):
+    for name in ('hafen', 'landeplatz', 'keller', 'mars', 'mars_froh', 'uhrwerk'):
         if os.path.exists(f'art/render/raum_{name}.png'):
             Image.open(f'art/render/raum_{name}.png').convert('RGB').save(f'img/raum_{name}.jpg', quality=86, optimize=True, progressive=True)
     comic(Image.open('art/render/raum_testkammer_ue')).save('img/raum_testkammer.jpg', quality=86, optimize=True, progressive=True)

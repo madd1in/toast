@@ -8,7 +8,7 @@ from PIL import Image
 NAME = sys.argv[1]
 # Spielhöhe h für den Scheitel bei top Metern (240 px pro Meter gerendert); welche Bilder die Figur braucht
 CFG = {
-    'bernard': dict(top=2.05, h=214, skip=[]),
+    'bernard': dict(top=2.32, h=242, skip=[]),   # höherer Kopf mit Antennen-Strähnen (bernard_schick.py)
     'hoagie': dict(top=1.72, h=186, skip=['climb0', 'climb1', 'climb2', 'climb3', 'glasses', 'yawn']),
     'laverne': dict(top=1.96, h=212, skip=['dig0', 'dig1', 'rope0', 'rope1', 'airguitar0', 'airguitar1', 'belly0', 'belly1', 'pour', 'glasses']),
     # Nebenfiguren: Scheitel (mit Haarbüscheln, Haube, Dreispitz) auf die Höhe der gezeichneten Figur

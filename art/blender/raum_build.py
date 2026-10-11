@@ -5,7 +5,7 @@
 # Maßstab 1 (104 Spiel-Einheiten pro Meter), Hinterkante (y = 330) im Maßstab 0,8 – wie in den gezeichneten Räumen.
 # Schreibt img/raum_<name>.jpg (1920 × 880) und art/render/raum_<name>.json (Bildpunkte von Ankern für Hotspots).
 import bpy, bmesh, json, math, os, random, sys, importlib
-from mathutils import Vector
+from mathutils import Vector, Matrix
 from bpy_extras.object_utils import world_to_camera_view
 sys.path.insert(0, REPO + '/art/blender')
 import figur_lib
@@ -959,7 +959,161 @@ def build_dachboden(SC):
     return {'Kisten': KISTEN, 'Truhe': TR, 'Teleskop': TL, 'Dachfenster': bpy.data.objects['Dachfenster'], 'Baum': bpy.data.objects['Baum'], 'Spinne': bpy.data.objects['Spinne']}
 
 
-ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12')),
+# ---------------------------------------------------------------- Uhrwerk-Schacht (Geheimgang hinter der Standuhr)
+def zahnrad(B, name, loc, R, dicke, zaehne, mat, parent=None, rot=(0, 0, 0)):
+    """Zahnrad um die lokale z-Achse (Ursprung in der Mitte – das Spiel dreht es um genau diese Achse)."""
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=max(24, zaehne * 2), radius1=R, radius2=R, depth=dicke)
+    for i in range(zaehne):
+        a = 2 * math.pi * i / zaehne
+        m = Matrix.Translation(((R + 0.09) * math.cos(a), (R + 0.09) * math.sin(a), 0)) @ Matrix.Rotation(a, 4, 'Z')
+        bmesh.ops.create_cube(bm, size=1, matrix=m @ Matrix.Diagonal((0.22, 0.2 + R * 0.08, dicke * 0.96, 1)))
+    o = B.obj(name, bm, mat, parent, loc, rot, smooth=False, bevel=0.012)
+    return o
+
+
+def build_uhrwerk(SC):
+    """Der Gang hinter der Standuhr der Lobby: ein Schacht voller Messing-Uhrwerk. Links kommt man aus dem Uhrkasten,
+    rechts führt eine Steintreppe in den Keller. Dazwischen klafft der Abgrund des Getriebes – im Echtzeit-3D springt
+    man über liegende Zahnräder und einen Hubkolben, während ein Riesenpendel quer durch den Weg schwingt.
+    Der Notsteg aus Brettern gilt nur fürs vorgerenderte Bild (im Echtzeit-3D ist er ausgeblendet)."""
+    B = Builder(SC)
+    STEIN = tex_toon('T_SchachtMauer', 'mauer.png', 0.45, hi=0.25)
+    DIEL = tex_toon('T_SchachtDielen', 'dielen_dunkel.png', 0.5)
+    MESS, MESSD = toon('T_UhrMessing', '#d8a83a', hi=0.75), toon('T_UhrMessingDunkel', '#8a6422', hi=0.4)
+    KUPF, STAHL = toon('T_UhrKupfer', '#c46a3a', hi=0.6), toon('T_UhrStahl', '#6a7488', hi=0.6)
+    HOLZ, DUNKEL = toon('T_UhrHolz', '#6a3a1c', hi=0.35), toon('T_SchachtDunkel', '#0a0610')
+    GLUT = toon('T_SchachtGlut', '#ff9a3a', hi=0.9)
+    # Böden links und rechts, dazwischen der Abgrund (x -2,6 … 2,8)
+    box(B, 'BodenLinks', (-6.3, 12.5, -0.15), (7.4, 13.0, 0.3), DIEL, bevel=0.0)
+    box(B, 'BodenRechts', (6.4, 12.5, -0.15), (7.2, 13.0, 0.3), DIEL, bevel=0.0)
+    for k, x in ((-1, -2.6), (1, 2.8)):   # Kanten mit Messingleiste
+        box(B, f'Kante{k}', (x - k * 0.05, 12.5, -0.02), (0.1, 13.0, 0.08), MESSD, bevel=0.0)
+        box(B, f'Abbruch{k}', (x + k * 0.04, 12.5, -2.2), (0.08, 13.0, 4.2), STEIN, bevel=0.0)
+    box(B, 'Abgrund', (0.1, 12.5, -6.0), (5.4, 13.0, 0.2), DUNKEL, bevel=0.0)
+    ld = bpy.data.lights.new('Licht_Glut', 'POINT'); ld.energy, ld.color, ld.shadow_soft_size = 60, (1.0, 0.55, 0.2), 1.0
+    ld.use_custom_distance, ld.cutoff_distance = True, 8
+    lo = bpy.data.objects.new('Licht_Glut', ld); SC.collection.objects.link(lo); lo.location = (0.1, 11.0, -3.5)
+    for i, (x, y, z, r) in enumerate(((-1.2, 13.0, -2.4, 1.5), (1.4, 11.2, -3.6, 1.2), (0.0, 15.0, -1.6, 1.8))):   # tief unten mahlt das Getriebe
+        zahnrad(B, f'ZahnradTief{i}', (x, y, z), r, 0.25, 14, MESSD if i % 2 else KUPF)
+    B.sphere('GlutTief', (0.1, 12.0, -5.7), (2.4, 4.0, 0.3), GLUT, None)
+    # Wände: Rückwand mit Riesenzifferblatt von hinten, Seitenwände
+    box(B, 'Rueckwand', (0, 15.2, 3.3), (24, 0.4, 7.4), STEIN, bevel=0.0)
+    for k in (-1, 1):
+        box(B, f'Seitenwand{k}', (k * 9.9, 12, 3.3), (0.3, 10.4, 7.4), STEIN, bevel=0.0)
+    box(B, 'Decke', (0, 12, 6.9), (24, 12, 0.3), DUNKEL, bevel=0.0)
+    ZB = B.empty('Zifferblatt', (0.6, 14.95, 3.7))   # das Riesenzifferblatt von hinten: Zahlen spiegelverkehrt, Zeiger drehen rückwärts
+    B.cone('ZifferblattScheibe', -0.06, 0.06, 1.95, 1.95, toon('T_Ziffernscheibe', '#f2e6c8', hi=0.8), ZB, seg=48, rot=(math.pi / 2, 0, 0), bevel=0.0)
+    for i in range(12):
+        a = i / 12 * 2 * math.pi
+        r0, r1 = (1.45, 1.8) if i % 3 else (1.3, 1.8)
+        B.rod(f'Ziffer{i}', (math.sin(a) * r0, -0.08, math.cos(a) * r0), (math.sin(a) * r1, -0.08, math.cos(a) * r1), 0.05 if i % 3 else 0.09, DUNKEL, ZB, seg=6)
+    for nm_, l, w in (('ZeigerGross', 1.55, 0.07), ('ZeigerKlein', 1.0, 0.1)):
+        zg = B.empty(nm_); zg.parent = ZB; zg.location = (0, -0.14, 0)
+        box(B, nm_ + 'Blatt', (0, 0, l / 2 - 0.15), (w * 2, 0.04, l), toon('T_Zeiger', '#1a1216'), zg, bevel=0.0)
+    B.torus('ZifferblattRing', (0.6, 14.88, 3.7), 2.0, 0.1, MESS, None, rot=(math.pi / 2, 0, 0), seg=48, sseg=8)
+    zb = ZB
+    # große Wandzahnräder (das Spiel dreht sie), Achsen zur Kamera
+    WAND = [(-2.3, 14.5, 1.3, 0.7, 10, KUPF), (4.4, 14.6, 4.0, 1.4, 18, MESS), (2.9, 14.5, 1.5, 0.6, 9, MESSD), (-4.6, 14.6, 6.0, 0.9, 12, MESSD)]
+    for i, (x, y, z, r, n, m) in enumerate(WAND):
+        zahnrad(B, f'Zahnrad{i}', (x, y, z), r, 0.22, n, m, rot=(math.pi / 2, 0, 0))
+        B.sphere(f'ZahnradNabe{i}', (x, y - 0.18, z), (0.18, 0.12, 0.18), STAHL, None)
+    for i, (x0, x1, z) in enumerate(((-9.6, -4.6, 6.0), (4.4, 9.6, 4.0), (-2.3, 2.9, 0.75))):   # Rohre und Wellen
+        B.rod(f'Antriebswelle{i}', (x0, 14.7, z), (x1, 14.7, z), 0.09, STAHL, None)
+    # Castlevania-Hauch: gotische Spitzbogenfenster mit Vollmond, Kandelaber, Blutrote Banner und Ketten
+    EISEN, ROT, ROTD = toon('T_Schmiedeeisen', '#24202c', hi=0.4), toon('T_BannerRot', '#8a1424', hi=0.45), toon('T_BannerRotDunkel', '#4a0a16')
+    for side, x in (('L', -3.7), ('R', 7.8)):
+        G0 = B.empty('Gotik' + side, (x, 14.98, 1.4))
+        box(B, 'GotikGlas' + side, (0, 0, 1.5), (1.5, 0.05, 3.0), toon('T_FensterGotikNacht', '#2a3c7a', hi=0.85), G0, bevel=0.0)
+        for k in (-1, 1):   # Spitzbogen aus zwei schrägen Glasflächen und Steinrahmen
+            box(B, f'GotikBogen{side}{k}', (k * 0.38, 0, 3.32), (0.9, 0.05, 0.9), toon('T_FensterGotikNacht', '#2a3c7a', hi=0.85), G0, rot=(0, k * 0.78, 0), bevel=0.0)
+            box(B, f'GotikRahmen{side}{k}', (k * 0.82, -0.04, 1.6), (0.18, 0.12, 3.3), STEIN, G0, bevel=0.01)
+            box(B, f'GotikRahmenB{side}{k}', (k * 0.42, -0.04, 3.72), (0.16, 0.12, 1.25), STEIN, G0, rot=(0, k * 0.78, 0), bevel=0.01)
+        box(B, f'GotikSprosseV{side}', (0, -0.05, 2.0), (0.07, 0.06, 3.9), EISEN, G0, bevel=0.0)
+        for i in range(3):
+            box(B, f'GotikSprosseH{side}{i}', (0, -0.05, 0.6 + i * 0.95), (1.5, 0.06, 0.06), EISEN, G0, bevel=0.0)
+        for i, col in enumerate(('#c42a3a', '#3a5ad8', '#d8a83a', '#7a2ac4')):   # Buntglas unten
+            box(B, f'GotikBunt{side}{i}', (-0.56 + i * 0.375, -0.03, 0.3), (0.34, 0.03, 0.5), toon(f'T_FensterBunt{i}', col, hi=0.9), G0, bevel=0.0)
+        box(B, f'GotikBank{side}', (0, -0.15, -0.05), (1.9, 0.35, 0.14), STEIN, G0, bevel=0.01)
+    B.sphere('Vollmond', (-3.45, 15.02, 3.9), (0.48, 0.02, 0.48), toon('T_MondLampe', '#fff4d0', hi=1.0), None)
+    for side, x in (('L', -4.3), ('R', 4.6)):   # Kandelaber mit drei Kerzen
+        KA = B.empty('Kandelaber' + side, (x, 12.9, 0.0))
+        B.rod(f'KandelaberStab{side}', (0, 0, 0.0), (0, 0, 1.9), 0.05, EISEN, KA)
+        B.cone(f'KandelaberFuss{side}', 0.0, 0.25, 0.32, 0.06, EISEN, KA, seg=12, bevel=0.0)
+        B.rod(f'KandelaberArm{side}', (-0.45, 0, 1.9), (0.45, 0, 1.9), 0.035, EISEN, KA)
+        for i, dx in enumerate((-0.45, 0.0, 0.45)):
+            h = 0.32 if i == 1 else 0.24
+            B.rod(f'Kerze{side}{i}', (dx, 0, 1.93), (dx, 0, 1.93 + h), 0.055, toon('T_Kerzenwachs', '#f2ead0', hi=0.7), KA)
+            B.sphere(f'KerzenFlamme{side}{i}', (dx, 0, 1.99 + h), (0.05, 0.05, 0.1), toon('T_KerzeFeuer', '#ffc44a', hi=1.0), KA)
+        lk = bpy.data.lights.new('Licht_Kerzen' + side, 'POINT'); lk.energy, lk.color, lk.shadow_soft_size = 45, (1.0, 0.7, 0.35), 0.2
+        lk.use_custom_distance, lk.cutoff_distance = True, 6
+        lko = bpy.data.objects.new('Licht_Kerzen' + side, lk); SC.collection.objects.link(lko); lko.location = (x, 12.7, 2.4)
+    for i, x in enumerate((-9.2, -1.2, 9.4)):   # Banner, oben an Eisenstangen
+        B.rod(f'BannerStange{i}', (x - 0.75, 14.85, 5.6), (x + 0.75, 14.85, 5.6), 0.04, EISEN, None)
+        box(B, f'Banner{i}', (x, 14.88, 4.6), (1.2, 0.04, 2.0), ROT, None, bevel=0.0)
+        for k in (-1, 1):
+            box(B, f'BannerZacke{i}{k}', (x + k * 0.3, 14.88, 3.48), (0.42, 0.04, 0.42), ROT, None, rot=(0, 0.785, 0), bevel=0.0)
+        box(B, f'BannerBorte{i}', (x, 14.86, 5.4), (1.2, 0.05, 0.12), toon('T_BannerGold', '#d8a83a', hi=0.7), None, bevel=0.0)
+        B.sphere(f'BannerWappen{i}', (x, 14.84, 4.7), (0.28, 0.03, 0.34), ROTD, None)
+    for i, (x, y, l) in enumerate(((-1.0, 12.0, 2.6), (2.2, 13.2, 3.4), (-5.0, 11.5, 1.8), (6.6, 11.8, 2.2))):   # Ketten von der Decke
+        for j in range(int(l / 0.22)):
+            B.torus(f'Kette{i}_{j}', (x, y, 6.75 - j * 0.22), 0.09, 0.022, EISEN, None, rot=(0, 0, (j % 2) * 1.57), seg=10, sseg=5)
+    # Eingang links: Rückseite des Uhrkastens, Holztreppe herunter
+    box(B, 'UhrkastenRahmen', (-6.1, 14.85, 2.0), (1.6, 0.3, 4.0), HOLZ, bevel=0.03)
+    box(B, 'UhrkastenTuer', (-6.1, 14.75, 1.85), (1.15, 0.12, 3.4), toon('T_UhrkastenLicht', '#ffd890', hi=0.95), bevel=0.0)
+    for i in range(5):
+        box(B, f'Holzstufe{i}', (-6.1, 14.2 - i * 0.42, 0.9 - i * 0.2), (1.4, 0.42, 0.12), HOLZ, bevel=0.01)
+    # Ausgang rechts: Steintreppe in den Keller, Schild
+    box(B, 'KellerLoch', (5.9, 13.0, -0.02), (2.6, 2.4, 0.06), DUNKEL, bevel=0.0)
+    for i in range(6):
+        box(B, f'Steinstufe{i}', (5.9, 12.0 + i * 0.38, -0.25 - i * 0.3), (2.4, 0.4, 0.14), STEIN, bevel=0.01)
+    box(B, 'KellerSchild', (5.9, 14.95, 0.85), (2.1, 0.08, 0.6), toon('T_SchildKeller', '#e8cf8a'), bevel=0.02)
+    sch = bpy.data.curves.new('KellerSchriftK', 'FONT'); sch.body = 'KELLER'; sch.size = 0.36; sch.align_x = 'CENTER'; sch.align_y = 'CENTER'
+    so = bpy.data.objects.new('KellerSchrift', sch); SC.collection.objects.link(so); so.location = (5.9, 14.88, 0.85); so.rotation_euler = (math.pi / 2, 0, 0)
+    sch.materials.append(toon('T_SchriftRot', '#8a1a1a'))
+    wn = bpy.data.curves.new('WarnSchriftK', 'FONT'); wn.body = 'UHRWERK\nBETRETEN AUF EIGENE ZEIT! - F.'; wn.size = 0.27; wn.align_x = 'CENTER'; wn.align_y = 'CENTER'
+    wo = bpy.data.objects.new('WarnSchrift', wn); SC.collection.objects.link(wo); wo.location = (-6.1, 14.9, 4.5); wo.rotation_euler = (math.pi / 2, 0, 0)
+    wn.materials.append(toon('T_SchriftHell', '#ffe9a8', hi=0.9))
+    box(B, 'WarnSchild', (-6.1, 15.0, 4.5), (3.4, 0.06, 0.8), toon('T_WarnSchild', '#3a2418'), bevel=0.02)
+    # Sprungpassage: liegende Zahnräder (A, B), Hubkolben dazwischen (Oberkanten in Metern wie js/echt3d-szene.js)
+    zahnrad(B, 'ZahnradA', (-1.6, 10.2, 0.45 - 0.11), 0.72, 0.22, 12, MESS)
+    B.rod('AchseA', (-1.6, 10.2, 0.2), (-1.6, 10.2, -5.8), 0.12, STAHL, None)
+    zahnrad(B, 'ZahnradB', (1.7, 10.6, 0.8 - 0.11), 0.78, 0.22, 13, KUPF)
+    B.rod('AchseB', (1.7, 10.6, 0.6), (1.7, 10.6, -5.8), 0.12, STAHL, None)
+    K = B.empty('Kolben', (0.0, 9.6, 0.75))   # Ursprung = Oberkante; das Spiel hebt und senkt ihn
+    box(B, 'KolbenKopf', (0, 0, -0.12), (1.2, 1.2, 0.24), STAHL, K, bevel=0.03)
+    box(B, 'KolbenStreifen', (0, -0.61, -0.12), (1.0, 0.02, 0.08), toon('T_KolbenGelb', '#ffd23a'), K, bevel=0.0)
+    B.rod('KolbenStange', (0, 0, -0.2), (0, 0, -6.0), 0.2, MESS, K)
+    B.rod('Kolbenzylinder', (0.0, 9.6, -2.2), (0.0, 9.6, -6.0), 0.36, MESSD, None)
+    # Riesenpendel quer über der Passage (Drehpunkt oben, das Spiel lässt es schwingen)
+    PD = B.empty('Riesenpendel', (0.8, 10.0, 6.0))
+    B.rod('RiesenpendelStange', (0, 0, 0), (0, 0, -4.4), 0.07, MESSD, PD)
+    B.cone('RiesenpendelScheibe', -4.95, -4.55, 0.62, 0.62, MESS, PD, xy=(0, 0), seg=32, rot=(math.pi / 2, 0, 0), bevel=0.02)
+    bpy.data.objects['RiesenpendelScheibe'].location = (0, 0, -4.8)
+    B.sphere('RiesenpendelGlanz', (0.18, -0.22, -4.62), (0.16, 0.05, 0.12), toon('T_PendelGlanz', '#fff6c8', hi=1.0), PD)
+    B.sphere('Pendelachse', (0.8, 10.0, 6.0), (0.24, 0.24, 0.24), STAHL, None)
+    # Notsteg: im vorgerenderten Bild der Weg über den Abgrund
+    NS = B.empty('Notsteg', (0.1, 11.2, 0.0))
+    for i in range(7):
+        box(B, f'NotstegBrett{i}', (-2.5 + i * 0.84, 0, -0.04), (0.78, 1.3, 0.08), tex_toon('T_Brett', 'holz_steg.png', 0.6), NS, rot=(0, 0, 0.03 * ((i * 7) % 3 - 1)), bevel=0.01)
+    for k in (-1, 1):
+        B.rod(f'NotstegSeil{k}', (-2.9, k * 0.68, 0.55), (3.1, k * 0.68, 0.55), 0.03, toon('T_Seil', '#c8a060'), NS)
+    for i, x in enumerate((-2.9, 3.1)):
+        for k in (-1, 1):
+            B.rod(f'NotstegPfosten{i}{k}', (x, k * 0.68, 0.0), (x, k * 0.68, 0.6), 0.04, HOLZ, NS)
+    # Licht: warme Wandlampen, Glut von unten, kühles Grundlicht
+    for i, x in enumerate((-7.9,)):
+        B.sphere(f'Lampe{i}', (x, 14.8, 3.2), (0.22, 0.16, 0.26), toon('T_LampeGlas', '#ffe9b0', hi=0.95), None)
+        l2 = bpy.data.lights.new(f'Licht_Lampe{i}', 'POINT'); l2.energy, l2.color, l2.shadow_soft_size = 70, (1.0, 0.82, 0.55), 0.3
+        l2.use_custom_distance, l2.cutoff_distance = True, 10
+        lo2 = bpy.data.objects.new(f'Licht_Lampe{i}', l2); SC.collection.objects.link(lo2); lo2.location = (x, 14.0, 3.2)
+    sun(SC, (0.85, 0.2, -0.4), 1.1, (0.62, 0.68, 1.0))   # kühles Mondlicht
+    return {'Eingang': bpy.data.objects['UhrkastenTuer'], 'KellerTreppe': bpy.data.objects['KellerLoch'], 'Pendel': bpy.data.objects['RiesenpendelScheibe'],
+            'Kolben': bpy.data.objects['KolbenKopf'], 'ZahnradA': bpy.data.objects['ZahnradA'], 'ZahnradB': bpy.data.objects['ZahnradB'],
+            'Zifferblatt': zb, 'Wandrad': bpy.data.objects['Zahnrad1'], 'FensterL': bpy.data.objects['GotikGlasL'], 'FensterR': bpy.data.objects['GotikGlasR'], 'KerzeL': bpy.data.objects['KandelaberL'], 'KerzeR': bpy.data.objects['KandelaberR'], 'Schild': bpy.data.objects['WarnSchild'], 'Notsteg': NS}
+
+
+ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'uhrwerk': (build_uhrwerk, ('#2a1c3a', '#08060e')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12')),
            'stockwerk': (build_stockwerk, ('#2a1f46', '#0c0818')), 'dachboden': (build_dachboden, ('#221812', '#0a0604')),
            'testkammer': (build_testkammer, ('#3a4058', '#20242e')),
            'mars': (lambda SC: build_mars(SC, False, echt=bool(globals().get('ECHT'))), ('#f4c496', '#7a3c52')), 'mars_froh': (lambda SC: build_mars(SC, True), ('#f4c496', '#7a3c52'))}
