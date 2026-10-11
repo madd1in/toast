@@ -55,6 +55,24 @@ const ECHT3D_TEILE = {
     return { rot, sx, sy };
   },
 };
+// Raumwechsel im Echtzeit-3D: erst einblenden, wenn die 3D-Szene geladen ist (höchstens 6 s) – kein dunkles Bild mit Figuren
+function echt3dWarten(id) {
+  if (!G.settings.echt3d || G.settings.retro || !ECHT3D.rooms[id] || ECHT3D.failed) return Promise.resolve();
+  echt3dLoad();
+  const t0 = performance.now();
+  return new Promise(fertig => {
+    const pruefen = () => {
+      const m = ECHT3D.mod;
+      if (ECHT3D.failed || performance.now() - t0 > 6000 || (m && m.ready && (m.hasRoom(id) || m.failed(id)))) return fertig();
+      setTimeout(pruefen, 60);
+    };
+    pruefen();
+  });
+}
+{
+  const warmOhne3D = warmRoom;
+  warmRoom = async function (roomId) { await warmOhne3D(roomId); await echt3dWarten(roomId); };
+}
 function echt3dEiDa(id) { const e = typeof EGGS !== 'undefined' && EGGS[id]; return !!e && (!e.when || e.when()); }
 // Gezeichnete Überlagerungen, die im Echtzeit-3D ein echtes Modell haben, dort nicht mehr malen (Klickflächen bleiben)
 function echt3dHatModell(raum, key) { return !!(ECHT3D.mod && ECHT3D.mod.hatRequisit && echt3dOn(ROOMS[raum]) && ECHT3D.mod.hatRequisit(raum, key)); }
@@ -414,6 +432,7 @@ function drawEcht3dParkour() {
   setInterval(() => {
     if (G.screen !== 'game' || !G.state) { tasten.clear(); letzterRaum = null; echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; return; }
     const raum = viewRoomId(), drei = aktiv();
+    if (G.inIntro) return;   // im Vorspann keine Hinweise und keine Steuerung
     if (drei && raum !== letzterRaum) {
       if (KURS[raum]) note(KURS[raum]);
       else if (!hinweisDirekt) { hinweisDirekt = true; note('Echtzeit-3D: WASD oder linker Stick laufen, Leertaste/A springt, E benutzt das Nächste. Ziehen dreht die Kamera um dich.'); }

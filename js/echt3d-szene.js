@@ -438,6 +438,8 @@ function kameraFahren(R, t, actors) {
   for (const a of actors) { const m = a.mimik; if (m && m.kind === 'schreck') schreck = Math.max(schreck, 1 - Math.min(1, Math.max(0, (t - m.t0) / 700))); }
   if (schreck > 0) cam.position.addScaledVector(_fw, -0.09 * schreck).addScaledVector(_rt, Math.sin(t * 0.09) * 0.02 * schreck);
   cam.position.addScaledVector(_rt, Math.sin(t * 0.00019 + R.phase) * 0.011).addScaledVector(_up, Math.sin(t * 0.00013 + R.phase * 2) * 0.008);   // Parallax-Schwung im Stand
+  if (typeof G !== 'undefined' && G.inIntro) cam.position.addScaledVector(_rt, Math.sin(t * 0.00021) * 0.3).addScaledVector(_up, 0.05 + Math.sin(t * 0.00016) * 0.05);   // Vorspann: langsame Kinofahrt
+
   // freie Kamera: 360° um den Raum, dazu neigen und zoomen – um einen Zielpunkt in der Raummitte
   const o = R.orbit;
   if (o && (o.zurueck || Math.abs(o.yaw) > 1e-4 || Math.abs(o.pitch) > 1e-4 || Math.abs(o.dist) > 1e-4)) {

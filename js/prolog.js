@@ -80,17 +80,19 @@ function drawProlog(c, t) {
     drawTentSprite(c, TENT_IMG.lila, lx, ly, th * 1.18 * pulse * a + th * (1 - a), true);
   } else drawTentSprite(c, TENT_IMG.green, lx, ly, th, true, 'hue-rotate(165deg) saturate(1.15)', drink * 0.55);
   c.restore();
-  // Kino-Balken
-  c.fillStyle = '#08030e'; c.fillRect(0, 0, W, 24); c.fillRect(0, SH - 24, W, 24);
+  // Kino-Balken zeichnet jetzt js/vorspann.js (drawKino) für den ganzen Vorspann
 }
 async function PROLOG() {
-  if (G.fast || G.settings.retro || !G.state || !imgOk(PROLOG_IMG)) return;
+  if (G.fast || G.settings.retro || !G.state) return;
+  if (!imgOk(PROLOG_IMG)) await new Promise(r => { const t0 = performance.now(), p = () => imgOk(PROLOG_IMG) || performance.now() - t0 > 4000 ? r() : setTimeout(p, 80); p(); });   // Panorama noch unterwegs: kurz warten
+  if (!imgOk(PROLOG_IMG)) return;
   G.inIntro = true;
   G.prolog = { t0: G.t + 400, panMs: 10000, sludgeT: 0, drinkT: 0, armsT: 0, zoomT: 0 };
   const keep = G.viewRoom; G.viewRoom = 'prolog'; markVisit('prolog'); music();
   try {
+    G.titelKarte = { t0: G.t, dauer: 4400, text: 'Wie alles begann ...', logo: true };   // Kino-Titelkarte mit Logo (js/vorspann.js)
     await fadeTo(0, 900);
-    G.caption = 'Wie alles begann ...'; await wait(2600); G.caption = null;
+    await wait(3500); G.titelKarte = null;
     await wait(Math.max(0, G.prolog.t0 + G.prolog.panMs - G.t));
     G.prolog.zoomT = G.t; await wait(2700);
     Sound.play('lab'); Sound.sfx('pour'); G.prolog.sludgeT = G.t; await wait(1500);

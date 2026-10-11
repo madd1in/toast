@@ -4040,7 +4040,8 @@ function drawScreen() {
   else if (G.screen === 'toaster') { drawToaster(); if (!cx.isPix) drawBloom(0.2, H); }
   else if (G.screen === 'rock') { drawRock(); if (!cx.isPix) drawBloom(0.25, H); }
   else if (G.screen === 'game') { if (modernUI()) { drawSceneModern(); if (!G.photoMode) drawHUD(); } else { drawScene(); drawUI(); } if (!G.photoMode) drawFly(); if (G.menu) drawMenu(); }
-  else {   // Ladebildschirm: hüpfender Toast mit Tentakel-Schatten
+  else if (typeof drawLadebild === 'function') drawLadebild();   // Ladebildschirm (js/vorspann.js)
+  else {   // Ladebildschirm, solange js/vorspann.js noch nicht da ist: hüpfender Toast
     cx.fillStyle = grad(cx, 0, 0, 0, H, [[0, '#0c0420'], [1, '#2a0f4a']]); cx.fillRect(0, 0, W, H);
     const t = G.t, y = H / 2 - 20 - Math.abs(Math.sin(t * 0.006)) * 26, sq = 1 + Math.max(0, Math.cos(t * 0.012)) * 0.06;
     E(cx, W / 2, H / 2 + 34, 34 - Math.abs(Math.sin(t * 0.006)) * 10, 7, 'rgba(0,0,0,0.35)', 0);
@@ -4110,6 +4111,10 @@ async function boot() {
       new Promise(r => setTimeout(r, 3000)),
     ]);
   } catch (e) { /* Fallback-Schrift */ }
+  G.schriftOk = true;
+  // Titelbild-Grafiken abwarten (höchstens 4 s), und den Ladebildschirm mindestens kurz zeigen
+  await Promise.race([Promise.all([LOGO_IMG, ...Object.values(TENT_IMG)].map(im => imgOk(im) ? 0 : new Promise(r => { im.addEventListener('load', r); im.addEventListener('error', r); }))), new Promise(r => setTimeout(r, 4000))]);
+  const seitStart = performance.now(); if (seitStart < 1600) await new Promise(r => setTimeout(r, 1600 - seitStart));
   for (const k in bgCache) delete bgCache[k];
   loadSettings(); loadAch();
   G.saved = loadSave(); G.hasSaves = anySave();

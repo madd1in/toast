@@ -1085,9 +1085,14 @@ function drawStatue(c) {
 // ---------- Portraits (Köpfe in den Charakter-Buttons) ----------
 const PORTRAIT = { bernard: [8, -186, 0.86], hoagie: [8, -154, 0.92], laverne: [8, -176, 0.82] };
 // Lädt ein gerendertes Bild; bricht das Laden ab (z. B. weil viele Bilder gleichzeitig kommen), wird es noch zweimal versucht
+const TT_LADEN = { n: 0, ok: 0 };   // Ladefortschritt für den Ladebildschirm (js/vorspann.js)
 function loadImg(src, tries = 3) {
   const im = new Image();
-  im.onerror = () => { if (--tries > 0) setTimeout(() => { im.src = `${src}?r=${tries}`; }, 700); };
+  TT_LADEN.n++;
+  let gezaehlt = false;
+  const fertig = () => { if (!gezaehlt) { gezaehlt = true; TT_LADEN.ok++; } };
+  im.addEventListener('load', fertig);
+  im.onerror = () => { if (--tries > 0) setTimeout(() => { im.src = `${src}?r=${tries}`; }, 700); else fertig(); };
   im.src = typeof TT_VER !== 'undefined' && !/^(data:|blob:|https?:)/.test(src) ? `${src}${src.includes('?') ? '&' : '?'}v=${TT_VER}` : src;   // Versions-Anhang: nach Updates kein altes Bild aus dem Cache
   return im;
 }

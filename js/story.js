@@ -1051,8 +1051,10 @@ const ARRIVALS = {
 async function INTRO() {
   G.inIntro = true;
   fl().kloH = fl().kloL = 1;   // im Labor stehen drei Chrono-Klos (js/kostuem.js)
+  await warmRoom(me().room);   // im Echtzeit-3D erst das Labor laden, dann einblenden
+  G.titelKarte = { t0: G.t, dauer: 4600, text: 'Fünf Jahre nach dem großen Tentakel-Tag ...', kapitel: 'Kapitel 1' };   // Kapitelkarte (js/vorspann.js)
   await fadeTo(0, 700);
-  G.caption = 'Fünf Jahre nach dem großen Tentakel-Tag ...'; await wait(2800); G.caption = null;
+  await wait(3900); G.titelKarte = null;
   await say('drfred', 'ENDLICH! Mein Gut-O-Mat ist fertig!');
   await say('drfred', 'Ein Toast daraus, und selbst der bösartigste Schurke wird lieb und nett!');
   await say('bernard', 'Es ist ein... Toaster, Dr. Fred.');
