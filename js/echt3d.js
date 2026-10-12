@@ -17,7 +17,7 @@ const ECHT3D_Q = { k: 1, ema: 16, letzt: 0 };
 function echt3dBreite(voll) {
   const jetzt = performance.now(), d = ECHT3D_Q.letzt ? Math.min(120, jetzt - ECHT3D_Q.letzt) : 16; ECHT3D_Q.letzt = jetzt;
   ECHT3D_Q.ema += (d - ECHT3D_Q.ema) * 0.05;
-  if (ECHT3D_Q.ema > 30) ECHT3D_Q.k = Math.max(0.5, ECHT3D_Q.k - 0.004); else if (ECHT3D_Q.ema < 19) ECHT3D_Q.k = Math.min(1, ECHT3D_Q.k + 0.002);
+  if (ECHT3D_Q.ema > 24) ECHT3D_Q.k = Math.max(0.45, ECHT3D_Q.k - 0.006); else if (ECHT3D_Q.ema < 17.5) ECHT3D_Q.k = Math.min(1, ECHT3D_Q.k + 0.0015);   // Ziel: flüssige 50–60 Bilder
   return Math.max(480, Math.round(voll * ECHT3D_Q.k / 160) * 160);   // in Stufen, damit der Renderer nicht dauernd neu anlegt
 }
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
@@ -285,20 +285,25 @@ function echt3dAusgangPruefen(p) {
   if (echt3dGehtDurch || G.busy || !p || !echt3dParkourAktiv()) return;
   const room = ROOMS[p.room]; if (!room) return;
   if (!p._ankunft || p._ankunft.room !== p.room) p._ankunft = { room: p.room, x: p.x, y: p.y, weg: false };
-  if (!p._ankunft.weg && Math.hypot(p.x - p._ankunft.x, (p.y - p._ankunft.y) * 1.6) > 70) p._ankunft.weg = true;
+  if (!p._ankunft.weg && Math.hypot(p.x - p._ankunft.x, (p.y - p._ankunft.y) * 1.6) > 50) p._ankunft.weg = true;
   let ziel = null;
   if (p._ausgang3d) ziel = OBJ[p._ausgang3d];
-  else if (p._gelenkt && p._ankunft.weg) {
+  else if (p._gelenkt && p._ankunft.weg && p.walking) {
+    // hindurch, wenn man nah am Ausgang ist und auf ihn zuläuft, oder schon in seiner Fläche steht (Tür, Leiter, Weg)
+    const [zx, zy] = p._zug || [0, 0], zl = Math.hypot(zx, zy * 1.6) || 1;
     for (const o of room.objs) {
       if (!o.exit || !isVisible(o)) continue;
       const w = typeof o.walk === 'function' ? o.walk() : o.walk || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10];
-      if (Math.hypot(w[0] - p.x, (w[1] - p.y) * 1.6) < 24) { ziel = o; break; }
+      const dx = w[0] - p.x, dy = (w[1] - p.y) * 1.6, d = Math.hypot(dx, dy);
+      const drauf = (dx * zx + dy * zy * 1.6) / ((d || 1) * zl);
+      const r = o.rect, inFlaeche = r && p.x > r[0] - 14 && p.x < r[0] + r[2] + 14 && p.y > r[1] && p.y < r[1] + r[3] + 30;
+      if (d < 30 || (d < 80 && drauf > 0.75) || (inFlaeche && drauf > 0.2)) { ziel = o; break; }
     }
   }
   p._ausgang3d = null;
   if (!ziel || !ziel.exit) return;
   echt3dGehtDurch = true;
-  echt3dLenkungAus(p);
+  echt3dLenkungAus(p, true);
   echt3dDurchgehen(ziel).finally(() => { echt3dGehtDurch = false; p._z3d = 0; p._vz3d = 0; });
 }
 async function echt3dDurchgehen(o) {   // wie „Gehe zu“, nur ohne Anlauf: die Figur steht schon im Durchgang (Regeln für verschlossene Türen gelten weiter)
@@ -345,27 +350,50 @@ function echt3dBenutzen() {
   const k = 'o:' + h.id;
   return runSentence(defaultVerb(k) || 'look', k);
 }
-function echt3dSetzBewegungsziel(a, dx, dy, sek) {
-  if (!a || a.room !== viewRoomId() || !ECHT3D.mod || !ECHT3D.mod.bewegungsZiel) return false;
-  const kraft = Math.hypot(dx, dy); if (kraft < 0.025) return false;
-  // Ziel ein gutes Stück voraus (sonst ist die Figur jedes Bild „angekommen“ und die Laufanimation startet nie)
-  const ziel = ECHT3D.mod.bewegungsZiel(a, dx, dy, Math.max(sek, 0.24), a.room);
-  a._gelenkt = true;
-  if (!ziel) return false;
-  const [x, y] = clampWalk(ROOMS[a.room], ziel[0], ziel[1]);
-  if (a._res) { const done = a._res; a._res = null; done(false); }
-  a.target = [x, y]; a.walking = true; a.run = true;
+// Stick/Tasten: nur die Eingabe merken – bewegt wird jedes Bild in echt3dLenkSchritt (direkt in 3D, mit Beschleunigen)
+function echt3dSetzBewegungsziel(a, dx, dy) {
+  if (!a || a.room !== viewRoomId() || !ECHT3D.mod || !ECHT3D.mod.lenken) return false;
+  if (Math.hypot(dx, dy) < 0.025) return false;
+  if (!a._gelenkt || a.target) { if (a._res) { const done = a._res; a._res = null; done(false); } a.target = null; }
+  a._gelenkt = true; a._eingabe3d = { x: dx, y: dy, t: performance.now() };
   return true;
 }
+let echt3dTastenLesen = () => {};
+function echt3dLenkSchritt(dt) {
+  echt3dTastenLesen();
+  const a = G.state && me();
+  if (!a || !a._gelenkt || !ECHT3D.mod || !ECHT3D.mod.lenken || a.room !== viewRoomId() || !echt3dAktiv()) return;
+  if (a.target) { a._gelenkt = false; a._v3d = null; return; }   // ein Klick hat übernommen
+  const e = a._eingabe3d, frisch = e && performance.now() - e.t < 150 && echt3dSteuerungErlaubt();
+  const sek = Math.min(0.1, dt / 1000);   // auch bei wenig Bildern pro Sekunde richtig schnell
+  const r = ECHT3D.mod.lenken(a, frisch ? e.x : 0, frisch ? e.y : 0, sek, a.room);
+  if (!r) return;
+  if (r.stand) { a._gelenkt = false; a._v3d = null; a._blick3d = null; a.walking = false; a.run = false; return; }
+  const [x, y] = r.innen ? [r.x, r.y] : clampWalk(ROOMS[a.room], r.x, r.y);
+  const mx = x - a.x, my = y - a.y;
+  if (Math.abs(mx) > 0.2) a.dir = mx > 0 ? 1 : -1;
+  if (Math.hypot(mx, my) > 0.01) a._zug = [mx, my];   // Bewegungsrichtung in Spiel-Koordinaten (für Türen)
+  a.x = x; a.y = y; a._blick3d = r.yaw; a.walking = r.tempo > 0.35; a.run = r.tempo > 3.4;
+  // Schritte hörbar machen wie beim normalen Gehen
+  const room = ROOMS[a.room], vorher = Math.floor((a.phase || 0) / Math.PI);
+  a.phase = (a.phase || 0) + sek * r.tempo * 2.3;
+  if (room && Math.floor(a.phase / Math.PI) !== vorher && a.walking && (a._z3d || 0) < 0.05) {
+    const st = (typeof STEP_STYLE !== 'undefined' && STEP_STYLE[a.id]) || [null, (a.bw || 50) / 55];
+    Sound.step(room.floor, panX(a.x), st[1], false, st[0]);
+  }
+}
+{ const updateOhneLenkung = updateActors; updateActors = function (dt) { echt3dLenkSchritt(dt); updateOhneLenkung(dt); }; }
 function echt3dPadBewegen(x, y, dt) {
   if (!echt3dParkourAktiv()) return false;
-  if (x || y) echt3dSetzBewegungsziel(me(), x, y, dt / 1000);
+  if (x || y) echt3dSetzBewegungsziel(me(), x, y);
   else echt3dLenkungAus(me());
   return true;
 }
-function echt3dLenkungAus(a) {   // Stick/Tasten losgelassen: sofort stehen bleiben (statt zum vorausliegenden Ziel weiterzulaufen)
-  if (!a || !a._gelenkt) return;
-  a._gelenkt = false; a._lenk3d = null; a.target = null; a.walking = false; a.run = false;
+function echt3dLenkungAus(a, sofort) {   // losgelassen: ausrollen lassen (bremsen); sofort = auf der Stelle stehen
+  if (!a) return;
+  a._eingabe3d = null; a._lenk3d = null;
+  if (!sofort || !a._gelenkt) return;
+  a._gelenkt = false; a._v3d = null; a._blick3d = null; a.target = null; a.walking = false; a.run = false;
   if (a._res) { const done = a._res; a._res = null; done(true); }
 }
 function echt3dPadSpringen() {
@@ -628,9 +656,14 @@ function drawEcht3dParkour() {
     if (!drei || !echt3dSteuerungErlaubt()) { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; }
     if (!drei || !p || p.room !== raum) return;
     echt3dAusgangPruefen(p);
+  }, 90);
+  // Tasten und Touch-Stick jedes Bild (vor der Bewegung) – nicht im 90-ms-Takt, sonst ruckelt es
+  echt3dTastenLesen = () => {
+    const p = me();
+    if (!p || !aktiv() || !echt3dSteuerungErlaubt() || G.inIntro) return;
     const dx = (tasten.has('d') || tasten.has('arrowright') ? 1 : 0) - (tasten.has('a') || tasten.has('arrowleft') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.x : 0);
     const dy = (tasten.has('s') || tasten.has('arrowdown') ? 1 : 0) - (tasten.has('w') || tasten.has('arrowup') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.y : 0);
-    if (dx || dy) echt3dSetzBewegungsziel(p, dx, dy, 0.09);
-    else if (!G.pointer || G.pointer !== 'pad') echt3dLenkungAus(p);
-  }, 90);
+    if (dx || dy) { const n = Math.max(1, Math.hypot(dx, dy)); echt3dSetzBewegungsziel(p, dx / n, dy / n); }
+    else if (G.pointer !== 'pad' && p._eingabe3d) echt3dLenkungAus(p);
+  };
 }

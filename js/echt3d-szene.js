@@ -123,6 +123,7 @@ export async function init(base = 'img/3d/') {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = !sparsam && !/xbox/i.test(navigator.userAgent || '');
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;   // Schatten jedes zweite Bild (frame) – spart fast die Hälfte der Schattenkosten
   // Kontext verloren (Grafikspeicher voll, Konsole im Hintergrund): nicht für immer aufgeben – sparsamer werden und auf
   // die Rückgabe warten; three.js lädt danach alles von selbst neu auf die Grafikkarte
   canvas.addEventListener('webglcontextlost', e => {
@@ -566,9 +567,11 @@ function kameraFahren(R, t, actors) {
     const ran = 1 - 0.55 * (o.w || 0) * Math.min(1, Math.abs(o.yaw) / 1.1);   // je weiter gedreht, desto näher an die Figur – sonst stünde die Kamera vor der Seitenwand
     _ab.copy(R.basis).applyAxisAngle(_yA, o.yaw).applyAxisAngle(pitchAxis, o.pitch)
       .multiplyScalar(Math.max(0.3, ran + o.dist / R.basisLen));
-    if (!R.innen && R.fokus) {   // draußen folgt die Kamera der Figur näher (wie Mario 64) statt im weiten Bühnenabstand
-      const L = _ab.length(), lmax = Math.max(3.2, 7.5 + o.dist);
-      if (L > lmax) _ab.setLength(L + (lmax - L) * Math.min(1, o.w || 0));
+    if (!R.innen && R.fokus) {   // draußen folgt die Kamera der Figur näher (wie Mario 64), knapp über Kopfhöhe statt von oben
+      const w = Math.min(1, o.w || 0), L = Math.hypot(_ab.x, _ab.z), lmax = Math.max(3.2, 6.0 + o.dist);
+      const lz = L + (Math.min(L, lmax) - L) * w, hy = _ab.y + (Math.max(0.35, 0.75 + o.pitch * 2.5) - _ab.y) * w;
+      if (L > 1e-4) { _ab.x *= lz / L; _ab.z *= lz / L; }
+      _ab.y = hy;
     }
     cam.position.copy(R.ziel).add(_ab);
     if (cam.position.y < 0.45) cam.position.y = 0.45;
@@ -587,10 +590,10 @@ function kameraFahren(R, t, actors) {
         const mid = gp.a.clone().add(gp.b).multiplyScalar(0.5), d = gp.b.clone().sub(gp.a); d.y = 0;
         const len = Math.max(0.6, d.length()); d.normalize();
         const n = new THREE.Vector3(-d.z, 0, d.x); if (n.z < 0) n.negate();
-        posD.copy(mid).addScaledVector(n, Math.max(5.0, len * 1.4 + 3.4)); posD.y = Math.min(I.y1 - m, 2.05);
+        posD.copy(mid).addScaledVector(n, Math.max(3.8, len * 1.1 + 2.6)); posD.y = Math.min(I.y1 - m, 1.7);
         zielD.copy(mid); zielD.y = 1.35;
       } else {
-        const weite = weiteAuto(o), hoch = Math.max(0.7, Math.min(I.y1 - m, 2.7, 2.3 + o.pitch * 3));
+        const weite = weiteAuto(o), hoch = Math.max(0.7, Math.min(I.y1 - m, 2.6, 1.8 + o.pitch * 2.5));   // knapp über Kopfhöhe, nicht von oben
         posD.set(0, hoch, weite).applyAxisAngle(_yA, o.yaw).add(R.fokus);
         zielD.copy(R.fokus);
       }
@@ -625,23 +628,31 @@ function kameraFahren(R, t, actors) {
       R.ziel.copy(R.zielHome).lerp(R.glatt.z, w);
     }
     cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, R.ziel, _yA));
-  }
+    const fovZiel = home.fov + ((kinoAktiv(R) ? 40 : WEITWINKEL) - home.fov) * Math.min(1, o.w || 0);
+    if (Math.abs(cam.fov - fovZiel) > 0.05) { cam.fov = fovZiel; cam.updateProjectionMatrix(); }
+  } else if (cam.fov !== home.fov) { cam.fov = home.fov; cam.updateProjectionMatrix(); }
   R.kT = t;
 }
 
 const armRay = new THREE.Raycaster();
-const weiteAuto = o => Math.max(2.2, 6.2 * (1 + o.dist / 6));
+const weiteAuto = o => Math.max(2.0, 4.7 * (1 + o.dist / 6));   // mit Weitwinkel näher dran und trotzdem mehr im Bild
+const WEITWINKEL = 56;   // Grad senkrecht (die Bühnenkamera hat rund 30): fast Fischauge, viel Raum im Bild
 function lenktGerade(R) { const a = typeof me === 'function' ? me() : null; return !!(a && a._gelenkt && a._lenk3d && performance.now() - a._lenk3d.t < 400); }
-function armFrei(R, von, bis) {   // freie Länge des Kameraarms von der Figur zur Kamera (mindestens 2 m)
+const _armBox = new THREE.Box3(), _armRay = new THREE.Ray(), _armHit = new THREE.Vector3();
+function armFrei(R, von, bis) {   // freie Länge des Kameraarms von der Figur zur Kamera (mindestens 1,6 m)
+  // gegen die Kollisionskisten (Möbel, Einbauten, Bäume) – Wände und Decke begrenzt schon die Raumbox; viel schneller als
+  // ein Strahl durch alle Dreiecke der zusammengefassten Raumgeometrie
   const dir = bis.clone().sub(von), lang = dir.length();
   if (lang < 0.4) return lang;
-  dir.divideScalar(lang); armRay.set(von, dir); armRay.far = lang;
-  for (const h of armRay.intersectObjects(R.scene.children, true)) {
-    let ok = h.distance > 0.35;
-    for (let q = h.object; q && ok; q = q.parent) if (q.visible === false || (q.name || '').startsWith('Figur_')) ok = false;
-    if (ok) return Math.max(2.0, h.distance - 0.3);
+  dir.divideScalar(lang); _armRay.set(von, dir);
+  let frei = lang;
+  for (const { k, o } of R.kisten || []) {
+    if (k[4] < 1.1 || (o && !sichtbar(o))) continue;   // niedrige Dinge verdecken die Figur nicht
+    _armBox.min.set(k[0], 0, -k[3]); _armBox.max.set(k[1], k[4], -k[2]);
+    if (_armBox.containsPoint(von)) continue;
+    if (_armRay.intersectBox(_armBox, _armHit)) { const d = _armHit.distanceTo(von); if (d < frei) frei = d; }
   }
-  return lang;
+  return frei < lang ? Math.max(1.6, frei - 0.3) : lang;
 }
 // Gesprächspartner der gesteuerten Figur: wer gerade spricht (oder im Dialog steht), im selben Raum
 // ---------- Vorspann-Kino: Sprecher im Halbprofil (Seiten im Wechsel), Läufer begleiten, dazwischen langsame Raumtotale ----------
@@ -682,14 +693,21 @@ export function autoKameraUmschalten() { autoKamera = !autoKamera; const o = orb
 // Bildpunkt (Szenen-Koordinaten der aktuellen Kamera) für einen Punkt in Kopfhöhe – Sprechblasen folgen so jeder Kamera
 export function bildVonSpiel(gx, gy, id) {   // Spiel-Punkt (Bühnenansicht) -> Bildpunkt der aktuellen Kamera, für das Steuerkreuz
   const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home || !freiAktiv()) return null;
-  _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2); ray.setFromCamera(_n, R.home);
-  let p = null;
-  for (const h of ray.intersectObjects(R.scene.children, true)) {
-    let ok = true;
-    for (let q = h.object; q && ok; q = q.parent) if (q.visible === false || (q.name || '').startsWith('Figur_')) ok = false;
-    if (ok) { p = h.point.clone(); break; }
+  const key = Math.round(gx) + ':' + Math.round(gy), cache = R.bildCache || (R.bildCache = new Map());
+  let p = cache.get(key);
+  if (p === undefined) {   // einmal suchen, dann merken (der Weltpunkt hinter einem Bühnen-Punkt bleibt derselbe)
+    _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2); ray.setFromCamera(_n, R.home);
+    p = null;
+    for (const h of ray.intersectObjects(R.scene.children, true)) {
+      let ok = true;
+      for (let q = h.object; q && ok; q = q.parent) if (q.visible === false || (q.name || '').startsWith('Figur_')) ok = false;
+      if (ok) { p = h.point.clone(); break; }
+    }
+    if (cache.size > 600) cache.clear();
+    cache.set(key, p);
   }
   if (!p) return null;
+  p = p.clone();
   p.project(R.camera);
   if (p.z > 1 || Math.abs(p.x) > 1.05 || Math.abs(p.y) > 1.05) return null;
   return [(p.x + 1) / 2 * GW, (1 - p.y) / 2 * GH];
@@ -728,10 +746,10 @@ export function pick(gx, gy, id) {
   let punkt = null, dist = 1e9;
   const boden = ray.ray.intersectPlane(ground, _pickV.clone());
   if (boden) { punkt = boden.clone(); dist = boden.distanceTo(R.camera.position); }
-  const treffer = ray.intersectObjects(R.scene.children, true);
+  const treffer = ray.intersectObjects(R.scene.children, true), selbst = 'Figur_' + (typeof ACT !== 'undefined' && ACT[curId()] ? ACT[curId()].kind : '');
   for (const h of treffer) {
-    let sichtbar = true;
-    for (let k = h.object; k; k = k.parent) if (k.visible === false) { sichtbar = false; break; }
+    let sichtbar = true;   // die eigene Figur ist durchlässig: die Auto-Kamera steht hinter ihr, Klicks zielen an ihr vorbei
+    for (let k = h.object; k; k = k.parent) if (k.visible === false || k.name === selbst) { sichtbar = false; break; }
     if (sichtbar && h.distance < dist) { punkt = h.point.clone(); dist = h.distance; break; }
   }
   if (!punkt) return null;
@@ -1468,6 +1486,36 @@ export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py 
   return z;
 }
 export function stehHoehe(id, x, y) { return plattformHoehe(id, x, y, 99); }   // höchste Plattform am Ort
+// Direkte Steuerung (Stick/WASD): Geschwindigkeit in Metern pro Sekunde, weich beschleunigt und gebremst wie in
+// Super Mario 64; die neue Lage wird über die Bühnenkamera in Spiel-Koordinaten zurückgerechnet
+const LAUF = { max: 4.8, beschl: 8.5, brems: 11 };
+export function lenken(a, dx, dy, sek, id = a.room) {
+  const R = rooms[id]; if (!R || !R.ready || !R.home || !R.camera) return null;
+  const kraft = Math.min(1, Math.hypot(dx, dy)), v = a._v3d || (a._v3d = { x: 0, z: 0 }), now = performance.now();
+  let wx = 0, wz = 0;
+  if (kraft > 0.05) {
+    const L = a._lenk3d, w = Math.atan2(dy, dx);   // Richtung halten, solange der Stick gleich zeigt (Kamera darf schwenken)
+    if (L && L.id === id && now - L.t < 350 && Math.abs(Math.atan2(Math.sin(w - L.w), Math.cos(w - L.w))) < 0.5) _fw.copy(L.fw);
+    else {
+      _fw.copy(R.camera.getWorldDirection(_fw)); _fw.y = 0;
+      if (_fw.lengthSq() < 1e-5) return null;
+      _fw.normalize(); a._lenk3d = { id, w, fw: _fw.clone(), t: now };
+    }
+    a._lenk3d.t = now;
+    _rt.crossVectors(_fw, _yA).normalize();
+    const n = Math.hypot(dx, dy), s = LAUF.max * kraft;
+    wx = (_rt.x * dx - _fw.x * dy) / n * s; wz = (_rt.z * dx - _fw.z * dy) / n * s;
+  }
+  const k = Math.min(1, sek * (kraft > 0.05 ? LAUF.beschl : LAUF.brems));
+  v.x += (wx - v.x) * k; v.z += (wz - v.z) * k;
+  const tempo = Math.hypot(v.x, v.z);
+  if (tempo < 0.08 && kraft <= 0.05) { v.x = v.z = 0; return { stand: true }; }
+  const p = toWorld(R.home, a.x, a.y, new THREE.Vector3());
+  p.x += v.x * sek; p.z += v.z * sek; p.y = 0;
+  if (R.innen) { const I = R.innen, m = 0.45; p.x = Math.max(I.x0 + m, Math.min(I.x1 - m, p.x)); p.z = Math.max(I.z0 + m, Math.min(I.z1 - m, p.z)); }
+  p.project(R.home);
+  return { x: (p.x + 1) * GW / 2, y: (1 - p.y) * GH / 2, tempo, yaw: Math.atan2(-v.z, v.x), innen: !!R.innen };
+}
 export function bewegungsZiel(a, dx, dy, sek, id = a.room) {
   const R = rooms[id]; if (!R || !R.ready || !R.home || !R.camera) return null;
   const kraft = Math.hypot(dx, dy); if (kraft < 0.025) return null;
@@ -1523,6 +1571,7 @@ function kartenStellen(R, liste) {
 let lastT = 0;
 const _vis = new Map();
 const _v2 = new THREE.Vector3();
+let schattenN = 0, letzterSchatten = null;
 function curKind(actors) { const id = curId(); const a = actors.find(x => x.id === id); return a ? a.kind : null; }
 export function frame(t, actors, pxW, ctx) {
   const R = rooms[ctx.id]; if (!R || !R.ready) return null;
@@ -1610,7 +1659,7 @@ export function frame(t, actors, pxW, ctx) {
       }
       a._pos3d = [p.x, -p.z, a._z3d || 0];   // Blender-Weltlage für Sammelobjekte (js/uhrwerk.js)
       if (ctx.id === 'lobby' && (a._z3d || 0) > 2.9 && !a._ausgang3d) a._ausgang3d = 'treppe_hoch';   // oben angekommen
-      const fz = Math.max(0, a._z3d || 0) + 0.95;   // Folgekamera: weich hinterher, Höhe gedämpft (Sprünge wackeln nicht)
+      const fz = Math.max(0, a._z3d || 0) + 1.15;   // Folgekamera auf Brusthöhe: weich hinterher, Höhe gedämpft (Sprünge wackeln nicht)
       if (!R.fokus) R.fokus = new THREE.Vector3(p.x, fz, p.z);
       R.fokus.x += (p.x - R.fokus.x) * Math.min(1, dt / 160); R.fokus.z += (p.z - R.fokus.z) * Math.min(1, dt / 160); R.fokus.y += (fz - R.fokus.y) * Math.min(1, dt / 400);
       if (ctx.id === 'uhrwerk' && !a._schub3d && now - (a._bonkT3d || 0) > 1600) {   // das Riesenpendel trifft
@@ -1657,7 +1706,7 @@ export function frame(t, actors, pxW, ctx) {
       const q = toWorld(R.home, a.target[0] !== undefined ? a.target[0] : a.target.x, a.target[1] !== undefined ? a.target[1] : a.target.y, new THREE.Vector3());
       const dx = q.x - p.x, dz = q.z - p.z;
       if (dx * dx + dz * dz > 0.01) want = Math.atan2(-dz, dx);   // Blender-Gierwinkel: +x vorn, −y zur Kamera
-    }
+    } else if (a.walking && a._blick3d != null) want = a._blick3d;   // direkt gesteuert: in Laufrichtung
     let dy = want - f.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     f.yaw += dy * Math.min(1, dt / 120);
     const dreh = a._schub3d ? (now - a._schub3d.t0) * 0.03 : 0;   // getroffen: Figur wirbelt um sich selbst
@@ -1710,6 +1759,8 @@ export function frame(t, actors, pxW, ctx) {
     if (v && f.id !== curKind(actors) && freiAktiv()) { _v2.copy(f.holder.position); _v2.y += 1.0; if (_v2.distanceTo(camera.position) < 1.5) v = false; }
     f.holder.visible = v;
   }
+  schattenN = (schattenN + 1) % 2;
+  if (renderer.shadowMap.enabled && (schattenN === 0 || R !== letzterSchatten)) { renderer.shadowMap.needsUpdate = true; letzterSchatten = R; }
   effect.render(R.scene, camera);
   return renderer.domElement;
 }
