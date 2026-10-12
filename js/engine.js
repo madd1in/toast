@@ -2024,7 +2024,7 @@ function drawScene() {
   if (G.inIntro && !G.fast && !G.skipAll) {
     button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
     const tp = vorspulen();
-    button(UI.tempo, tp === 1 ? '▶ 1×' : tp === 2 ? '⏩ 2×' : '⏩ 4×', inRect(G.mouse.x, G.mouse.y, UI.tempo));
+    button(UI.tempo, tp === 1 ? '▶ 1×' : `⏩ ${tp}×`, inRect(G.mouse.x, G.mouse.y, UI.tempo));
     txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
     if (tp > 1) drawVorspulZeichen(tp);
   }
@@ -3360,7 +3360,7 @@ function drawSceneOverlays() {
     if (G.inIntro && !G.fast && !G.skipAll) {
       button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
       const tp = vorspulen();
-    button(UI.tempo, tp === 1 ? '▶ 1×' : tp === 2 ? '⏩ 2×' : '⏩ 4×', inRect(G.mouse.x, G.mouse.y, UI.tempo));
+    button(UI.tempo, tp === 1 ? '▶ 1×' : `⏩ ${tp}×`, inRect(G.mouse.x, G.mouse.y, UI.tempo));
     txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
     if (tp > 1) drawVorspulZeichen(tp);
     }
@@ -4146,11 +4146,11 @@ function frame(ts) {
   try { update(dt); render(); updateAmbilight(); } catch (e) { console.error(e); }
   requestAnimationFrame(frame);
 }
-// Vorspann-Tempo: ein Druck schaltet 1× → 2× → 4× → 1× (Taste F, RT am Controller oder der Knopf oben rechts); bleibt gespeichert
+// Vorspann-Tempo: ein Druck schaltet 1× → 2× → 4× → 8× → 1× (Taste F, RT am Controller oder der Knopf oben rechts); bleibt gespeichert
 function vorspulen() { return G.inIntro && G.screen === 'game' && !G.dialog && !G.menu ? (G.settings.introTempo || 1) : 1; }
 function tempoWeiter() {
   const t = G.settings.introTempo || 1;
-  G.settings.introTempo = t === 1 ? 2 : t === 2 ? 4 : 1; saveSettings();
+  G.settings.introTempo = t === 1 ? 2 : t === 2 ? 4 : t === 4 ? 8 : 1; saveSettings();
   Sound.sfx('tick'); note(G.settings.introTempo === 1 ? 'Vorspann in normalem Tempo' : `Vorspann in ${G.settings.introTempo}-facher Geschwindigkeit`);
 }
 window.addEventListener('keydown', e => { if (G.inIntro && G.screen === 'game' && !e.repeat && (e.key === 'f' || e.key === 'F')) tempoWeiter(); });

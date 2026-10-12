@@ -123,7 +123,18 @@ export async function init(base = 'img/3d/') {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = !sparsam && !/xbox/i.test(navigator.userAgent || '');
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); kontextWeg = true; console.warn('Echtzeit-3D: WebGL-Kontext verloren'); });
+  // Kontext verloren (Grafikspeicher voll, Konsole im Hintergrund): nicht für immer aufgeben – sparsamer werden und auf
+  // die Rückgabe warten; three.js lädt danach alles von selbst neu auf die Grafikkarte
+  canvas.addEventListener('webglcontextlost', e => {
+    e.preventDefault(); kontextWeg = true; kontextVerluste++; sparStufe = Math.max(sparStufe, 1);
+    console.warn('Echtzeit-3D: WebGL-Kontext verloren');
+    if (typeof note === 'function') note('Echtzeit-3D: Grafikspeicher knapp – kurz das gemalte Bild, 3D kommt gleich wieder.');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    console.warn('Echtzeit-3D: WebGL-Kontext wieder da');
+    for (const R of Object.values(rooms)) if (R.ready && R.id !== letzterRaum) raumFreigeben(R);
+    kontextWeg = false;
+  });
   effect = new OutlineEffect(renderer, { defaultThickness: 0.0032, defaultColor: INK, defaultAlpha: 1 });
   GRAD = new THREE.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, THREE.RedFormat);
   GRAD.minFilter = GRAD.magFilter = THREE.NearestFilter; GRAD.needsUpdate = true;
@@ -137,23 +148,30 @@ export async function init(base = 'img/3d/') {
 // Raum laden (einmal); bis er da ist, zeigt das Spiel das vorgerenderte Bild
 export function hasRoom(id) {
   const r = rooms[id];
-  if (r) { r.benutzt = performance.now(); return r.ready; }
+  if (r && r.failed && (r.versuche || 1) < 3 && performance.now() - (r.failT || 0) > 12000) delete rooms[id];   // später noch einmal versuchen
+  else if (r) { r.benutzt = performance.now(); return r.ready; }
+  const versuche = (r && r.versuche || 0) + 1;
   raeumeAuf(id);
-  rooms[id] = { id, loading: true, ready: false, benutzt: performance.now() };
+  rooms[id] = { id, loading: true, ready: false, benutzt: performance.now(), versuche };
   (id === 'hafen' ? ladeHafen() : ladeRaum(id)).then(x => { Object.assign(rooms[id], x, { ready: true, loading: false }); },
     e => {
-      console.error('Echtzeit-3D', id, e); rooms[id].failed = true;
+      console.error('Echtzeit-3D', id, e); rooms[id].failed = true; rooms[id].failT = performance.now(); sparStufe = Math.max(sparStufe, 1);
       if (typeof note === 'function') note(`Echtzeit-3D: Raum „${id}“ ließ sich nicht laden (${String((e && e.message) || e).slice(0, 80)}) – dort bleibt das vorgerenderte Bild.`);
     });
   return false;
 }
-// Grafikspeicher schonen (Konsolen, Tablets): höchstens vier Räume geladen halten, den am längsten unbenutzten freigeben
-const RAUM_MAX = 4;
+// Grafikspeicher schonen: am PC vier Räume im Speicher, auf Xbox und kleinen Geräten zwei; nach einem Speicher-Engpass nur
+// noch der Raum, in dem man gerade ist (der vorige wird freigegeben, bevor der nächste lädt)
+const SPARSAM = /xbox/i.test(navigator.userAgent || '') || !!(navigator.deviceMemory && navigator.deviceMemory <= 4);
+let sparStufe = SPARSAM ? 0 : -1, kontextVerluste = 0;
+export function speicherInfo() { return { sparsam: SPARSAM, stufe: sparStufe, verluste: kontextVerluste, raeume: Object.values(rooms).filter(r => r.ready).map(r => r.id) }; }
 function raeumeAuf(neu) {
-  const geladen = Object.values(rooms).filter(r => r.ready && r.id !== neu && r.id !== letzterRaum);
-  if (geladen.length < RAUM_MAX) return;
+  const max = sparStufe >= 0 ? 0 : 2;   // so viele weitere Räume dürfen bleiben (neben dem neuen und – außer im Engpass – dem aktuellen)
+  const geladen = Object.values(rooms).filter(r => r.ready && r.id !== neu && (sparStufe >= 1 || r.id !== letzterRaum));
   geladen.sort((a, b) => (a.benutzt || 0) - (b.benutzt || 0));
-  const R = geladen[0];
+  while (geladen.length > max) raumFreigeben(geladen.shift());
+}
+function raumFreigeben(R) {
   for (const f of Object.values(figs)) if (f.holder.parent === R.scene) R.scene.remove(f.holder);   // Figuren gehören allen Räumen
   for (const k of karten.values()) if (k.mesh.parent === R.scene) R.scene.remove(k.mesh);
   R.scene.traverse(o => {
@@ -161,9 +179,12 @@ function raeumeAuf(neu) {
     for (const m of [].concat(o.material || [])) { for (const v of Object.values(m)) if (v && v.isTexture && v !== GRAD) v.dispose(); m.dispose(); }
   });
   if (R.scene.background && R.scene.background.dispose) R.scene.background.dispose();
+  const weg = new Set(); R.scene.traverse(o => { for (const m of [].concat(o.material || [])) weg.add(m); });
+  for (const [k, m] of matCache) if (weg.has(m)) matCache.delete(k);   // sonst blieben Bilder der Texturen im Speicher
   delete rooms[R.id];
 }
 export function failed(id) { return !!(rooms[id] && rooms[id].failed); }
+export function raumGeladen(id) { return !!(rooms[id] && rooms[id].ready); }   // nur nachsehen, nichts laden
 
 function grundlicht(scene, hell, dunkel, k = 1.15) { scene.add(new THREE.HemisphereLight(hell, dunkel, k)); }
 function sonne(scene, dir, farbe, staerke, schatten) {

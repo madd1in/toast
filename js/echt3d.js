@@ -21,7 +21,12 @@ function echt3dBreite(voll) {
   return Math.max(480, Math.round(voll * ECHT3D_Q.k / 160) * 160);   // in Stufen, damit der Renderer nicht dauernd neu anlegt
 }
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
-function echt3dOn(room) { return echt3dWanted(room) && !!ECHT3D.mod && ECHT3D.mod.ready && !(ECHT3D.mod.verloren && ECHT3D.mod.verloren()) && !ECHT3D.mod.failed(room.id) && ECHT3D.mod.hasRoom(room.id); }
+// Läuft dieser Raum im Echtzeit-3D? Nur der Raum, den man gerade sieht, wird dafür auch geladen – Abfragen für andere
+// Räume (Rätsel, Requisiten, Uhrwerk) schauen nur nach; sonst lägen auf der Xbox drei, vier Räume zugleich im Grafikspeicher
+function echt3dOn(room) {
+  if (!echt3dWanted(room) || !ECHT3D.mod || !ECHT3D.mod.ready || (ECHT3D.mod.verloren && ECHT3D.mod.verloren()) || ECHT3D.mod.failed(room.id)) return false;
+  return room.id === viewRoomId() ? ECHT3D.mod.hasRoom(room.id) : ECHT3D.mod.raumGeladen(room.id);
+}
 // Kann dieses Gerät WebGL 2? (three.js braucht es; manche Konsolen-Browser und alte Grafikchips nicht)
 function echt3dWebgl2() {
   try { const c = document.createElement('canvas'), g = c.getContext('webgl2'); if (g) { const x = g.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); return true; } } catch (e) { /* kein WebGL */ }
@@ -82,11 +87,12 @@ const ECHT3D_TEILE = {
 function echt3dWarten(id) {
   if (!G.settings.echt3d || G.settings.retro || !ECHT3D.rooms[id] || ECHT3D.failed) return Promise.resolve();
   echt3dLoad();
-  const t0 = performance.now();
+  const t0 = performance.now(); let gemeldet = false;
   return new Promise(fertig => {
     const pruefen = () => {
+      if (!gemeldet && performance.now() - t0 > 1200) { gemeldet = true; note('Echtzeit-3D: Raum wird geladen …'); }
       const m = ECHT3D.mod;
-      if (ECHT3D.failed || performance.now() - t0 > 6000 || (m && m.ready && (m.hasRoom(id) || m.failed(id)))) return fertig();
+      if (ECHT3D.failed || performance.now() - t0 > (ECHT3D_XBOX ? 16000 : 8000) || (m && m.ready && (m.hasRoom(id) || m.failed(id)))) return fertig();   // Konsole lädt langsamer: länger aufs 3D warten statt aufs gemalte Bild zu springen
       setTimeout(pruefen, 60);
     };
     pruefen();
