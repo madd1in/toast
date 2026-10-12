@@ -337,9 +337,8 @@ function schilderBauen(H, liste) {   // vor dem Verbiegen: die Tafeln biegen sic
 function schilderTick(R) {   // jede Sekunde: Sprache gewechselt oder Übersetzung eingetroffen?
   if (!R.schilder || !R.schilder.length) return;
   const jetzt = performance.now(); if (jetzt - (R.schildT || 0) < 1000) return; R.schildT = jetzt;
-  const fremd = typeof Lang !== 'undefined' && Lang.cur !== 'de';
   for (const st of R.schilder) {
-    const ziel = fremd && typeof schildText === 'function' ? schildText(st.t) : st.t, an = fremd && ziel && ziel !== st.t;
+    const ziel = typeof schildText === 'function' ? schildText(st.t) : st.t, an = !!ziel && ziel !== st.t;   // übersetzt oder umgewidmet
     st.mesh.visible = !an; st.tafel.visible = an;
     if (an) schildTextur(st);
   }
@@ -1530,7 +1529,7 @@ function flugKamera(R, t) {
 // ---------- Raum-Extras: Teile, die das Spiel selbst bewegt oder dazubaut ----------
 const EXTRA_BEWEGLICH = {
   uhrwerk: /^(Notsteg|Riesenpendel|Kolben|Zahnrad(\d+|[AB]|Tief\d+)|Zifferblatt|Zeiger(Gross|Klein))$/,
-  lobby: /^L_Uhr$|^L_Konf/,
+  lobby: /^L_Uhr$|^L_Konf|^L_Bilderrahmen|^L_Leinwand|^L_Rahmenrosette|^L_Plakett/,
   auffahrt: /^(KamTent|Auto|TuerL|TuerR)$/,
 };
 // Uhrwerk-Takt (Sekunden): Kolben-Oberkante und Pendelwinkel – Bild und Sprungphysik nutzen dieselben Formeln
@@ -1619,8 +1618,9 @@ const RAUM_EXTRAS = {
       const bb = new THREE.Box3(); for (const o of konf) bb.expandByObject(o);
       const gruppe = new THREE.Group(); gruppe.position.set((bb.min.x + bb.max.x) / 2, 0, bb.max.z); scene.add(gruppe);
       for (const o of konf) gruppe.attach(o);
-      gruppe.scale.set(1.32, 1.36, 1);
+      gruppe.scale.set(1.12, 1.15, 1);   // größer, aber unter dem Gemälde (das rückt dafür ein Stück hinauf)
     }
+    for (const o of [...H.children]) if (/^(Schild_)?L_(Bilderrahmen|Leinwand|Rahmenrosette|Plakett)/.test(nm(o))) o.position.y += 0.14;
     let uhr = null; H.traverse(o => { if (!uhr && nm(o) === 'L_Uhr') uhr = o; });
     const teile = {};
     if (uhr) {

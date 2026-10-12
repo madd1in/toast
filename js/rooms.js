@@ -215,7 +215,7 @@ room({
     { id: 'uhr_heute', name: 'Standuhr', rect: [284, 100, 72, 232], walk: [322, 352], dv: 'open', draw: (c, t) => pendulum(c, t, 319.2, 176, 78, [305, 172, 28, 96]) },
     { id: 'sofa', name: 'Sofa', rect: [418, 256, 244, 94], walk: [540, 374], dv: 'pull' },
     { id: 'automat', name: 'Kaffeeautomat', rect: [688, 134, 100, 206], walk: [738, 366], dv: 'use' },
-    { id: 'tuer_labor', name: 'Labor', rect: [826, 70, 116, 270], walk: [880, 346], exit: ['labor', 140, 398, 1], look: 'Die Tür zu Dr. Freds Labor. Dahinter blubbert es verdächtig.' },
+    { id: 'tuer_labor', name: 'Dr. Freds Büro', rect: [826, 70, 116, 270], walk: [880, 346], look: 'Dr. Freds Büro. Abgeschlossen. Das Labor ist woanders – hinter der Standuhr, hat er mal geflüstert.' },
   ],
 });
 
@@ -365,7 +365,7 @@ room({
     }
   },
   objs: [
-    { id: 'tuer_lobby', name: 'Lobby', rect: [14, 96, 100, 244], walk: [72, 354], exit: ['lobby', 815, 374, -1], look: 'Die Tür zur Lobby.' },
+    { id: 'tuer_lobby', name: 'Treppe hinauf zur Standuhr', rect: [14, 96, 100, 244], walk: [72, 354], exit: ['lobby', 312, 366, 1], look: 'Die Wendeltreppe hinauf. Oben kommt man aus der Standuhr in der Lobby heraus – Dr. Freds Geheimgang.' },
     { id: 'tafel', name: 'Tafel', rect: [134, 50, 186, 108], look: 'E = mc². Darunter, durchgestrichen: "E = mc Toast". Und ganz unten: "Brot kaufen!"', txt: { pick: 'Die Tafel ist an die Wand geschraubt. Dr. Fred hat schlechte Erfahrungen gemacht.' } },
     { id: 'regal', name: 'Regal', rect: [130, 196, 196, 110], walk: [228, 356], look: 'Dr. Freds Chemikalien. Eine Flasche trägt das Etikett "NICHT TRINKEN (diesmal ernsthaft)".', txt: { pick: 'Ich fasse keine von Dr. Freds Flaschen an. Die letzte hat meine Augenbrauen umgefärbt.' } },
     { id: 'gutomat', name: 'Gut-O-Mat', rect: [362, 98, 236, 244], walk: [490, 362], dv: 'look', draw: drawMachineDyn },

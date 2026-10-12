@@ -13,7 +13,9 @@ function schildFrage(t) {
   const gross = t === t.toUpperCase() && /[A-ZÄÖÜ]{2}/.test(t);
   return gross ? t.toLowerCase().replace(/(^|[\s\-–→←(])(\p{L})/gu, (m, a, c) => a + c.toUpperCase()) : t;
 }
+const SCHILD_NEU = { 'LABOR': 'BÜRO' };   // umgewidmete Schilder: das Labor liegt jetzt hinter der Standuhr im Keller
 function schildText(t) {
+  if (SCHILD_NEU[t]) t = SCHILD_NEU[t];
   if (typeof Lang === 'undefined' || Lang.cur === 'de' || !t) return t;
   const q = schildFrage(t), r = Lang.t(q);
   if (!r || r === q) return t;
@@ -29,7 +31,7 @@ function schilderEinhaengen(id) {
   const room = ROOMS[id]; if (!room || room._schilder || typeof room.draw !== 'function') return;
   room._schilder = true;
   const malen = room.draw;
-  room.draw = function (g) { malen.call(this, g); if (Lang.cur !== 'de' && !g.isPix) schilderMalen(g, id); };
+  room.draw = function (g) { malen.call(this, g); if ((Lang.cur !== 'de' || Object.values(SCHILDER[id] || {}).some(s => SCHILD_NEU[s.t])) && !g.isPix) schilderMalen(g, id); };
 }
 // Grundfarbe rund um das Schild aus dem schon gemalten Bild (damit die deutsche Schrift verschwindet)
 function schildGrund(g, r) {

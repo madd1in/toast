@@ -196,11 +196,12 @@ RULES['talk o:uhr_banner'] = line('„Hallo, Toaster mit Flügeln.“ Er antwort
       await s('Dahinter führt ein Gang hinab. Es tickt. Es knarrt. Es riecht nach Kerzenwachs und Maschinenöl. Ich LIEBE diese Villa.');
     } else await s('Klick, knarz – Geheimgang offen. Ich kenne den Trick jetzt.');
   };
-  multi(['push', 'pull'], 'o:uhr_heute', oeffnen);
+  multi(['push', 'pull', 'open'], 'o:uhr_heute', oeffnen);   // wie im Original: einfach die Standuhr öffnen
+  // Hinter der Standuhr geht es hinab in Dr. Freds Geheimlabor (wie in Day of the Tentacle)
   ROOMS.lobby.objs.push({
-    id: 'uhrgang', name: 'Geheimgang in der Standuhr', rect: [258, 147, 92, 197], walk: [312, 362], dv: 'walk', exit: ['uhrwerk', 150, 358, 1],
+    id: 'uhrgang', name: 'Geheimgang zum Labor', rect: [258, 147, 92, 197], walk: [312, 362], dv: 'walk', exit: ['labor', 140, 398, 1],
     visible: () => !!fl().uhrGang,
-    look: 'Wo eben noch die Standuhr stand, führt jetzt eine Holztreppe hinab ins Ticken. Von unten flackert Kerzenlicht.',
+    look: 'Wo eben noch die Standuhr stand, führt jetzt eine Wendeltreppe hinab. Von unten blubbert es grün. Dr. Freds Geheimlabor.',
     draw(c, t) {
       if (imEcht3d('lobby')) return;   // im Echtzeit-3D schwingt die echte Uhr zur Seite (js/echt3d-szene.js)
       const k = Math.min(1, (Date.now() - (fl().uhrGangT || 0)) / 700), e = 1 - Math.pow(1 - k, 3);
@@ -240,3 +241,17 @@ RULES['walk o:keller_leiter'] = async () => {
   await goRoom(curId(), 'lobby', 630, 404, 1);
   await s('TADA! Ich bin aus dem Boden gekommen wie ein sehr gebildeter Maulwurf.');
 };
+
+// ---------- Labor im Keller: hinauf durch die Standuhr, das Büro bleibt zu ----------
+RULES['walk o:tuer_lobby'] = async () => {
+  Sound.sfx('door');
+  fl().uhrGang = 1; fl().uhrGangT = Date.now();
+  await goRoom(curId(), 'lobby', 312, 366, 1);
+  await wait(500); fl().uhrGang = 0; Sound.sfx('thunk'); shake(200, 3);
+  if (!fl().uhrAusLabor) { fl().uhrAusLabor = 1; await s('Ich steige aus der Standuhr. KLONK, sie schwingt hinter mir zu. Kein Mensch würde ahnen, was darunter blubbert.'); }
+};
+RULES['open o:tuer_lobby'] = RULES['walk o:tuer_lobby'];
+multi(['open', 'use', 'push', 'pull', 'walk'], 'o:tuer_labor', async () => {
+  Sound.sfx('knock');
+  await s(pick(['Abgeschlossen. Auf dem Schild steht „BÜRO – BITTE NICHT STÖREN, ICH ERFINDE“.', 'Zu. Das Labor ist nicht hier – Dr. Fred hat es hinter der Standuhr versteckt.', 'Ich rüttle. Die Tür rüttelt nicht zurück. Fred lässt sein Büro nie offen.']));
+});

@@ -1850,11 +1850,13 @@ function drawSpeech(scr) {
   const pk = Math.min(1, (G.t - sp.start) / 140), pop = pk < 1 ? 0.82 + 0.18 * (1 - Math.pow(1 - pk, 3)) + Math.sin(pk * Math.PI) * 0.06 : 1;
   cx.save(); cx.translate(x, y); if (!cx.isPix) cx.rotate(((schiefWert(sp.text) % 7) - 3) * 0.013); cx.scale(pop, pop); cx.translate(-x, -y);   // Sprechtext leicht schief
   readBox(x, y, maxW, lines.length, lh, fsz);
-  lines.forEach((l, i) => {
-    const ly = y - (lines.length - 1 - i) * lh;
-    if (!cx.isPix) { cx.fillStyle = 'rgba(8,2,16,0.45)'; cx.fillText(l, x + 2, ly + 3); }
-    cx.lineWidth = 5; cx.strokeStyle = '#0b0610'; cx.strokeText(l, x, ly);
-    cx.fillStyle = col; cx.fillText(l, x, ly);
+  lines.forEach((l, i) => {   // jede Zeile ein wenig anders schief und versetzt (DOTT-Untertitel)
+    const ly = y - (lines.length - 1 - i) * lh, k = cx.isPix ? 0 : ((schiefWert(l) % 5) - 2) * 0.012 + (i % 2 ? 0.01 : -0.01), dx = cx.isPix ? 0 : ((schiefWert(l) >> 3) % 7 - 3) * 2;
+    cx.save(); cx.translate(x + dx, ly); cx.rotate(k);
+    if (!cx.isPix) { cx.fillStyle = 'rgba(8,2,16,0.45)'; cx.fillText(l, 2, 3); }
+    cx.lineWidth = 5; cx.strokeStyle = '#0b0610'; cx.strokeText(l, 0, 0);
+    cx.fillStyle = col; cx.fillText(l, 0, 0);
+    cx.restore();
   });
   cx.restore();
 }
@@ -2676,17 +2678,21 @@ function drawTitle() {
   let y = (G.saved ? 236 : 262) - (G.hasSaves ? 22 : 0);
   G.titleBtns = btns.map(b => { const r = { ...b, x: bx, y, w: bw, h: b.big ? 50 : 34 }; y += r.h + 10; return r; });
   const p0 = G.titleBtns[0].y - 18;
+  // Menütafel und Knöpfe schief wie ein DOTT-Schild: die Tafel kippt, jeder Knopf auf seine eigene Art, leicht versetzt
+  cx.save(); cx.translate(bx + bw / 2, (p0 + y) / 2); cx.rotate(-0.035); cx.translate(-bx - bw / 2, -(p0 + y) / 2);
   R(cx, bx - 18, p0, bw + 36, y + 30 - p0, 'rgba(20,9,38,0.72)', 2.5, 18, '#7a5ab8');
-  L(cx, [bx - 4, p0 + 3, bx + bw + 4, p0 + 3], 1.5, 'rgba(255,255,255,0.14)');
-  for (const b of G.titleBtns) {
+  L(cx, [bx - 4, p0 + 3, bx + bw + 4, p0 + 9], 1.5, 'rgba(255,255,255,0.14)');
+  cx.restore();
+  G.titleBtns.forEach((b, i) => {
     const hot = inRect(G.mouse.x, G.mouse.y, b);
     b.hs = (b.hs || 1) + ((hot ? 1.045 : 1) - (b.hs || 1)) * 0.25;
-    cx.save(); cx.translate(b.x + b.w / 2, b.y + b.h / 2); cx.scale(b.hs, b.hs); cx.translate(-b.x - b.w / 2, -b.y - b.h / 2);
+    const kipp = cx.isPix ? 0 : ((i * 7 + 3) % 5 - 2) * 0.03 - 0.02 + (hot ? Math.sin(G.t * 0.012) * 0.025 : 0), rueck = cx.isPix ? 0 : ((i * 5 + 1) % 3 - 1) * 7;
+    cx.save(); cx.translate(b.x + b.w / 2 + rueck, b.y + b.h / 2); cx.rotate(kipp); cx.scale(b.hs, b.hs); cx.translate(-b.x - b.w / 2, -b.y - b.h / 2);
     if (hot) R(cx, b.x - 2, b.y - 2, b.w + 4, b.h + 4, 'rgba(255,224,102,0.16)', 0, 14);
     R(cx, b.x, b.y, b.w, b.h, b.big ? (hot ? '#ffe066' : '#ffd23a') : (hot ? '#3a2758' : '#251640'), 3, 12, b.big ? '#5a2a10' : (hot ? '#ffe066' : '#6a52a0'));
     txt(cx, b.label, b.x + b.w / 2, b.y + b.h / 2 + (b.big ? 8 : 6), b.big ? '400 22px "Titan One", sans-serif' : '700 16px "Baloo 2", sans-serif', b.big ? '#2a0a3a' : (hot ? '#ffe066' : '#e6dcff'));
     cx.restore();
-  }
+  });
   txt(cx, 'Spielbar mit Maus, Touch, Tastatur oder Xbox-Controller', bx + bw / 2, y + 16, '600 13px "Baloo 2", sans-serif', 'rgba(255,240,255,0.8)');
   if (XBOX_EDGE && !PAD.direkt) {   // Edge auf der Xbox startet jede Seite im Browser-Modus (Controller = Mauszeiger)
     const hy = y + 44, puls = 0.75 + 0.25 * Math.sin(G.t * 0.005);

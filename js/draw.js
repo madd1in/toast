@@ -478,7 +478,7 @@ function brows(c, a, t, x1, x2, y, w, col, lw) {
 }
 
 // ---------- Easter Eggs: Verbeugungen vor anderen Klassikern (Fußpunkt bei 0,0, Raumkoordinaten) ----------
-// Onkel Ed lugt alle 26 Sekunden für ein paar Sekunden aus der Labortür
+// Onkel Ed lugt alle 26 Sekunden für ein paar Sekunden aus der Bürotür (früher Labortür; das Labor liegt jetzt hinter der Standuhr)
 function edPeek(t) { const p = (t + 7000) % 26000; return p < 400 ? p / 400 : p < 4400 ? 1 : p < 4800 ? 1 - (p - 4400) / 400 : 0; }
 function eggFx(name, t, len) { const s = typeof G !== 'undefined' && G.eggFx && G.eggFx[name]; return s != null && t - s < len ? (t - s) / len : -1; }
 const EGG_DRAW = {

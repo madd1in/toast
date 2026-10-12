@@ -249,7 +249,7 @@ const EGGS = {
     use: ['Ich gieße Chuck mit dem Rest aus meiner Tasse. Er wirkt jetzt irgendwie koffeiniert.'],
     pick: ['Chuck bleibt hier. Er hat Wurzeln geschlagen. Wortwörtlich.'] },
   ed: { name: 'Onkel Ed', kind: 'ed', room: 'lobby', x: 928, y: 300, w: 44, h: 190, walk: [870, 392], dv: 'talk', when: () => edPeek(G.t) > 0.6,
-    look: ['Onkel Ed lugt aus der Labortür. Er bewacht sein Päckchen. Und seinen Hamster.', 'Onkel Ed. Er grüßt nie. Er späht nur.'],
+    look: ['Onkel Ed lugt aus der Bürotür. Er bewacht sein Päckchen. Und seinen Hamster.', 'Onkel Ed. Er grüßt nie. Er späht nur.'],
     talk: async p => { Sound.sfx('psst', panX(EGGS.ed.x)); await say(p, pick(['Onkel Ed flüstert: „Hast du mein Päckchen gesehen? Ich warte seit Jahren auf dieses Päckchen!“', 'Onkel Ed zischt: „Finger weg von meinem Hamster!“ – und schon ist er wieder weg.'])); },
     use: ['Ich winke Onkel Ed. Er zieht sich hinter den Türrahmen zurück. Sehr langsam.'] },
   grail: { name: 'Holzbecher', kind: 'grail', room: 'gasthaus', x: 226, y: 192, w: 20, h: 22, walk: [226, 400], dv: 'look',

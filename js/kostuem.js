@@ -94,7 +94,7 @@ ROOMS.konferenz.onEnter = async () => {
   await s('Es riecht nach Gummi, Konfetti und verlorener Hoffnung. Und der Clown kichert. Von ganz allein.');
 };
 // Ausgang in der Lobby: die neue Tür zwischen Standuhr und Sofa
-ROOMS.lobby.objs.push({ id: 'tuer_konferenz', name: 'Konferenzsaal', rect: (r => [r[0] - r[2] * 0.16, r[1] - r[3] * 0.36, r[2] * 1.32, r[3] * 1.36])((ALTBAU3D.lobby && ALTBAU3D.lobby.anchors.KonfTuer) || [347, 196, 89, 139]),   // Klickfläche wie die größere Tür walk: [392, 364], exit: ['konferenz', 92, 398, 1],
+ROOMS.lobby.objs.push({ id: 'tuer_konferenz', name: 'Konferenzsaal', rect: (r => [r[0] - r[2] * 0.06, r[1] - r[3] * 0.15, r[2] * 1.12, r[3] * 1.15])((ALTBAU3D.lobby && ALTBAU3D.lobby.anchors.KonfTuer) || [347, 196, 89, 139]),   // Klickfläche wie die größere Tür walk: [392, 364], exit: ['konferenz', 92, 398, 1],
   look: 'Die Tür zum Konferenzsaal. Darauf klebt ein vergilbtes Plakat: „1. Internationale Scherzartikel-Messe – HEUTE: 1987!“ Heute ist schon eine Weile her.' });
 
 // ---------- Regeln im Konferenzsaal ----------

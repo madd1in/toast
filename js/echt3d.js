@@ -269,7 +269,7 @@ function echt3dNaechsterHotspot() {
   for (const o of room.objs) {
     if (!isVisible(o)) continue;
     const w = typeof o.walk === 'function' ? o.walk() : o.walk || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10];
-    const d = Math.hypot(w[0] - p.x, (w[1] - p.y) * 1.6);
+    const d = Math.hypot(w[0] - p.x, (w[1] - p.y) * 1.6) * (o.exit ? 0.6 : 1);   // Ausgänge findet X schon von weiter weg
     if (d < bd) { bd = d; best = o; }
   }
   for (const a of Object.values(ACT)) if (a.room === room.id && a.visible && a.id !== curId() && a.talk) {
@@ -297,13 +297,14 @@ function echt3dAusgangPruefen(p) {
       const dx = w[0] - p.x, dy = (w[1] - p.y) * 1.6, d = Math.hypot(dx, dy);
       const drauf = (dx * zx + dy * zy * 1.6) / ((d || 1) * zl);
       const r = o.rect, inFlaeche = r && p.x > r[0] - 10 && p.x < r[0] + r[2] + 10 && p.y > r[1] && p.y < r[1] + r[3] + 22;
-      if ((d < 34 && drauf > 0.5) || (d < 64 && drauf > 0.85) || (inFlaeche && drauf > 0.6)) { ziel = o; break; }
+      const drueckt = p._gestossen3d && performance.now() - p._gestossen3d < 250 && d < 95 && drauf > 0.3;   // gegen die Wand neben der Tür
+      if ((d < 38 && drauf > 0.45) || (d < 70 && drauf > 0.8) || (inFlaeche && drauf > 0.5) || drueckt) { ziel = o; break; }
     }
     // erst hindurch, wenn man eine knappe halbe Sekunde zielstrebig darauf zuläuft – Vorbeistreifen zählt nicht
     const jetzt = performance.now();
     if (ziel) {
       if (!p._ausgangDruck || p._ausgangDruck.id !== ziel.id) { p._ausgangDruck = { id: ziel.id, seit: jetzt }; ziel = null; }
-      else if (jetzt - p._ausgangDruck.seit < 420) ziel = null;
+      else if (jetzt - p._ausgangDruck.seit < 320) ziel = null;
     } else p._ausgangDruck = null;
   }
   p._ausgang3d = null;
@@ -321,8 +322,10 @@ async function echt3dDurchgehen(o) {   // wie „Gehe zu“, nur ohne Anlauf: di
   save();
 }
 // Hervorhebung für Controller/Tasten: das nächste Ding vor der Figur bekommt ein Schild mit „X“ (X benutzt genau das)
+let echt3dTastenT = 0;   // zuletzt mit WASD/Pfeilen gelaufen (dann zeigt das Fokus-Schild „E“ statt „X“)
 function drawEcht3dFokus() {
-  if (!echt3dParkourAktiv() || G.pointer === 'mouse' || G.pointer === 'touch' || G.busy || G.photoMode || cx.isPix) return;
+  const tasten = performance.now() - echt3dTastenT < 6000;
+  if (!echt3dParkourAktiv() || ((G.pointer === 'mouse' || G.pointer === 'touch') && !tasten) || G.busy || G.photoMode || cx.isPix) return;
   const h = echt3dNaechsterHotspot(); if (!h) return;
   const room = ROOMS[viewRoomId()];
   let pos = null, name = '', verb = 'look';
@@ -343,10 +346,12 @@ function drawEcht3dFokus() {
   const w = cx.measureText(label).width + 44, x = Math.max(w / 2 + 6, Math.min(W - w / 2 - 6, sx)), y = Math.max(30, sy - 18);
   const puls = 1 + Math.sin(G.t * 0.008) * 0.04;
   cx.translate(x, y); cx.scale(puls, puls);
-  R(cx, -w / 2, -15, w, 30, 'rgba(18,10,28,0.82)', 2, 15, '#f1d6a0');
+  const raus = !!h.exit;   // Ausgang: grünes Schild mit Pfeil – X geht hindurch
+  R(cx, -w / 2, -15, w + (raus ? 22 : 0), 30, raus ? 'rgba(10,40,18,0.88)' : 'rgba(18,10,28,0.82)', 2, 15, raus ? '#7dff7a' : '#f1d6a0');
   E(cx, -w / 2 + 16, 0, 10, 10, '#2a6ad8', 2, 0, '#0b0610');
-  txt(cx, 'X', -w / 2 + 16, 5, '400 13px "Titan One", sans-serif', '#ffffff', 'center');
-  txt(cx, label, 12, 5, '800 15px "Baloo 2", sans-serif', '#fff0c8', 'center');
+  txt(cx, G.pointer === 'pad' ? 'X' : 'E', -w / 2 + 16, 5, '400 13px "Titan One", sans-serif', '#ffffff', 'center');
+  txt(cx, label, 12, 5, '800 15px "Baloo 2", sans-serif', raus ? '#c8ffc0' : '#fff0c8', 'center');
+  if (raus) txt(cx, '➜', w / 2 + 8, 6, '800 17px "Baloo 2", sans-serif', '#7dff7a', 'center');
   cx.restore();
 }
 function echt3dBenutzen() {
@@ -669,7 +674,19 @@ function drawEcht3dParkour() {
     if (!p || !aktiv() || !echt3dSteuerungErlaubt() || G.inIntro) return;
     const dx = (tasten.has('d') || tasten.has('arrowright') ? 1 : 0) - (tasten.has('a') || tasten.has('arrowleft') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.x : 0);
     const dy = (tasten.has('s') || tasten.has('arrowdown') ? 1 : 0) - (tasten.has('w') || tasten.has('arrowup') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.y : 0);
-    if (dx || dy) { const n = Math.max(1, Math.hypot(dx, dy)); echt3dSetzBewegungsziel(p, dx / n, dy / n); }
+    if (dx || dy) { const n = Math.max(1, Math.hypot(dx, dy)); echt3dSetzBewegungsziel(p, dx / n, dy / n); if (!echt3dVirtualStick.aktiv) echt3dTastenT = performance.now(); }
     else if (G.pointer !== 'pad' && p._eingabe3d) echt3dLenkungAus(p);
   };
 }
+// Zeitwechsel ohne Warten: am PC lädt im Hintergrund schon die Räume der anderen beiden Helden – nur im Stehen (das
+// Aufbauen eines Raums kostet einen Moment Rechenzeit) und nie auf der Xbox (Grafikspeicher, siehe speicherInfo)
+setInterval(() => {
+  const m = ECHT3D.mod;
+  if (!m || !m.ready || !m.speicherInfo || m.speicherInfo().sparsam || G.screen !== 'game' || !G.state || G.busy || G.inIntro || G.settings.retro) return;
+  const ich = me(); if (!ich || ich.walking || ich._gelenkt) return;
+  const hier = viewRoomId(); if (!m.raumGeladen(hier)) return;
+  for (const id of PLAYERS) {
+    const r = ACT[id] && ACT[id].room;
+    if (r && r !== hier && ECHT3D.rooms[r] && !m.raumGeladen(r) && !m.failed(r)) { m.hasRoom(r); break; }
+  }
+}, 3000);
