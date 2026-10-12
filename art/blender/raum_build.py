@@ -1142,7 +1142,7 @@ def build_auffahrt(SC):
         box(B, f'BordsteinA{k}', (k * 2.7, -19.25, 0.06), (0.2, 51.5, 0.12), MAUER, bevel=0.0)
     # ---- die Villa vom Titelbild ----
     HS = bpy.data.scenes['Haus']
-    T = Matrix.Translation((0, 22, 0)) @ Matrix.Scale(5, 4)
+    T = Matrix.Translation((0, 23.5, 0)) @ Matrix.Scale(5, 4)   # Spukhaus: Portikus und Stufen reichen weiter nach vorn
     villa = {}
     for o in HS.objects:
         if o.type != 'MESH':
@@ -1152,9 +1152,10 @@ def build_auffahrt(SC):
         c.matrix_world = T @ o.matrix_world
         villa[o.name] = c
     # Fenster rundum: Rückseite (gespiegelt) und beide Seiten (die mittleren Fensterachsen, gedreht)
+    rundum = any(o.name.startswith('FensterHU') for o in HS.objects)   # das Spukhaus hat schon Fenster auf allen Seiten
     for o in HS.objects:
         n = o.name
-        if o.type != 'MESH' or not (n.startswith(('FensterO', 'FensterU', 'Laden'))):
+        if rundum or o.type != 'MESH' or not (n.startswith(('FensterO', 'FensterU', 'Laden'))):
             continue
         hinten = o.copy(); SC.collection.objects.link(hinten); hinten.name = 'Hinten_' + n
         hinten.matrix_world = T @ Matrix.Rotation(math.pi, 4, 'Z') @ o.matrix_world
@@ -1317,10 +1318,11 @@ def render(name):
     build, sky = ROOMS3D[name]
     SC, cam = setup(name, sky)
     anchors = build(SC)
-    win = bpy.context.window
-    prev = win.scene
-    win.scene = SC   # erst in der aktiven Szene stimmen die Weltmatrizen
-    bpy.context.view_layer.update()
+    win = bpy.context.window   # mit Oberfläche: Szene umschalten; im Hintergrund-Job reicht die Ebene der Szene
+    prev = win.scene if win else None
+    if win:
+        win.scene = SC   # erst in der aktiven Szene stimmen die Weltmatrizen
+    SC.view_layers[0].update()
     pts = {}
     for k, o in anchors.items():   # Bildpunkte (in Spiel-Einheiten 960 × 440) der Objekt-Mittelpunkte für die Hotspots
         bb = [o.matrix_world @ Vector(c) for c in o.bound_box] if o.type != 'EMPTY' else [o.matrix_world.translation]
@@ -1336,7 +1338,8 @@ def render(name):
             SC.render.filepath = REPO + f'/art/render/raum_{name}.png'
             bpy.ops.render.render(write_still=True, scene=SC.name)
     finally:
-        win.scene = prev
+        if win:
+            win.scene = prev
     json.dump(pts, open(REPO + f'/art/render/raum_{name}.json', 'w'), indent=1)
     print('raum', name, pts)
 

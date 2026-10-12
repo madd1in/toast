@@ -288,8 +288,22 @@ function echt3dAusgangPruefen(p) {
   if (!p._ankunft.weg && Math.hypot(p.x - p._ankunft.x, (p.y - p._ankunft.y) * 1.6) > 50) p._ankunft.weg = true;
   let ziel = null;
   if (p._ausgang3d) ziel = OBJ[p._ausgang3d];
-  else if (p._gelenkt && p._ankunft.weg && p.walking) {
-    // hindurch, wenn man nah am Ausgang ist und auf ihn zuläuft, oder schon in seiner Fläche steht (Tür, Leiter, Weg)
+  else if (p._gelenkt && p._ankunft.weg && p.walking && ECHT3D.mod.ausgangLage) {
+    // im Raum gemessen (Meter). Viele Türen liegen in der Rückwand, ein, zwei Meter hinter dem Rand der Lauffläche –
+    // darum zählt die Nähe zu ihrem Laufpunkt (dem letzten Fleck davor) und die Richtung auf die Tür selbst; wer am
+    // Rand der Fläche oder an Möbeln weiter auf die Tür zu drückt, geht hindurch
+    const ich = ECHT3D.mod.spielerLage(p, room.id), v = p._v3d || { x: 0, z: 0 }, vl = Math.hypot(v.x, v.z);
+    const drueckt = p._gestossen3d && performance.now() - p._gestossen3d < 300;
+    for (const o of room.objs) {
+      if (!o.exit || !isVisible(o) || !o.rect || !ich || vl < 0.25) continue;
+      const t = ECHT3D.mod.ausgangLage(room.id, o.id, o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] * 0.6); if (!t) continue;
+      const wp = (typeof o.walk === 'function' ? o.walk() : o.walk) || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10], w = ECHT3D.mod.spielerLage({ x: wp[0], y: wp[1], room: room.id }, room.id);
+      const dx = t[0] - ich[0], dz = t[1] - ich[1], d = Math.hypot(dx, dz), drauf = (dx * v.x + dz * v.z) / ((d || 1) * vl);
+      const dw = w ? Math.hypot(w[0] - ich[0], w[1] - ich[1]) : 99;
+      if ((d < 1.35 && drauf > 0.3) || (dw < 1.1 && drauf > 0.4) || (drueckt && Math.min(d, dw + 0.4) < 1.9 && drauf > 0.15)) { ziel = o; break; }
+    }
+  } else if (p._gelenkt && p._ankunft.weg && p.walking) {
+    // Rückfall ohne 3D-Lage: in Spiel-Koordinaten
     const [zx, zy] = p._zug || [0, 0], zl = Math.hypot(zx, zy * 1.6) || 1;
     for (const o of room.objs) {
       if (!o.exit || !isVisible(o)) continue;
@@ -300,11 +314,12 @@ function echt3dAusgangPruefen(p) {
       const drueckt = p._gestossen3d && performance.now() - p._gestossen3d < 250 && d < 95 && drauf > 0.3;   // gegen die Wand neben der Tür
       if ((d < 38 && drauf > 0.45) || (d < 70 && drauf > 0.8) || (inFlaeche && drauf > 0.5) || drueckt) { ziel = o; break; }
     }
-    // erst hindurch, wenn man eine knappe halbe Sekunde zielstrebig darauf zuläuft – Vorbeistreifen zählt nicht
+  }
+  if (!p._ausgang3d) {   // erst hindurch, wenn man einen Moment zielstrebig darauf zuläuft – Vorbeistreifen zählt nicht
     const jetzt = performance.now();
     if (ziel) {
       if (!p._ausgangDruck || p._ausgangDruck.id !== ziel.id) { p._ausgangDruck = { id: ziel.id, seit: jetzt }; ziel = null; }
-      else if (jetzt - p._ausgangDruck.seit < 320) ziel = null;
+      else if (jetzt - p._ausgangDruck.seit < 180) ziel = null;
     } else p._ausgangDruck = null;
   }
   p._ausgang3d = null;
@@ -381,6 +396,7 @@ function echt3dLenkSchritt(dt) {
   if (!r) return;
   if (r.stand) { a._gelenkt = false; a._v3d = null; a._blick3d = null; a.walking = false; a.run = false; return; }
   const [x, y] = r.innen ? [r.x, r.y] : clampWalk(ROOMS[a.room], r.x, r.y);
+  if (!r.innen && Math.hypot(x - r.x, y - r.y) > 0.4) a._gestossen3d = performance.now();
   const mx = x - a.x, my = y - a.y;
   if (Math.abs(mx) > 0.2) a.dir = mx > 0 ? 1 : -1;
   if (Math.hypot(mx, my) > 0.01) a._zug = [mx, my];   // Bewegungsrichtung in Spiel-Koordinaten (für Türen)

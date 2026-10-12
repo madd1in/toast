@@ -22,6 +22,8 @@ for o in list(HS.collection.objects):
         continue
     if neu_alt:
         alt.collection.objects.link(o); HS.collection.objects.unlink(o)
+        if not o.name.endswith('_alt'):
+            o.name = o.name + '_alt'   # die neuen Teile sollen die alten Namen tragen (TuerL, Laterne0, FensterU0G …)
     elif o.name in alt.collection.objects:
         HS.collection.objects.unlink(o)
     else:
@@ -191,8 +193,8 @@ for p in lat_data.points:
 for o in list(HS.collection.objects):
     if o.type == 'MESH':
         m = o.modifiers.new('Krumm', 'LATTICE'); m.object = lat
-bpy.context.view_layer.update()
-dg = bpy.context.evaluated_depsgraph_get()
+HS.view_layers[0].update()
+dg = HS.view_layers[0].depsgraph   # auch im Hintergrund-Job die Ebene dieser Szene
 for o in list(HS.collection.objects):
     if o.type != 'MESH' or 'Krumm' not in o.modifiers:
         continue

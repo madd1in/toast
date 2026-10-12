@@ -1853,9 +1853,12 @@ function drawSpeech(scr) {
   lines.forEach((l, i) => {   // jede Zeile ein wenig anders schief und versetzt (DOTT-Untertitel)
     const ly = y - (lines.length - 1 - i) * lh, k = cx.isPix ? 0 : ((schiefWert(l) % 5) - 2) * 0.012 + (i % 2 ? 0.01 : -0.01), dx = cx.isPix ? 0 : ((schiefWert(l) >> 3) % 7 - 3) * 2;
     cx.save(); cx.translate(x + dx, ly); cx.rotate(k);
-    if (!cx.isPix) { cx.fillStyle = 'rgba(8,2,16,0.45)'; cx.fillText(l, 2, 3); }
-    cx.lineWidth = 5; cx.strokeStyle = '#0b0610'; cx.strokeText(l, 0, 0);
-    cx.fillStyle = col; cx.fillText(l, 0, 0);
+    if (cx.isPix) { cx.lineWidth = 5; cx.strokeStyle = '#0b0610'; cx.strokeText(l, 0, 0); cx.fillStyle = col; cx.fillText(l, 0, 0); }
+    else {
+      cx.transform(1, 0, (((schiefWert(l) >> 5) % 7) - 3) * 0.04, 1, 0, 0);
+      krummText(cx, l, 'center', fsz, col, 5, '#0b0610', 'rgba(8,2,16,0.45)', sp.a && sp.a.talking ? 1 : 0.35);
+      cx.textAlign = 'center';
+    }
     cx.restore();
   });
   cx.restore();
@@ -2064,7 +2067,9 @@ function drawToasts() {
 }
 function button(r, label, hot, active) {   // Knöpfe sitzen leicht schief (DOTT), jeder auf seine Art
   const k = cx.isPix ? 0 : ((schiefWert(String(label)) % 5) - 2) * 0.02;
-  cx.save(); cx.translate(r.x + r.w / 2, r.y + r.h / 2); cx.rotate(k); cx.translate(-r.x - r.w / 2, -r.y - r.h / 2);
+  cx.save(); cx.translate(r.x + r.w / 2, r.y + r.h / 2); cx.rotate(k);
+  if (!cx.isPix) cx.transform(1, 0, (((schiefWert(String(label)) >> 3) % 7) - 3) * 0.05, 1 + (((schiefWert(String(label)) >> 6) % 5) - 2) * 0.025, 0, 0);
+  cx.translate(-r.x - r.w / 2, -r.y - r.h / 2);
   R(cx, r.x, r.y, r.w, r.h, hot ? '#3a2758' : '#24173a', 2, 8, active ? '#ffe066' : '#4a3672');
   const bz = Math.min(uf(14), Math.round(r.h * 0.5));
   txt(cx, label, r.x + r.w / 2, r.y + r.h / 2 + bz * 0.36, `700 ${bz}px "Baloo 2", sans-serif`, hot || active ? '#ffe066' : '#d7c6ff');
@@ -2455,10 +2460,10 @@ function drawLogo3d(t) {
   cx.restore();
   return true;
 }
-// Herrenhaus in 3D (in Blender modelliert: Holzverkleidung, Schindeldach, schiefe Fensterläden, Gaube).
+// Spukhaus in 3D (in Blender modelliert wie die Haunted Mansion: Säulenveranda, Balkon, Gauben, Kuppel – alles schief).
 // Die Ankerpunkte (Anteile im Bild) kommen aus der Kamera-Projektion in Blender: Schornstein, Fenster, Laternen.
 const HAUS_IMG = loadImg('img/haus.png');
-const HAUS_AT = {"chimney": [0.488, 0.224], "windows": [[0.176, 0.615], [0.176, 0.783], [0.353, 0.618], [0.353, 0.786], [0.53, 0.621], [0.53, 0.789], [0.707, 0.624], [0.707, 0.792], [0.194, 0.254], [0.194, 0.34], [0.194, 0.425], [0.66, 0.301], [0.66, 0.398]], "lamps": [[0.341, 0.889], [0.55, 0.892]]};
+const HAUS_AT = {"chimney": [0.244, 0.254], "windows": [[0.146, 0.844], [0.266, 0.846], [0.678, 0.849], [0.798, 0.848], [0.124, 0.628], [0.254, 0.631], [0.391, 0.633], [0.531, 0.632], [0.668, 0.63], [0.798, 0.628], [0.2, 0.426], [0.451, 0.428], [0.701, 0.422], [0.256, 0.395], [0.507, 0.397], [0.758, 0.391], [0.076, 0.406], [0.881, 0.401], [0.52, 0.244], [0.478, 0.247], [0.421, 0.259], [0.382, 0.273], [0.384, 0.282], [0.426, 0.279], [0.483, 0.267], [0.522, 0.252]], "lamps": [[0.356, 0.83], [0.582, 0.831]]};
 // Laternen am Herrenhaus (3D-Haus: aus den Blender-Ankern, sonst die gezeichneten): [x, Oberkante]
 function titleLamps() {
   if (!cx.isPix && imgOk(HAUS_IMG)) { const h = 522, w = h * HAUS_IMG.naturalWidth / HAUS_IMG.naturalHeight, x = 262 - w / 2, y = 606 - h; return HAUS_AT.lamps.map(([fx, fy]) => [x + fx * w, y + fy * h - LAMP_TOP]); }
@@ -2487,7 +2492,7 @@ function drawHaus3d(t) {
   const [sx, sy] = at(HAUS_AT.chimney);
   for (let i = 0; i < 3; i++) { const k = ((t * 0.0003) + i / 3) % 1; cx.save(); cx.globalAlpha = (1 - k) * 0.5; E(cx, sx + Math.sin(t * 0.002 + i) * 10, sy - 6 - k * 90, 10 + k * 18, 7 + k * 12, 'rgba(122,90,154,0.9)', 0); cx.restore(); }
   cx.drawImage(HAUS_IMG, x, y, w, h);
-  HAUS_AT.windows.forEach((p, i) => { const [wx, wy] = at(p), k = 0.5 + 0.5 * Math.sin(t * 0.0021 + i * 1.7); glow(wx, wy, i < 8 ? 40 : 28, '#ffbe5a', 0.12 + 0.22 * k); });
+  HAUS_AT.windows.forEach((p, i) => { const [wx, wy] = at(p), k = 0.5 + 0.5 * Math.sin(t * 0.0021 + i * 1.7); glow(wx, wy, i < 10 ? 40 : 24, '#ffbe5a', 0.12 + 0.22 * k); });
   HAUS_AT.lamps.forEach((p, i) => { const [lx, ly] = at(p), f = 0.85 + 0.15 * Math.sin(t * 0.017 + i * 2.3) * Math.sin(t * 0.007 + i); glow(lx, ly, 38, '#ffc86e', 0.5 * f); });
   return true;
 }

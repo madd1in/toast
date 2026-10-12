@@ -155,9 +155,12 @@ def export(name, objs, cam=None):
     """objs: Objekte samt Hierarchie (Eltern vor Kindern egal); cam: optional Kamera-Objekt."""
     src_scene = objs[0].users_scene[0]
     T = bpy.data.scenes.new('Export3D_' + name)
-    win = bpy.context.window
-    prev = win.scene
-    win.scene = src_scene
+    win = bpy.context.window   # mit Oberfläche: Szene im Fenster umschalten; im Hintergrund-Job (blender -b) über temp_override
+    prev = win.scene if win else None
+    if win:
+        win.scene = src_scene
+    ctx = bpy.context.temp_override(scene=src_scene, view_layer=src_scene.view_layers[0])
+    ctx.__enter__()
     bpy.context.view_layer.update()
     dg = bpy.context.evaluated_depsgraph_get()
     cache, made, mapping = {}, [], {}
@@ -195,17 +198,21 @@ def export(name, objs, cam=None):
         if cam is not None:
             T.collection.objects.link(cam)
             T.camera = cam
-        win.scene = T
-        bpy.context.view_layer.update()
+        if win:
+            win.scene = T
         path = OUT + name + '.glb'
         logging.disable(logging.INFO)   # der glTF-Exporter meldet sonst jedes einzelne Objekt
-        bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_active_scene=True, export_apply=False,
-                                  export_image_format='JPEG', export_jpeg_quality=82, export_cameras=cam is not None, export_lights=False,
-                                  export_extras=False, export_yup=True, export_animations=False, export_materials='EXPORT')
+        with bpy.context.temp_override(scene=T, view_layer=T.view_layers[0]):
+            bpy.context.view_layer.update()
+            bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_active_scene=True, export_apply=False,
+                                      export_image_format='JPEG', export_jpeg_quality=82, export_cameras=cam is not None, export_lights=False,
+                                      export_extras=False, export_yup=True, export_animations=False, export_materials='EXPORT')
         logging.disable(logging.NOTSET)
         print('glb', name, len(made), 'Objekte', os.path.getsize(path) // 1024, 'KB')
     finally:
-        win.scene = prev
+        ctx.__exit__(None, None, None)
+        if win:
+            win.scene = prev
         if cam is not None and cam.name in T.collection.objects:
             T.collection.objects.unlink(cam)
         for c in made:
@@ -279,6 +286,11 @@ for w in WHAT:
     elif w in ('hoagie', 'laverne', 'bernard', 'drfred', 'gertrude', 'hancock'):   # Figuren mit Gelenken (figur_rig.py)
         root = bpy.data.objects[{'hoagie': 'HRig', 'laverne': 'LRig', 'bernard': 'BRig', 'drfred': 'FRig', 'gertrude': 'GRig', 'hancock': 'KRig'}[w]]
         export(w, tree(root))
+    elif w in ('green', 'guard', 'purple'):   # Tentakel (Rig-Szenen aus tent_v2.py): das ganze Modell in Grundhaltung
+        SC = bpy.data.scenes['Rig3D_T_' + {'green': 'green', 'guard': 'guard', 'purple': 'lila'}[w]]
+        roots = [o for o in SC.objects if o.parent is None and o.type in ('EMPTY', 'MESH', 'ARMATURE') and not o.name.endswith('_Boden')]   # ohne Bodenscheibe der Rig-Szene
+        objs = [x for r in roots for x in tree(r) if x.type in ('EMPTY', 'MESH')]
+        export(w, objs)
     else:   # Gäste: ganzes Modell der Gast-Szene in Grundhaltung
         SC = bpy.data.scenes['Gast3D_' + w]
         roots = [o for o in SC.objects if o.parent is None and o.type in ('EMPTY', 'MESH')]

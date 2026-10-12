@@ -181,12 +181,17 @@ function P(c, pts, fill, lw = 3, stroke) {
 }
 // Kästen ohne rechte Winkel (DOTT): die Ecken sitzen leicht versetzt, immer gleich für dieselbe Größe (kein Flackern)
 function schiefKasten(p, x, y, w, h, r) {
-  const k = Math.min(6, w * 0.03, h * 0.08), s = ((Math.round(w) * 73856093) ^ (Math.round(h) * 19349663)) >>> 0;
+  const k = Math.min(9, w * 0.045, h * 0.12), s = ((Math.round(w) * 73856093) ^ (Math.round(h) * 19349663)) >>> 0;
   const j = i => (((s >>> (i * 4)) & 15) / 7.5 - 1) * k;
   const P = [[x + j(0), y + j(1)], [x + w + j(2), y + j(3)], [x + w + j(4), y + h + j(5)], [x + j(6), y + h + j(7)]];
   const rr = Math.max(0, Math.min(r, w / 2 - 1, h / 2 - 1));
-  p.moveTo((P[0][0] + P[1][0]) / 2, (P[0][1] + P[1][1]) / 2);
-  for (let i = 1; i <= 4; i++) { const a = P[i % 4], b = P[(i + 1) % 4]; if (rr) p.arcTo(a[0], a[1], b[0], b[1], rr); else p.lineTo(a[0], a[1]); }
+  const beule = i => ((((s * 2654435761) >>> (i * 5 + 3)) & 15) / 7.5 - 1) * Math.min(6, k * 0.9);
+  const M = i => {   // Mitte der Kante i (P[i] → P[i+1]), quer zur Kante verschoben
+    const a = P[i % 4], b = P[(i + 1) % 4], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, q = beule(i % 4);
+    return [(a[0] + b[0]) / 2 + dy / l * q, (a[1] + b[1]) / 2 - dx / l * q];
+  };
+  const m0 = M(0); p.moveTo(m0[0], m0[1]);
+  for (let i = 1; i <= 4; i++) { const a = P[i % 4], m = M(i); if (rr) p.arcTo(a[0], a[1], m[0], m[1], rr); else p.lineTo(a[0], a[1]); p.lineTo(m[0], m[1]); }
   p.closePath();
 }
 function R(c, x, y, w, h, fill, lw = 3, r = 0, stroke) {
@@ -216,6 +221,31 @@ function grad(c, x0, y0, x1, y1, stops) { const g = c.createLinearGradient(x0, y
 // Schiefe Schrift wie in Day of the Tentacle: jeder Schriftzug sitzt leicht schräg (immer gleich, kein Flackern),
 // große Schrift tanzt Buchstabe für Buchstabe ein wenig aus der Reihe
 function schiefWert(s) { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+const _glyphW = new Map();
+function glyphW(c, ch) {   // Breiten je Schrift und Zeichen merken – sonst misst jedes Bild hunderte Buchstaben neu
+  const key = c.font + '\u0001' + ch; let w = _glyphW.get(key);
+  if (w === undefined) { if (_glyphW.size > 8000) _glyphW.clear(); w = c.measureText(ch).width; _glyphW.set(key, w); }
+  return w;
+}
+// Verzerrte Schrift: jeder Buchstabe für sich geschert, gestreckt, gekippt und aus der Zeile gehüpft – immer gleich
+// für denselben Text (kein Flackern); wabbel > 0 lässt die Buchstaben zusätzlich schwabbeln (Sprechtext beim Reden)
+function krummText(c, s, align, px, col, stroke, strokeCol, schatten, wabbel) {
+  const lauf = px * 0.035;   // etwas mehr Luft zwischen den Buchstaben, Wortlücken breiter – gekippte Buchstaben rücken sonst zusammen
+  const chars = [...s], ws = chars.map(ch => ch === ' ' ? glyphW(c, ch) * 1.7 + lauf : glyphW(c, ch) + lauf), ges = ws.reduce((a, b) => a + b, 0) - lauf, h = schiefWert(s);
+  const st = Math.max(0.45, Math.min(1, px / 22)), t = wabbel ? (typeof G !== 'undefined' ? G.t : performance.now()) * 0.001 : 0;   // kleine Schrift weniger (lesbar)
+  let x0 = align === 'center' ? -ges / 2 : align === 'right' ? -ges : 0;
+  c.textAlign = 'center';
+  const pos = chars.map((ch, i) => {
+    const q = (h % 997) * 0.37 + i * 2.17, wb = wabbel ? Math.sin(t * 6.5 + i * 0.85) * wabbel : 0, wb2 = wabbel ? Math.cos(t * 4.3 + i * 1.3) * wabbel : 0;
+    const p = { x: x0 + ws[i] / 2, y: ((Math.sin(i * 1.9 + h) * 0.09 + Math.sin(i * 0.7 + h * 0.13) * 0.05) * st + wb * 0.1) * px,
+      r: Math.sin(q) * 0.09 * st + wb2 * 0.07, sx: 1 + Math.sin(q * 1.3 + 1) * 0.08 * st + wb2 * 0.04, sy: 1 + Math.sin(q * 0.8 + 2) * 0.13 * st + wb * 0.06, k: Math.sin(q * 0.6 + 3) * 0.18 * st };
+    x0 += ws[i]; p.x -= lauf / 2; return p;
+  });
+  const zeichne = fn => { for (let i = 0; i < chars.length; i++) { const p = pos[i]; c.save(); c.translate(p.x, p.y); c.rotate(p.r); c.transform(p.sx, 0, -p.k, p.sy, 0, 0); fn(chars[i]); c.restore(); } };
+  if (schatten) { c.fillStyle = schatten; zeichne(ch => c.fillText(ch, 2, 3)); }
+  if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; zeichne(ch => c.strokeText(ch, 0, 0)); }
+  c.fillStyle = col; zeichne(ch => c.fillText(ch, 0, 0));
+}
 function txt(c, s, x, y, font, col, align = 'center', stroke = 0, strokeCol = OUT) {
   if (typeof Lang !== 'undefined' && Lang.cur !== 'de') s = Lang.t(s);
   s = String(s);
@@ -226,16 +256,10 @@ function txt(c, s, x, y, font, col, align = 'center', stroke = 0, strokeCol = OU
     c.fillStyle = col; c.fillText(s, x, y);
     return;
   }
-  c.save(); c.translate(x, y); c.rotate(((h % 9) - 4) * 0.011);   // bis 2,5 Grad schief
-  if (px >= 20 && s.length <= 40) {   // große Schrift: Buchstaben einzeln, leicht gehüpft und gekippt
-    const ws = [...s].map(ch => c.measureText(ch).width), ges = ws.reduce((a, b) => a + b, 0);
-    let x0 = align === 'center' ? -ges / 2 : align === 'right' ? -ges : 0;
-    c.textAlign = 'left';
-    const pos = ws.map((w, i) => { const p = [x0, Math.sin(i * 1.9 + h) * px * 0.08, Math.sin(i * 2.7 + h * 0.3) * 0.1]; x0 += w; return p; });
-    const zeichne = fn => [...s].forEach((ch, i) => { const [bx, by, r] = pos[i]; c.save(); c.translate(bx, by); c.rotate(r); fn(ch); c.restore(); });
-    if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; zeichne(ch => c.strokeText(ch, 0, 0)); }
-    c.fillStyle = col; zeichne(ch => c.fillText(ch, 0, 0));
-  } else {
+  c.save(); c.translate(x, y); c.rotate(((h % 9) - 4) * 0.013);   // bis 3 Grad schief
+  c.transform(1, 0, (((h >> 4) % 7) - 3) * 0.035, 1, 0, 0);   // und die ganze Zeile geschert
+  if (s.length <= 90) krummText(c, s, align, px, col, stroke, strokeCol);
+  else {
     if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; c.strokeText(s, 0, 0); }
     c.fillStyle = col; c.fillText(s, 0, 0);
   }

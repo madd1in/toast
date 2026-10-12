@@ -15,7 +15,7 @@ raum3d('auffahrt', 'img/raum_auffahrt.jpg', {
   // Vorplatz bis an die Stufen (Blender y 8 … 14,3); Maßstab wie die Kamera: Horizont 185, Maßstab 1 an der Vorderkante
   walk: [[8, 324], [952, 324], [958, 432], [2, 432]], yTop: 322, sMin: (322 - 185) / (432 - 185),
   objs: [
-    { id: 'haustuer_villa', name: 'Haustür', rect: [389, 116, 183, 145], walk: [480, 328], dv: 'walk', exit: ['lobby', 120, 420, 1],
+    { id: 'haustuer_villa', name: 'Haustür', rect: [378, 75, 164, 182], walk: [462, 330], dv: 'walk', exit: ['lobby', 120, 420, 1],
       look: 'Die Haustür der Villa Edison. Zwei Flügel, zwei Klinken, null Klingel. Dr. Fred hält Klingeln für „einen Angriff auf die Konzentration“.' },
     { id: 'tourbus', name: 'Tourbus', rect: [86, 249, 406, 95], walk: [300, 352],
       look: 'Hoagies Tourbus. Auf dem Dachschild steht „TOAST WARS TOUR“. Die Tour bestand bisher aus einem Auftritt. In einer Garage. Vor drei Leuten. Zwei davon waren wir.' },
@@ -40,12 +40,19 @@ ROOMS.lobby.objs.push({
 // einmal um die Villa herum und zum Schluss tief hinunter zum Tourbus
 // Bahn des Kamera-Tentakels (Blender-Meter): vom Anflugpunkt am Tor die Auffahrt hinauf, einmal um die Villa, dann zu
 // seinem Platz rechts vom Bus; die Kamera folgt dicht dahinter und landet zum Schluss auf dem Bus
+// Genüsslich wie in Super Mario 64: eine weite Ellipse um das Spukhaus (21 × 16 m, mit Kuppel 24 m hoch), über der
+// Rückseite am höchsten; die Kamera schaut dabei immer zur Villa, das Tentakel fliegt vorne im Bild
+const ANKUNFT_VILLA = [-1, 22, 9];
 const ANKUNFT_FLUG = [
-  [1.2, -31.2, 6.1], [0.5, -18, 7], [-2.5, -6, 5.5], [-15, 5, 8], [-23, 20, 10.5], [-17, 37, 13], [0, 43, 15], [17, 37, 13],
-  [23.5, 20, 10.5], [15, 6, 7], [8, 6.5, 4.6], [4.6, 9.4, 3.0],
+  [1.2, -31.2, 6.1], [0.6, -20, 7.5],
+  ...Array.from({ length: 16 }, (_, k) => {
+    const w = 0.2 + k * (Math.PI * 2 - 0.8) / 15;   // vorn → links → hinten → rechts → wieder vorn rechts
+    return [ANKUNFT_VILLA[0] - 34 * Math.sin(w), ANKUNFT_VILLA[1] - 30 * Math.cos(w), 9 + 9 * Math.pow(Math.sin(w / 2), 2)];
+  }),
+  [8, 6.5, 4.6], [4.6, 9.4, 3.0],
 ];
 const ANKUNFT_FLUG_ENDE = [7.4, 0.8, 2.5, -0.8, 11.2, 1.55];   // Schlussbild: Bus, Haustür und das Tentakel rechts
-const ANKUNFT_FLUGZEIT = 22000;
+const ANKUNFT_FLUGZEIT = 34000;
 const KT = async text => say(null, '​' + await Lang.tAsync('Kamera-Tentakel') + ': ' + await Lang.tAsync(text));   // Sprecher und Satz getrennt übersetzt
 function ankunftTween(key, ziel, ms) {   // G.ankunft[key] weich auf ziel (Spielzeit, läuft mit dem Vorspann-Tempo mit)
   const A = G.ankunft; if (!A) return Promise.resolve();
@@ -89,11 +96,17 @@ async function ANKUNFT() {
     await fadeTo(0, 900);
     await KT('Hallo und herzlich willkommen! Hier spricht das Kamera-Tentakel – live vor der Villa Edison!');
     // das Tentakel dreht ab und fliegt einmal um die Villa; die Kamera folgt ihm, es bleibt schön im Bild
-    const flug = drei && ECHT3D.mod.kameraflug('auffahrt', ANKUNFT_FLUG, ANKUNFT_FLUGZEIT, 44, { folgen: true, ende: ANKUNFT_FLUG_ENDE });
+    const flug = drei && ECHT3D.mod.kameraflug('auffahrt', ANKUNFT_FLUG, ANKUNFT_FLUGZEIT, 50, { folgen: true, ende: ANKUNFT_FLUG_ENDE, blick: ANKUNFT_VILLA });
     G.ankunft.kt = flug ? 'flug' : 'schweben'; Sound.sfx('whoosh');
     const t0 = G.t;
     await wait(1200);
     await KT('Ich bleibe den ganzen Abend an euch dran. Wer mag, dreht meinen Blick selbst: rechter Stick, Ziehen oder Wischen.');
+    if (flug) {   // ein paar Worte zur Villa, während es hinten herum geht
+      await wait(Math.max(0, ANKUNFT_FLUGZEIT * 0.3 - (G.t - t0)));
+      await KT('Und da ist sie: die Villa Edison! Zwei Stockwerke, zwei Kamine, eine Kuppel – und kein einziger rechter Winkel.');
+      await wait(Math.max(0, ANKUNFT_FLUGZEIT * 0.55 - (G.t - t0)));
+      await KT('Hinten raus der Garten – und irgendwo da drin ein Labor, aus dem es schon wieder raucht.');
+    }
     if (flug) await wait(Math.max(0, ANKUNFT_FLUGZEIT - (G.t - t0) - 1200));
     G.ankunft.kt = 'schweben';
     await KT('Achtung, da kommen sie! Ton läuft … Kamera läuft … und: Action!');

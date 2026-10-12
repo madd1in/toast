@@ -16,6 +16,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 export let ready = false;
 let kontextWeg = false;   // Grafikkontext vom Gerät entzogen (z. B. Konsole im Hintergrund): dann zurück zum vorgerenderten Bild
 export function verloren() { return kontextWeg; }
+export function kontextProbe() { const x = renderer && renderer.getContext().getExtension('WEBGL_lose_context'); if (x) x.loseContext(); return !!x; }   // zum Ausprobieren der Wiederbelebung (Konsole)
 const GW = 960, GH = 440;   // Spiel-Einheiten des Raumbilds
 const INK = [0.04, 0.012, 0.07];
 const V = '?v=' + (globalThis.TT_VER || 0);   // Versions-Anhang für Modelle und Raumdaten (Browser-Cache nach Updates)
@@ -107,36 +108,58 @@ function himmel(top, unten) {
 }
 
 // ---------- Aufbau: Renderer und Figuren; Räume kommen beim ersten Besuch dazu ----------
-export async function init(base = 'img/3d/') {
-  BASE = base;
-  // Renderer: erst mit voller Qualität, sonst sparsam (Xbox, ältere Grafikchips) – ohne Kantenglättung und Schatten
-  let canvas = null, sparsam = false;
-  for (const opt of [{ antialias: true, powerPreference: 'high-performance' }, { antialias: false, powerPreference: 'low-power' }]) {
+// Renderer: erst mit voller Qualität, sonst sparsam (Xbox, ältere Grafikchips) – ohne Kantenglättung und Schatten
+let neuT = 0;
+function rendererBauen() {
+  let canvas = null, sparsam = false, r = null;
+  for (const opt of [{ antialias: !SPARSAM, powerPreference: 'high-performance' }, { antialias: false, powerPreference: 'low-power' }]) {
     try {
       canvas = document.createElement('canvas');
-      renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true, alpha: false, failIfMajorPerformanceCaveat: false, ...opt });
+      r = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true, alpha: false, failIfMajorPerformanceCaveat: false, ...opt });
       break;
-    } catch (e) { console.warn('Echtzeit-3D: Renderer', opt, e); renderer = null; sparsam = true; }
+    } catch (e) { console.warn('Echtzeit-3D: Renderer', opt, e); r = null; sparsam = true; }
   }
-  if (!renderer) throw new Error('WebGL-Renderer ließ sich nicht starten');
-  renderer.setPixelRatio(1);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = !sparsam && !/xbox/i.test(navigator.userAgent || '');
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.shadowMap.autoUpdate = false;   // Schatten jedes zweite Bild (frame) – spart fast die Hälfte der Schattenkosten
-  // Kontext verloren (Grafikspeicher voll, Konsole im Hintergrund): nicht für immer aufgeben – sparsamer werden und auf
-  // die Rückgabe warten; three.js lädt danach alles von selbst neu auf die Grafikkarte
+  if (!r) throw new Error('WebGL-Renderer ließ sich nicht starten');
+  r.setPixelRatio(1);
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  r.shadowMap.enabled = !sparsam && !SPARSAM;
+  r.shadowMap.type = THREE.PCFSoftShadowMap;
+  r.shadowMap.autoUpdate = false;   // Schatten jedes zweite Bild (frame) – spart fast die Hälfte der Schattenkosten
+  // Kontext verloren (Grafikspeicher voll, Konsole im Hintergrund, Zeitreise in einen großen Raum): nicht aufgeben –
+  // sparsamer werden und kurz auf die Rückgabe warten; kommt sie nicht (Edge auf der Xbox gibt ihn oft nie zurück),
+  // einen frischen Renderer bauen und den Raum neu laden
   canvas.addEventListener('webglcontextlost', e => {
+    if (r !== renderer) return;
     e.preventDefault(); kontextWeg = true; kontextVerluste++; sparStufe = Math.max(sparStufe, 1);
     console.warn('Echtzeit-3D: WebGL-Kontext verloren');
     if (typeof note === 'function') note('Echtzeit-3D: Grafikspeicher knapp – kurz das gemalte Bild, 3D kommt gleich wieder.');
+    clearTimeout(neuT); neuT = setTimeout(neuStarten, 2000);
   });
   canvas.addEventListener('webglcontextrestored', () => {
+    if (r !== renderer) return;
+    clearTimeout(neuT);
     console.warn('Echtzeit-3D: WebGL-Kontext wieder da');
     for (const R of Object.values(rooms)) if (R.ready && R.id !== letzterRaum) raumFreigeben(R);
     kontextWeg = false;
   });
-  effect = new OutlineEffect(renderer, { defaultThickness: 0.0032, defaultColor: INK, defaultAlpha: 1 });
+  renderer = r;
+  effect = new OutlineEffect(r, { defaultThickness: 0.0032, defaultColor: INK, defaultAlpha: 1 });
+}
+function neuStarten() {
+  if (!kontextWeg) return;
+  try {
+    const alt = renderer;
+    for (const id of Object.keys(rooms)) delete rooms[id];   // die Räume lagen im verlorenen Kontext – frisch laden
+    matCache.clear(); letzterRaum = null; letzterSchatten = null; fischRT = null;
+    rendererBauen();
+    try { alt.dispose(); } catch (e) { /* schon weg */ }
+    kontextWeg = false;
+    console.warn('Echtzeit-3D: neuer Renderer');
+  } catch (e) { console.warn('Echtzeit-3D: Neustart', e); neuT = setTimeout(neuStarten, 5000); }
+}
+export async function init(base = 'img/3d/') {
+  BASE = base;
+  rendererBauen();
   GRAD = new THREE.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, THREE.RedFormat);
   GRAD.minFilter = GRAD.magFilter = THREE.NearestFilter; GRAD.needsUpdate = true;
   loader = new GLTFLoader();
@@ -165,7 +188,7 @@ export function hasRoom(id) {
 // Grafikspeicher schonen: am PC vier Räume im Speicher, auf Xbox und kleinen Geräten zwei; nach einem Speicher-Engpass nur
 // noch der Raum, in dem man gerade ist (der vorige wird freigegeben, bevor der nächste lädt)
 const SPARSAM = /xbox/i.test(navigator.userAgent || '') || !!(navigator.deviceMemory && navigator.deviceMemory <= 4);
-let sparStufe = SPARSAM ? 0 : -1, kontextVerluste = 0;
+let sparStufe = /xbox/i.test(navigator.userAgent || '') ? 1 : SPARSAM ? 0 : -1, kontextVerluste = 0;
 export function speicherInfo() { return { sparsam: SPARSAM, stufe: sparStufe, verluste: kontextVerluste, raeume: Object.values(rooms).filter(r => r.ready).map(r => r.id) }; }
 function raeumeAuf(neu) {
   const max = sparStufe >= 0 ? 0 : 2;   // so viele weitere Räume dürfen bleiben (neben dem neuen und – außer im Engpass – dem aktuellen)
@@ -256,7 +279,7 @@ export const LOBBY_TREPPE = Array.from({ length: 14 }, (_, i) => [-8.05, -6.85, 
 // Was auf dem Boden steht (Sofa, Automat, Tresen, Tische, Schränke, Uhren), versperrt der gesteuerten Figur den Weg;
 // niedrige Dinge sind Plattformen wie in Super Mario 64: hinaufspringen und obendrauf herumlaufen.
 const _kb = new THREE.Box3(), FIGUR_R = 0.28, STUFE = 0.4;   // so hoch steigt man ohne Sprung (Treppenstufe, Bordstein, Podest)
-const KISTEN_EXTRA = { lobby: LOBBY_TREPPE, auffahrt: [[-4.8, 0.2, 9.95, 12.05, 2.6], [-10.3, 10.3, 16.4, 27.7, 13.5]] };   // Tourbus und Villa (zu groß für die automatischen Kisten)   // eigene Bauten (Treppe) sperren von der Seite ebenfalls
+const KISTEN_EXTRA = { lobby: LOBBY_TREPPE, auffahrt: [[-4.8, 0.2, 9.95, 12.05, 2.6], [-9.8, 9.8, 18.4, 28.6, 13]] };   // Tourbus und Spukhaus   // Tourbus und Villa (zu groß für die automatischen Kisten)   // eigene Bauten (Treppe) sperren von der Seite ebenfalls
 function kollisionsKisten(root, out = [], beweglichRe = null) {
   root.updateMatrixWorld(true);
   const visit = list => {
@@ -394,6 +417,7 @@ async function ladeRaum(id) {
   for (const k of KISTEN_EXTRA[id] || []) kisten.push({ k, o: null });
   const innen = INNENRAUM.has(id) ? raumSchliessen(scene, camera, id) : null;
   if (innen) kisten.push(...innen.dekoKisten);   // Möbel an der Vorderwand (nur bei gedrehter Kamera da)
+  if (DRAUSSEN.has(id)) baeumeVerbiegen(scene);
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
   return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
 }
@@ -525,6 +549,45 @@ function walkPoseRoh(r, ph) {
     aR: -0.12 + 0.4 * s, aL: 0.12 - 0.4 * s, eR: 0.12 + Math.max(0, -s) * 0.5, eL: 0.12 + Math.max(0, s) * 0.5, lean: 0.035 + (r.rest ? r.rest.lean || 0 : 0) });
 }
 
+// ---------- Fischauge: Tonnenverzeichnung als letzter Bildschritt (freie Kamera, Kameraflüge) ----------
+// Die Szene wird etwas weitwinkliger in ein Zwischenbild gerechnet, ein Shader zieht die Mitte groß und staucht den
+// Rand rund – wie eine Fischaugen-Linse. Klicks und Sprechblasen-Punkte rechnen dieselbe Verzeichnung hin und zurück.
+// In der Bühnenansicht (gemalte Kamera) bleibt das Bild unverzerrt, damit es Punkt für Punkt zum Spiel passt.
+const FISCH = { k: 0.075, fovPlus: 14 };
+const ASP = 960 / 440;
+let fischS = 0, fischRT = null, fischMat = null, fischSzene = null, fischKam = null;
+const fischZ = k => 1 / (1 + k * (ASP * ASP + 1));   // Ecken bleiben Ecken: nichts außerhalb des Zwischenbilds
+function fischVor(v) {   // Bildschirm (NDC) -> Punkt im unverzerrten Zwischenbild
+  const k = FISCH.k * fischS; if (!k) return v;
+  const px = v.x * ASP, f = (1 + k * (px * px + v.y * v.y)) * fischZ(k);
+  return v.set(v.x * f, v.y * f);
+}
+function fischZurueck(v) {   // Punkt im unverzerrten Bild (NDC) -> Stelle auf dem Bildschirm
+  const k = FISCH.k * fischS; if (!k) return v;
+  const z = fischZ(k), ux = v.x, uy = v.y; let sx = ux, sy = uy;
+  for (let i = 0; i < 8; i++) { const px = sx * ASP, f = (1 + k * (px * px + sy * sy)) * z; sx = ux / f; sy = uy / f; }
+  return v.set(sx, sy, v.z);
+}
+function fischZiel(R) { if (R.flug) return 1; const o = R.orbit; return o ? Math.min(1, Math.max(0, o.w || 0)) : 0; }
+function fischBauen() {
+  fischKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  fischMat = new THREE.ShaderMaterial({
+    uniforms: { tex: { value: null }, k: { value: 0 }, z: { value: 1 }, asp: { value: ASP } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `uniform sampler2D tex; uniform float k; uniform float z; uniform float asp; varying vec2 vUv;
+      void main() {
+        vec2 p = vUv * 2.0 - 1.0, a = vec2(p.x * asp, p.y);
+        vec2 uv = p * (1.0 + k * dot(a, a)) * z * 0.5 + 0.5;
+        gl_FragColor = texture2D(tex, uv);
+        gl_FragColor.rgb *= 1.0 - 2.4 * k * smoothstep(0.75, 1.5, length(p));   // Linsenrand etwas dunkler
+        #include <colorspace_fragment>
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), fischMat); quad.frustumCulled = false;
+  fischSzene = new THREE.Scene(); fischSzene.add(quad);
+}
+
 // ---------- Spiel-Koordinaten <-> Welt ----------
 const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), _v = new THREE.Vector3(), _n = new THREE.Vector2(), _w = new THREE.Vector3();
 function toWorld(camera, x, y, out) {
@@ -539,7 +602,8 @@ function unitsPerMeter(camera, p) {   // Spiel-Einheiten pro Meter Höhe an dies
 
 // Figuren, die die 3D-Szene selbst zeigt: die Helden überall (außer beim Klettern), die Gäste im Hafen
 // Nebenfiguren mit 3D-Modell: werden erst geladen, wenn sie das erste Mal in einem 3D-Raum stehen
-const SPAETER = new Set(['drfred', 'sam', 'max']), laedt = new Set();
+// erst bei Bedarf geladen: Dr. Fred, die Gäste und die Tentakel (ohne Gelenke: sie stehen und atmen; ohne Modell bleibt die Bildkarte)
+const SPAETER = new Set(['drfred', 'sam', 'max', 'dave', 'salad', 'affe', 'bender', 'prof', 'zoid', 'glados', 'simon', 'bobbin', 'zak', 'gertrude', 'hancock', 'green', 'guard', 'purple']), laedt = new Set();
 function figurLaden(kind) {
   if (laedt.has(kind)) return;
   laedt.add(kind);
@@ -681,7 +745,7 @@ function kameraFahren(R, t, actors) {
       R.ziel.copy(R.zielHome).lerp(R.glatt.z, w);
     }
     cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, R.ziel, _yA));
-    const fovZiel = home.fov + ((kinoAktiv(R) ? 40 : WEITWINKEL) - home.fov) * Math.min(1, o.w || 0);
+    const fovZiel = home.fov + ((kinoAktiv(R) ? 40 : WEITWINKEL) + FISCH.fovPlus - home.fov) * Math.min(1, o.w || 0);
     if (Math.abs(cam.fov - fovZiel) > 0.05) { cam.fov = fovZiel; cam.updateProjectionMatrix(); }
   } else if (cam.fov !== home.fov) { cam.fov = home.fov; cam.updateProjectionMatrix(); }
   R.kT = t;
@@ -761,7 +825,7 @@ export function bildVonSpiel(gx, gy, id) {   // Spiel-Punkt (Bühnenansicht) -> 
   }
   if (!p) return null;
   p = p.clone();
-  p.project(R.camera);
+  fischZurueck(p.project(R.camera));
   if (p.z > 1 || Math.abs(p.x) > 1.05 || Math.abs(p.y) > 1.05) return null;
   return [(p.x + 1) / 2 * GW, (1 - p.y) / 2 * GH];
 }
@@ -769,7 +833,7 @@ export function kopfPunkt(gx, gy, hoehePx, id) {
   const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home || !freiAktiv()) return null;
   const p = toWorld(R.home, gx, gy, new THREE.Vector3()), upm = unitsPerMeter(R.home, p);
   p.y += hoehePx / upm;
-  p.project(R.camera);
+  fischZurueck(p.project(R.camera));
   if (p.z > 1) return null;   // hinter der Kamera
   return [(p.x + 1) / 2 * GW, (1 - p.y) / 2 * GH];
 }
@@ -794,7 +858,7 @@ export function freiZurueck(id) { const o = orbit(id || letzterRaum); if (o && (
 const _pickV = new THREE.Vector3();
 export function pick(gx, gy, id) {
   const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home) return null;
-  _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2);
+  fischVor(_n.set(gx / GW * 2 - 1, 1 - gy / GH * 2));
   ray.setFromCamera(_n, R.camera);
   let punkt = null, dist = 1e9;
   const boden = ray.ray.intersectPlane(ground, _pickV.clone());
@@ -1015,6 +1079,38 @@ function entbiegen(k, p, out) {
   out.copy(p);
   for (let i = 0; i < 8; i++) { krummVersatz(k, out.x, out.y, out.z, d); out.copy(p).sub(d); }
   return out;
+}
+// Bäume draußen: jeder lehnt sich in seine eigene Richtung, krümmt sich S-förmig und verdreht die Krone (wie gezeichnet)
+function baeumeVerbiegen(scene) {
+  scene.updateMatrixWorld(true);
+  const gruppen = new Map();
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    let m = null; for (let q = o; q && !m; q = q.parent) m = /^(Baum[A-Z]?\d+|Tanne\d+)/.exec(q.name || '');
+    if (m) { if (!gruppen.has(m[1])) gruppen.set(m[1], []); gruppen.get(m[1]).push(o); }
+  });
+  const v = new THREE.Vector3(), inv = new THREE.Matrix4(), bb = new THREE.Box3();
+  for (const [key, ms] of gruppen) {
+    bb.makeEmpty(); for (const o of ms) bb.expandByObject(o);
+    const mx = (bb.min.x + bb.max.x) / 2, mz = (bb.min.z + bb.max.z) / 2, y0 = bb.min.y, H = Math.max(1, bb.max.y - y0);
+    let s = 7; for (const ch of key) s = (s * 31 + ch.charCodeAt(0)) % 9973;
+    const w = s * 0.37, dx = Math.cos(w), dz = Math.sin(w), lehn = 0.16 + (s % 7) * 0.03, bieg = 0.1 + (s % 5) * 0.035, dreh = (((s >> 3) % 9) - 4) * 0.09;
+    for (const o of ms) {
+      o.geometry = o.geometry.clone();   // Bäume teilen sich oft ein Modell – jeder bekommt seine eigene Form
+      const pos = o.geometry.attributes.position; if (!pos) continue;
+      inv.copy(o.matrixWorld).invert();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        const h = Math.max(0, (v.y - y0) / H);
+        const a = dreh * h * Math.PI, rx = v.x - mx, rz = v.z - mz, c = Math.cos(a), sn = Math.sin(a);
+        v.x = mx + rx * c - rz * sn; v.z = mz + rx * sn + rz * c;   // Krone verdreht
+        const quer = bieg * H * Math.sin(h * Math.PI * 1.3) * h, vor = lehn * H * h * h;
+        v.x += dx * vor - dz * quer; v.z += dz * vor + dx * quer;
+        v.applyMatrix4(inv); pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      pos.needsUpdate = true; o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere();
+    }
+  }
 }
 function krummBiegen(scene, k) {
   const v = new THREE.Vector3(), dv = new THREE.Vector3(), inv = new THREE.Matrix4(), schon = new Set(), meshes = [];
@@ -1309,11 +1405,13 @@ function gartenWelt(scene) {
     for (let x = x0 + 1; x < x1; x += 2.2) teil(new THREE.SphereGeometry(0.75, 10, 6), heckeH, x, -3.3, 1.2 + Math.sin(x) * 0.12).scale.set(1.1, 0.55, 0.9);
   }
   const blatt = [M(0x4aa83a), M(0x6cc048), M(0x3a8a2e)];
+  let baumNr = 0;
   const baum = (x, y, s) => {
-    teil(new THREE.CylinderGeometry(0.28 * s, 0.4 * s, 3.4 * s, 8), holzD, x, y, 1.7 * s);
+    const nr = 'BaumW' + baumNr++;
+    teil(new THREE.CylinderGeometry(0.28 * s, 0.4 * s, 3.4 * s, 8, 6), holzD, x, y, 1.7 * s).name = nr + 'Stamm';
     for (let i = 0; i < 4; i++) {
       const w = i * 1.9 + x;
-      teil(new THREE.SphereGeometry((1.5 + (i % 2) * 0.5) * s, 12, 8), blatt[((i + Math.round(y)) % 3 + 3) % 3], x + Math.cos(w) * 0.9 * s, y + Math.sin(w) * 0.9 * s, (3.6 + (i % 3) * 0.7) * s);
+      teil(new THREE.SphereGeometry((1.5 + (i % 2) * 0.5) * s, 12, 8), blatt[((i + Math.round(y)) % 3 + 3) % 3], x + Math.cos(w) * 0.9 * s, y + Math.sin(w) * 0.9 * s, (3.6 + (i % 3) * 0.7) * s).name = nr + 'Krone' + i;
     }
   };
   for (const [x, y, s] of [[-18, -13, 1.3], [-9, -17, 1.1], [7, -14, 1.2], [17, -11, 1.4], [-31, -5, 1.2], [27, -3, 1.0], [-38, 6, 1.5], [-36, 20, 1.3],
@@ -1418,7 +1516,44 @@ function gartenWelt(scene) {
 
 // ---------- Auffahrt (Ankunft der Helden, js/ankunft.js): Bus-Türen, Hüpfen, Haustür, Kamera-Tentakel ----------
 // Steuerung über G.ankunft = { schiebe, tuerV, haustuer (je 0…1), hopsT, kt: 'weg' | 'schweben' }
+// Spukhaus rundherum: in Blender hat nur die Vorderseite Fenster – Seiten und Rückseite bekommen hier ihre eigenen
+// (warmes Licht, Kreuz, schiefe Läden, Fensterbank), damit die Umrundung im Vorspann keine kahlen Wände zeigt.
+// Jedes Fenster sucht sich per Strahl von außen die (schiefe) Wand und richtet sich nach ihr aus.
+function villaRundum(scene, H) {
+  scene.updateMatrixWorld(true);
+  const glas = leuchtMat(0xffd27a), rahmen = toonMat(0xf2eee6), laden = toonMat(0x1f3a2a), gruppe = new THREE.Group(); gruppe.name = 'VillaRundum';
+  const tast = new THREE.Raycaster(), n = new THREE.Vector3(), zA = new THREE.Vector3(0, 0, 1);
+  const fenster = (p, nrm, nr) => {
+    const f = new THREE.Group(), w = 1.35, h = 3.1, kipp = ((nr * 7) % 5 - 2) * 0.025;
+    f.position.copy(p); f.quaternion.setFromUnitVectors(zA, nrm); f.rotateZ(kipp);
+    const teil = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); f.add(m); return m; };
+    teil(new THREE.BoxGeometry(w + 0.3, h + 0.3, 0.12), rahmen, 0, 0, 0.02);
+    teil(new THREE.PlaneGeometry(w, h), glas, 0, 0, 0.09);
+    teil(new THREE.BoxGeometry(0.12, h, 0.06), rahmen, 0, 0, 0.12); teil(new THREE.BoxGeometry(w, 0.12, 0.06), rahmen, 0, h * 0.15, 0.12);
+    for (const sx of [-1, 1]) teil(new THREE.BoxGeometry(0.62, h + 0.1, 0.08), laden, sx * (w / 2 + 0.45), 0, 0.06).rotation.z = sx * kipp * 3;
+    teil(new THREE.BoxGeometry(w + 0.6, 0.16, 0.3), rahmen, 0, -h / 2 - 0.2, 0.1);   // Fensterbank
+    gruppe.add(f);
+  };
+  let nr = 0;
+  const setze = (x, y, h, dx, dy) => {   // Blender-Meter: Wandpunkt und Blickrichtung von außen auf die Wand
+    const von = bl(x - dx * 6, y - dy * 6, h), r = new THREE.Vector3(dx, 0, -dy).normalize();
+    tast.set(von, r); tast.far = 10;
+    for (const hit of tast.intersectObject(H, true)) {
+      if (Math.abs(hit.distance - 6) > 2.5 || !hit.face) continue;
+      n.copy(hit.face.normal).transformDirection(hit.object.matrixWorld); n.y = 0;
+      if (n.lengthSq() < 0.1 || n.normalize().dot(r) > -0.6) continue;   // nur eine Wand, die zu uns schaut
+      fenster(hit.point.clone().addScaledVector(n, 0.03), n.clone(), nr++);
+      return;
+    }
+  };
+  for (const h of [3.25, 8.95]) {
+    for (const x of [-8.6, -5.5, -2.3, 0.9, 4.1, 7.0]) setze(x, 29.2, h, 0, -1);   // Rückseite
+    for (const y of [20.7, 23.8, 26.9]) { setze(-11.2, y, h, 1, 0); setze(9.1, y, h, -1, 0); }   // Seiten
+  }
+  scene.add(gruppe);
+}
 function auffahrtTeile(scene, H) {
+  villaRundum(scene, H);
   const auto = find(H, 'Auto'), kt = find(H, 'KamTent'), tv = find(H, 'AutoTuerV'), st = find(H, 'AutoSchiebetuer');
   const tuer = [find(H, 'TuerL'), find(H, 'TuerR')];
   if (auto) mergeUnder(auto, c => c === tv || c === st);   // der Bus: eine Handvoll Zeichenaufrufe, Türen bleiben beweglich
@@ -1485,11 +1620,12 @@ function auffahrtTeile(scene, H) {
 export function kameraflug(id, punkte, dauer, fov = 42, opt = {}) {
   const R = rooms[id]; if (!R || !R.ready) return false;
   R.flug = { punkte: punkte.map(p => [bl(p[0], p[1], p[2]), bl(p[3] ?? p[0], p[4] ?? p[1], p[5] ?? p[2])]), dauer, t0: null, fov,
-    folgen: !!opt.folgen, ende: opt.ende ? [bl(opt.ende[0], opt.ende[1], opt.ende[2]), bl(opt.ende[3], opt.ende[4], opt.ende[5])] : null };
+    folgen: !!opt.folgen, schluss: opt.ende ? [bl(opt.ende[0], opt.ende[1], opt.ende[2]), bl(opt.ende[3], opt.ende[4], opt.ende[5])] : null,
+    blick: opt.blick ? bl(opt.blick[0], opt.blick[1], opt.blick[2]) : null };
   R.flugKT = null;
   return true;
 }
-export function kameraflugEnde(id) { const R = rooms[id]; if (R && R.flug) R.flug.ende = true; }
+export function kameraflugEnde(id) { const R = rooms[id]; if (R && R.flug) R.flug.aus = true; }   // Schnitt: zurück zur Spielkamera
 const _cr = (a, b, c, d, t, out) => {   // Catmull-Rom zwischen b und c
   const t2 = t * t, t3 = t2 * t;
   return out.set(
@@ -1500,7 +1636,7 @@ const _cr = (a, b, c, d, t, out) => {   // Catmull-Rom zwischen b und c
 const _fp = new THREE.Vector3(), _fz = new THREE.Vector3();
 function flugKamera(R, t) {
   const F = R.flug, cam = R.camera;
-  if (F.ende) { R.flug = null; cam.fov = R.home.fov; cam.updateProjectionMatrix(); return false; }
+  if (F.aus) { R.flug = null; cam.fov = R.home.fov; cam.updateProjectionMatrix(); return false; }
   if (F.t0 == null) F.t0 = t;
   const P = F.punkte, n = P.length - 1, roh = Math.min(1, (t - F.t0) / F.dauer);
   const k = roh * roh * (3 - 2 * roh);   // weich los, weich an
@@ -1514,14 +1650,22 @@ function flugKamera(R, t) {
     const tan = vor.sub(_fp); tan.y *= 0.4; if (tan.lengthSq() < 1e-6) tan.set(0, 0, -1); tan.normalize();
     R.flugKT = (R.flugKT || new THREE.Vector3()).copy(_fp);
     const seite = new THREE.Vector3(-tan.z, 0, tan.x);
-    const kp = _fp.clone().addScaledVector(tan, -5.4).addScaledVector(seite, 1.9); kp.y += 1.5;
-    const kz = _fp.clone().addScaledVector(tan, 2.2); kz.y -= 0.4;   // etwas voraus: das Tentakel sitzt im Bild, der Weg liegt vor ihm
-    if (F.ende) { const e = Math.max(0, Math.min(1, (roh - 0.84) / 0.16)), ee = e * e * (3 - 2 * e); kp.lerp(F.ende[0], ee); kz.lerp(F.ende[1], ee); }
+    let kp, kz;
+    if (F.blick) {   // Umrundung wie Lakitu in Super Mario 64: Kamera außen neben und hinter dem Tentakel, Blick zum Haus – beide im Bild
+      const raus = _fp.clone().sub(F.blick); raus.y = 0; if (raus.lengthSq() < 1e-6) raus.copy(seite); raus.normalize();
+      const nah = Math.min(1, _fp.distanceTo(F.blick) / 12);   // nah am Haus (Anflug, Landung) weniger weit hinaus
+      kp = _fp.clone().addScaledVector(raus, 4.6 * nah).addScaledVector(tan, -4.2); kp.y += 1.9;
+      kz = _fp.clone().lerp(F.blick, 0.55 * nah);
+    } else {
+      kp = _fp.clone().addScaledVector(tan, -5.4).addScaledVector(seite, 1.9); kp.y += 1.5;
+      kz = _fp.clone().addScaledVector(tan, 2.2); kz.y -= 0.4;   // etwas voraus: das Tentakel sitzt im Bild, der Weg liegt vor ihm
+    }
+    if (F.schluss) { const e = Math.max(0, Math.min(1, (roh - 0.84) / 0.16)), ee = e * e * (3 - 2 * e); kp.lerp(F.schluss[0], ee); kz.lerp(F.schluss[1], ee); }
     _fp.copy(kp); _fz.copy(kz);
   }
   _fp.x += Math.sin(t * 0.0021) * 0.06; _fp.y += Math.sin(t * 0.0017) * 0.05;   // Handkamera-Wackeln
   cam.position.copy(_fp);
-  if (cam.fov !== F.fov) { cam.fov = F.fov; cam.updateProjectionMatrix(); }
+  if (cam.fov !== F.fov + FISCH.fovPlus) { cam.fov = F.fov + FISCH.fovPlus; cam.updateProjectionMatrix(); }
   cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, _fz, _yA));
   return true;
 }
@@ -1618,9 +1762,17 @@ const RAUM_EXTRAS = {
       const bb = new THREE.Box3(); for (const o of konf) bb.expandByObject(o);
       const gruppe = new THREE.Group(); gruppe.position.set((bb.min.x + bb.max.x) / 2, 0, bb.max.z); scene.add(gruppe);
       for (const o of konf) gruppe.attach(o);
-      gruppe.scale.set(1.12, 1.15, 1);   // größer, aber unter dem Gemälde (das rückt dafür ein Stück hinauf)
+      gruppe.position.x += 0.12; gruppe.scale.set(1.3, 1.35, 1);   // so groß wie die Bürotür, ein Stück weg von der Standuhr
     }
-    for (const o of [...H.children]) if (/^(Schild_)?L_(Bilderrahmen|Leinwand|Rahmenrosette|Plakett)/.test(nm(o))) o.position.y += 0.14;
+    // das Gemälde darüber: hinauf bis unter das Gesims und auf 80 % (um seine Oberkante), damit es die Tür nicht berührt
+    const bild = []; H.traverse(o => { if (/^(Schild_)?L_(Bilderrahmen|Leinwand|Rahmenrosette|Plakett)/.test(nm(o)) && o.parent === H) bild.push(o); });
+    if (bild.length) {
+      H.updateMatrixWorld(true);
+      const bb = new THREE.Box3(); for (const o of bild) bb.expandByObject(o);
+      const g = new THREE.Group(); g.position.set((bb.min.x + bb.max.x) / 2, bb.max.y, (bb.min.z + bb.max.z) / 2); scene.add(g);
+      for (const o of bild) g.attach(o);
+      g.scale.set(0.8, 0.8, 1); g.position.y += 0.2;
+    }
     let uhr = null; H.traverse(o => { if (!uhr && nm(o) === 'L_Uhr') uhr = o; });
     const teile = {};
     if (uhr) {
@@ -1670,7 +1822,7 @@ const RAUM_EXTRAS = {
 
 export function entkruemmt(gx, gy, id) {   // Bildpunkt der Spielkamera -> Spielpunkt vor dem Verbiegen (Klicks, Mauszeiger)
   const R = rooms[id]; if (!R || !R.ready || !R.krumm || !R.home) return null;
-  _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2);
+  fischVor(_n.set(gx / GW * 2 - 1, 1 - gy / GH * 2));
   ray.setFromCamera(_n, R.camera);
   let p = null;
   for (const h of ray.intersectObjects(R.scene.children, true)) {
@@ -2045,9 +2197,40 @@ export function frame(t, actors, pxW, ctx) {
   }
   schattenN = (schattenN + 1) % 2;
   if (renderer.shadowMap.enabled && (schattenN === 0 || R !== letzterSchatten)) { renderer.shadowMap.needsUpdate = true; letzterSchatten = R; }
-  effect.render(R.scene, camera);
+  fischS = fischZiel(R);
+  if (fischS > 0.01) {
+    if (!fischMat) fischBauen();
+    if (!fischRT || fischRT.width !== w || fischRT.height !== h) {
+      if (fischRT) fischRT.dispose();
+      fischRT = new THREE.WebGLRenderTarget(w, h, { samples: SPARSAM ? 0 : 4, colorSpace: THREE.SRGBColorSpace });
+    }
+    renderer.setRenderTarget(fischRT); effect.render(R.scene, camera); renderer.setRenderTarget(null);
+    const k = FISCH.k * fischS; fischMat.uniforms.tex.value = fischRT.texture; fischMat.uniforms.k.value = k; fischMat.uniforms.z.value = fischZ(k);
+    renderer.render(fischSzene, fischKam);
+  } else effect.render(R.scene, camera);
   return renderer.domElement;
 }
+// Ausgänge im Raum: der Weltpunkt der Tür (Mitte ihrer Klickfläche, über die Bühnenkamera auf Wand oder Boden getroffen,
+// zurückgebogen wie die Lauffläche) – damit „nah an der Tür“ in Metern zählt und nicht in perspektivisch verzerrten Bildpunkten
+export function ausgangLage(id, key, gx, gy) {
+  const R = rooms[id]; if (!R || !R.ready || !R.home) return null;
+  const cache = R.ausgaenge || (R.ausgaenge = new Map());
+  if (cache.has(key)) return cache.get(key);
+  _n.set(gx / GW * 2 - 1, 1 - gy / GH * 2); ray.setFromCamera(_n, R.home);
+  let p = null;
+  for (const h of ray.intersectObjects(R.scene.children, true)) {
+    let ok = true;
+    // Figuren, Raumhülle und die Möbel an der Vorderwand (nur bei gedrehter Kamera sichtbar) nicht – sonst landet die Tür vorn
+    const deko = R.innen && R.innen.deko;
+    for (let q = h.object; q && ok; q = q.parent) if (q.visible === false || q === deko || /^(Figur_|Raumhuelle)/.test(q.name || '')) ok = false;
+    if (ok) { p = h.point.clone(); break; }
+  }
+  if (p && R.krumm) entbiegen(R.krumm, p.clone(), p);
+  const out = p ? [p.x, p.z] : null;
+  cache.set(key, out);
+  return out;
+}
+export function spielerLage(a, id) { const R = rooms[id || a.room]; if (!R || !R.ready || !R.home) return null; const p = toWorld(R.home, a.x, a.y, new THREE.Vector3()); return [p.x, p.z]; }
 export function raumInfo(id) {   // Fehlersuche: Innenmaße und Kameralage
   const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
   const c = R.camera.position;
