@@ -67,7 +67,7 @@ function drawLadebild() {
   // Logo (wenn schon geladen), sonst Schriftzug
   if (!c.isPix && typeof LOGO_IMG !== 'undefined' && imgOk(LOGO_IMG)) {
     const w = 520, h = w * LOGO_IMG.naturalHeight / LOGO_IMG.naturalWidth, k = Math.min(1, t / 600), sc = 0.8 + 0.2 * (1 - Math.pow(1 - k, 3)) + Math.sin(t * 0.0021) * 0.01;
-    c.save(); c.globalAlpha = k; c.translate(W / 2 - 110, 110); c.scale(sc, sc); c.drawImage(LOGO_IMG, -w / 2, -h / 2, w, h); c.restore();
+    c.save(); c.globalAlpha = k; c.translate(W / 2 - 110, 110); c.scale(sc, sc); krummBild(c, LOGO_IMG, w, h, t); c.restore();
   } else txt(c, 'TENTAKEL-TOAST', W / 2 - 110, 120, '400 52px "Titan One", sans-serif', '#ffd23a', 'center', 8, '#1b1020');
   // Verfolgungsjagd: der Toast flieht, der Lila Tentakel hüpft hinterher (Schleife über den Bildschirm)
   const per = 4200, q = (t % per) / per, bx = -80 + q * (W + 240), boden = 520;
@@ -117,7 +117,7 @@ function drawKino() {
   }
   if (!cx.isPix && typeof LOGO_IMG !== 'undefined' && imgOk(LOGO_IMG)) {
     const w = 560, lh = w * LOGO_IMG.naturalHeight / LOGO_IMG.naturalWidth, z = 0.7 + 0.3 * (1 - Math.pow(1 - ein, 3)) + e * 0.06;
-    cx.save(); cx.translate(W / 2, my - 40); cx.scale(z, z); cx.rotate(Math.sin(G.t * 0.002) * 0.015); cx.drawImage(LOGO_IMG, -w / 2, -lh / 2, w, lh); cx.restore();
+    cx.save(); cx.translate(W / 2, my - 40); cx.scale(z, z); cx.rotate(Math.sin(G.t * 0.002) * 0.015); krummBild(cx, LOGO_IMG, w, lh, G.t); cx.restore();
   } else txt(cx, 'TENTAKEL-TOAST', W / 2, my - 30, '400 60px "Titan One", sans-serif', '#ffd23a', 'center', 8, '#1b1020');
   const s = T(k.text), n = Math.floor(Math.max(0, e - 0.18) / 0.45 * s.length);   // Schreibmaschine
   txt(cx, s.slice(0, n), W / 2, my + 92, '400 26px "Titan One", sans-serif', '#ffe8b0', 'center', 5, '#1b1020');

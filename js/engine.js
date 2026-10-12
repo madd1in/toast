@@ -2455,8 +2455,8 @@ function drawLogo3d(t) {
   if (cx.isPix || !LOGO_IMG.complete || !LOGO_IMG.naturalWidth) return false;
   const w = 590, h = w * LOGO_IMG.naturalHeight / LOGO_IMG.naturalWidth, x = W / 2 - w * 0.47, y = -2 + Math.sin(t * 0.0021) * 3;
   const s = 1 + Math.sin(t * 0.0017) * 0.01;
-  cx.save(); cx.translate(x + w / 2, y + h / 2); cx.scale(s, s); cx.rotate(Math.sin(t * 0.0013) * 0.008);
-  cx.drawImage(LOGO_IMG, -w / 2, -h / 2, w, h);
+  cx.save(); cx.translate(x + w / 2, y + h / 2 + 4); cx.scale(s, s); cx.rotate(-0.03 + Math.sin(t * 0.0013) * 0.012);
+  krummBild(cx, LOGO_IMG, w, h, t);
   cx.restore();
   return true;
 }

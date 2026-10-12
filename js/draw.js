@@ -246,6 +246,21 @@ function krummText(c, s, align, px, col, stroke, strokeCol, schatten, wabbel) {
   if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; zeichne(ch => c.strokeText(ch, 0, 0)); }
   c.fillStyle = col; zeichne(ch => c.fillText(ch, 0, 0));
 }
+// Bild (Logo) wie Wackelpudding: in schmalen Streifen gezeichnet, jeder mit eigener Höhe, Streckung und Schräglage –
+// ein Bogen über die ganze Breite, Buchstaben hüpfen aus der Reihe, alles schwabbelt langsam. Mittelpunkt im Ursprung.
+function krummBild(c, img, w, h, t, k = 1) {
+  if (c.isPix || !k) { c.drawImage(img, -w / 2, -h / 2, w, h); return; }
+  const n = 48, iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height, sw = iw / n, dw = w / n;
+  for (let i = 0; i < n; i++) {
+    const u = (i + 0.5) / n - 0.5;
+    const dy = -k * h * (0.13 * (1 - 4 * u * u) + 0.05 * Math.sin(u * 14 + t * 0.0016) + 0.035 * Math.sin(u * 31 + 0.7));
+    const sy = 1 + k * (0.13 * Math.sin(u * 9 + 1.3 + t * 0.0011) + 0.05 * Math.sin(u * 23));
+    const kx = k * (0.13 * Math.sin(u * 6.5 + 0.4) + 0.03 * Math.sin(t * 0.0013 + u * 3));
+    c.save(); c.translate(-w / 2 + (i + 0.5) * dw, dy); c.transform(1, 0, kx, sy, 0, 0);
+    c.drawImage(img, i * sw, 0, sw + 0.6, ih, -dw / 2 - 0.3, -h / 2, dw + 0.7, h);
+    c.restore();
+  }
+}
 function txt(c, s, x, y, font, col, align = 'center', stroke = 0, strokeCol = OUT) {
   if (typeof Lang !== 'undefined' && Lang.cur !== 'de') s = Lang.t(s);
   s = String(s);
