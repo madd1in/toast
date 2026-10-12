@@ -254,7 +254,7 @@ export const LOBBY_TREPPE = Array.from({ length: 14 }, (_, i) => [-8.05, -6.85, 
 // Was auf dem Boden steht (Sofa, Automat, Tresen, Tische, Schränke, Uhren), versperrt der gesteuerten Figur den Weg;
 // niedrige Dinge sind Plattformen wie in Super Mario 64: hinaufspringen und obendrauf herumlaufen.
 const _kb = new THREE.Box3(), FIGUR_R = 0.28, STUFE = 0.4;   // so hoch steigt man ohne Sprung (Treppenstufe, Bordstein, Podest)
-const KISTEN_EXTRA = { lobby: LOBBY_TREPPE };   // eigene Bauten (Treppe) sperren von der Seite ebenfalls
+const KISTEN_EXTRA = { lobby: LOBBY_TREPPE, auffahrt: [[-4.8, 0.2, 9.95, 12.05, 2.6], [-10.3, 10.3, 16.4, 27.7, 13.5]] };   // Tourbus und Villa (zu groß für die automatischen Kisten)   // eigene Bauten (Treppe) sperren von der Seite ebenfalls
 function kollisionsKisten(root, out = [], beweglichRe = null) {
   root.updateMatrixWorld(true);
   const visit = list => {
@@ -519,6 +519,7 @@ function kameraLoesen(R) {   // einmalig: Kamera aus ihrem glTF-Knoten lösen (W
 }
 function kameraFahren(R, t, actors) {
   const cam = R.camera, home = R.home;
+  if (R.flug && flugKamera(R, t)) { if (letzterRaum !== R.id) { letzterRaum = R.id; R.sweepT0 = t; } R.kT = t; return; }
   cam.position.copy(home.position);
   cam.quaternion.copy(home.quaternion);
   if (letzterRaum !== R.id) { letzterRaum = R.id; R.sweepT0 = t; }
@@ -1151,10 +1152,96 @@ function gartenWelt(scene) {
   };
 }
 
+// ---------- Auffahrt (Ankunft der Helden, js/ankunft.js): Bus-Türen, Hüpfen, Haustür, Kamera-Tentakel ----------
+// Steuerung über G.ankunft = { schiebe, tuerV, haustuer (je 0…1), hopsT, kt: 'weg' | 'schweben' }
+function auffahrtTeile(scene, H) {
+  const auto = find(H, 'Auto'), kt = find(H, 'KamTent'), tv = find(H, 'AutoTuerV'), st = find(H, 'AutoSchiebetuer');
+  const tuer = [find(H, 'TuerL'), find(H, 'TuerR')];
+  if (auto) mergeUnder(auto, c => c === tv || c === st);   // der Bus: eine Handvoll Zeichenaufrufe, Türen bleiben beweglich
+  const rollen = [];
+  if (kt) { kt.traverse(o => { if (/^KamRolle\d$/.test(nm(o))) rollen.push(o); }); mergeUnder(kt, c => rollen.includes(c) || /^KamLampe$/.test(nm(c))); }
+  const lampe = kt && find(kt, 'KamLampe');
+  const b = o => o && { p: o.position.clone(), q: o.quaternion.clone() };
+  const B0 = { auto: b(auto), kt: b(kt), tv: b(tv), st: b(st), tuer: tuer.map(b) };
+  // Türen der Villa drehen um ihre Außenkante nach innen; dahinter warmes Licht aus der Diele
+  const angel = tuer.map((o, i) => { if (!o) return null; const bb = new THREE.Box3().setFromObject(o); return new THREE.Vector3(i ? bb.max.x : bb.min.x, 0, (bb.min.z + bb.max.z) / 2); });   // Scharnier: Außenkante
+  if (tuer[0] && tuer[1]) {
+    const bb = new THREE.Box3().setFromObject(tuer[0]).union(new THREE.Box3().setFromObject(tuer[1]));
+    const licht = new THREE.Mesh(new THREE.PlaneGeometry(bb.max.x - bb.min.x, bb.max.y - bb.min.y), leuchtMat(0xf2c878));
+    licht.material.userData.outlineParameters = { visible: false };
+    licht.position.set((bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, bb.min.z - 0.08); scene.add(licht);
+  }
+  const _q3 = new THREE.Quaternion(), _yy = new THREE.Vector3(0, 1, 0);
+  let kamera = null;
+  return {
+    tick(s) {
+      const A = (typeof G !== 'undefined' && G.ankunft) || {}, jetzt = typeof G !== 'undefined' ? G.t : s * 1000;
+      if (tv && B0.tv) tv.quaternion.copy(B0.tv.q).multiply(_q3.setFromAxisAngle(_yy, (A.tuerV || 0) * 1.2));
+      if (st && B0.st) st.position.set(B0.st.p.x - (A.schiebe || 0) * 1.55, B0.st.p.y, B0.st.p.z + Math.min(1, (A.schiebe || 0) * 4) * 0.12);
+      if (auto && B0.auto) {   // Aussteigen: der Bus federt nach (gedämpfte Schwingung)
+        const k = A.hopsT ? (jetzt - A.hopsT) / 1000 : 9;
+        auto.position.y = B0.auto.p.y + (k < 1.6 ? Math.exp(-k * 3.2) * Math.sin(k * 18) * 0.09 : 0);
+      }
+      tuer.forEach((o, i) => {   // nach innen aufschwingen, um die Außenkante
+        if (!o || !B0.tuer[i]) return;
+        const w = (A.haustuer || 0) * 1.35 * (i ? -1 : 1), h = angel[i], c = Math.cos(w), sn = Math.sin(w);
+        const dx = B0.tuer[i].p.x - h.x, dz = B0.tuer[i].p.z - h.z;
+        o.quaternion.copy(B0.tuer[i].q).premultiply(_q3.setFromAxisAngle(_yy, w));
+        o.position.set(h.x + dx * c + dz * sn, B0.tuer[i].p.y, h.z - dx * sn + dz * c);
+      });
+      if (kt && B0.kt) {
+        kt.visible = A.kt !== 'weg';
+        kt.position.set(B0.kt.p.x + Math.sin(s * 0.7) * 0.25, B0.kt.p.y + Math.sin(s * 1.7) * 0.12 + 0.1, B0.kt.p.z + Math.cos(s * 0.55) * 0.18);
+        if (!kamera) scene.traverse(o => { if (!kamera && o.isCamera) kamera = o; });
+        if (kamera) {   // dreht sich (mit Kamera in der Tentakelspitze) immer zum Geschehen
+          const ziel = Math.atan2(kamera.position.x - kt.position.x, kamera.position.z - kt.position.z);
+          kt.quaternion.copy(B0.kt.q).premultiply(_q3.setFromAxisAngle(_yy, ziel));
+        }
+        for (const r of rollen) r.rotation.x = s * 4;
+        if (lampe) lampe.visible = Math.floor(s * 2) % 2 === 0;
+      }
+    },
+  };
+}
+
+// ---------- Kameraflug (Vorspann, Super-Mario-64-Hommage): Catmull-Rom-Bahn durch Wegpunkte, Blick auf mitlaufendes Ziel ----------
+// punkte: [[x, y, z, zx, zy, zz], …] in Blender-Metern (Ort und Blickziel); dauer in Spiel-Millisekunden
+export function kameraflug(id, punkte, dauer, fov = 42) {
+  const R = rooms[id]; if (!R || !R.ready) return false;
+  R.flug = { punkte: punkte.map(p => [bl(p[0], p[1], p[2]), bl(p[3], p[4], p[5])]), dauer, t0: null, fov };
+  return true;
+}
+export function kameraflugEnde(id) { const R = rooms[id]; if (R && R.flug) R.flug.ende = true; }
+const _cr = (a, b, c, d, t, out) => {   // Catmull-Rom zwischen b und c
+  const t2 = t * t, t3 = t2 * t;
+  return out.set(
+    0.5 * (2 * b.x + (-a.x + c.x) * t + (2 * a.x - 5 * b.x + 4 * c.x - d.x) * t2 + (-a.x + 3 * b.x - 3 * c.x + d.x) * t3),
+    0.5 * (2 * b.y + (-a.y + c.y) * t + (2 * a.y - 5 * b.y + 4 * c.y - d.y) * t2 + (-a.y + 3 * b.y - 3 * c.y + d.y) * t3),
+    0.5 * (2 * b.z + (-a.z + c.z) * t + (2 * a.z - 5 * b.z + 4 * c.z - d.z) * t2 + (-a.z + 3 * b.z - 3 * c.z + d.z) * t3));
+};
+const _fp = new THREE.Vector3(), _fz = new THREE.Vector3();
+function flugKamera(R, t) {
+  const F = R.flug, cam = R.camera;
+  if (F.ende) { R.flug = null; cam.fov = R.home.fov; cam.updateProjectionMatrix(); return false; }
+  if (F.t0 == null) F.t0 = t;
+  const P = F.punkte, n = P.length - 1, roh = Math.min(1, (t - F.t0) / F.dauer);
+  const k = roh * roh * (3 - 2 * roh);   // weich los, weich an
+  const u = k * n, i = Math.min(n - 1, Math.floor(u)), f = u - i;
+  const g = j => P[Math.max(0, Math.min(n, j))];
+  _cr(g(i - 1)[0], g(i)[0], g(i + 1)[0], g(i + 2)[0], f, _fp);
+  _cr(g(i - 1)[1], g(i)[1], g(i + 1)[1], g(i + 2)[1], f, _fz);
+  _fp.x += Math.sin(t * 0.0021) * 0.06; _fp.y += Math.sin(t * 0.0017) * 0.05;   // Handkamera des Tentakels
+  cam.position.copy(_fp);
+  if (cam.fov !== F.fov) { cam.fov = F.fov; cam.updateProjectionMatrix(); }
+  cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, _fz, _yA));
+  return true;
+}
+
 // ---------- Raum-Extras: Teile, die das Spiel selbst bewegt oder dazubaut ----------
 const EXTRA_BEWEGLICH = {
   uhrwerk: /^(Notsteg|Riesenpendel|Kolben|Zahnrad(\d+|[AB]|Tief\d+)|Zifferblatt|Zeiger(Gross|Klein))$/,
   lobby: /^L_Uhr$/,
+  auffahrt: /^(KamTent|Auto|TuerL|TuerR)$/,
 };
 // Uhrwerk-Takt (Sekunden): Kolben-Oberkante und Pendelwinkel – Bild und Sprungphysik nutzen dieselben Formeln
 let uhrS = 0;   // Spielzeit des letzten Bildes in Sekunden – Takt für Bild und Physik
@@ -1174,6 +1261,7 @@ function leuchtMat(farbe) { const m = new THREE.MeshBasicMaterial({ color: farbe
 const _zA = new THREE.Vector3(0, 0, 1);
 const RAUM_EXTRAS = {
   garten1776: gartenWelt,
+  auffahrt: auffahrtTeile,
   // Zukunftsgarten: Astgabeln, Wurzelstumpf und Laubpolster als Kletterweg den Apfelbaum hinauf zur Laterne
   fgarten(scene) {
     const holz = toonMat(0x6a4226), laub = toonMat(0x4aa83a), laubH = toonMat(0x7ad85a), weg = new THREE.Group();

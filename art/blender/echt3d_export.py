@@ -39,7 +39,7 @@ def export_material(m, cache):
             col = tuple(mul.inputs[6].default_value)
         elif mul is not None and mul.inputs[6].is_linked:   # prozedurale Farbe (Sternenbanner, Tupfen, Ringel): die Grundfarbe nehmen
             for n in nodes:
-                if n.name.startswith('KS_') and n.type == 'MIX' and getattr(n, 'data_type', '') == 'RGBA':
+                if (n.name.startswith('KS_') or n.name == 'MusterMix') and n.type == 'MIX' and getattr(n, 'data_type', '') == 'RGBA':   # MusterMix: Holzbretter, Ziegel der Titel-Villa
                     ca, cb = (tuple(n.inputs[i].default_value) for i in (6, 7))
                     col = cb if min(ca[:3]) > 0.7 else ca
                     break

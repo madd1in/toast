@@ -1113,9 +1113,195 @@ def build_uhrwerk(SC):
             'Zifferblatt': zb, 'Wandrad': bpy.data.objects['Zahnrad1'], 'FensterL': bpy.data.objects['GotikGlasL'], 'FensterR': bpy.data.objects['GotikGlasR'], 'KerzeL': bpy.data.objects['KandelaberL'], 'KerzeR': bpy.data.objects['KandelaberR'], 'Schild': bpy.data.objects['WarnSchild'], 'Notsteg': NS}
 
 
+# ---------------------------------------------------------------- Auffahrt vor der Villa (Ankunft der Helden)
+def build_auffahrt(SC):
+    """Vorplatz der Villa Edison bei Sonnenuntergang: die Villa vom Titelbild (Szene 'Haus', fünffach vergrößert, mit
+    Fenstern rundum für den Kameraflug), gepflasterter Vorplatz, Auffahrt durchs offene Tor, Laternen, Hecken, Bäume,
+    Hügel bis zum Horizont, Springbrunnen mit Tentakel-Statue, der Tourbus der Helden (Schiebetür und Beifahrertür
+    beweglich) und das Kamera-Tentakel auf seiner Wolke – die Lakitu-Hommage aus Super Mario 64."""
+    B = Builder(SC)
+    RASEN = tex_toon('T_RasenVilla', 'wiese.png', 0.22)
+    PFLASTER = tex_toon('T_PflasterVilla', 'pflaster.png', 0.45)
+    MAUER = tex_toon('T_MauerTor', 'mauer.png', 0.5)
+    EISEN, HOLZ, LAUB, LAUB2, LAUBD = toon('T_Eisen', '#22202a', hi=0.4), toon('T_HolzVilla', '#6a4428'), toon('T_LaubVilla', '#4a9a3a'), toon('T_LaubVilla2', '#6ab84a'), toon('T_LaubDunkel', '#2e6a32')
+    HUEGEL = [toon(f'T_HuegelV{i}', c) for i, c in enumerate(('#5a9a44', '#4a8a3c', '#6aa84e'))]
+    LATERNE = toon('T_LaterneVilla', '#ffd27a', hi=0.95)
+    # Boden bis zum Horizont, Hügelkranz
+    bm = bmesh.new(); bmesh.ops.create_circle(bm, cap_ends=True, radius=140, segments=72)
+    B.obj('Rasen', bm, RASEN, None, (0, 20, 0), smooth=False)
+    rnd = random.Random(1776)
+    for i in range(26):
+        w = i / 26 * 2 * math.pi + rnd.uniform(-0.08, 0.08)
+        r = rnd.uniform(85, 125)
+        B.sphere(f'Huegel{i}', (math.sin(w) * r, 20 + math.cos(w) * r, -3), (rnd.uniform(16, 30), rnd.uniform(12, 22), rnd.uniform(7, 13)), HUEGEL[i % 3], None, rot=(0, 0, w))
+    # Vorplatz und Auffahrt (Pflaster), Bordsteine
+    plane(B, 'Vorplatz', -9, 9, 6.5, 14.6, 0.012, PFLASTER)
+    plane(B, 'Auffahrt', -2.6, 2.6, -45, 6.5, 0.012, PFLASTER)
+    for k in (-1, 1):
+        box(B, f'Bordstein{k}', (k * 9.1, 10.55, 0.06), (0.2, 8.1, 0.12), MAUER, bevel=0.0)
+        box(B, f'BordsteinA{k}', (k * 2.7, -19.25, 0.06), (0.2, 51.5, 0.12), MAUER, bevel=0.0)
+    # ---- die Villa vom Titelbild ----
+    HS = bpy.data.scenes['Haus']
+    T = Matrix.Translation((0, 22, 0)) @ Matrix.Scale(5, 4)
+    villa = {}
+    for o in HS.objects:
+        if o.type != 'MESH':
+            continue
+        c = o.copy()
+        SC.collection.objects.link(c)
+        c.matrix_world = T @ o.matrix_world
+        villa[o.name] = c
+    # Fenster rundum: Rückseite (gespiegelt) und beide Seiten (die mittleren Fensterachsen, gedreht)
+    for o in HS.objects:
+        n = o.name
+        if o.type != 'MESH' or not (n.startswith(('FensterO', 'FensterU', 'Laden'))):
+            continue
+        hinten = o.copy(); SC.collection.objects.link(hinten); hinten.name = 'Hinten_' + n
+        hinten.matrix_world = T @ Matrix.Rotation(math.pi, 4, 'Z') @ o.matrix_world
+        if n[8:9] in ('1', '2') and n.startswith(('FensterO', 'FensterU')):
+            for k, rot in ((1, math.pi / 2), (-1, -math.pi / 2)):
+                s = o.copy(); SC.collection.objects.link(s); s.name = f'Seite{k}_' + n
+                s.matrix_world = T @ Matrix.Translation((k * 0.9, 0, 0)) @ Matrix.Rotation(rot, 4, 'Z') @ o.matrix_world
+    # ---- Tor, Zaun, Laternen, Briefkasten ----
+    for k in (-1, 1):
+        box(B, f'TorPfeiler{k}', (k * 3.3, -9, 1.4), (0.9, 0.9, 2.8), MAUER, bevel=0.03)
+        B.sphere(f'TorKugel{k}', (k * 3.3, -9, 3.05), (0.42, 0.42, 0.42), toon('T_TorKugel', '#c8bca0'), None)
+        bm = bmesh.new()   # offener Torflügel aus Stäben
+        for j in range(7):
+            bmesh.ops.create_cube(bm, size=1, matrix=Matrix.LocRotScale((j * 0.36 + 0.2, 0, 1.15), None, (0.05, 0.05, 2.1)))
+        for z in (0.35, 2.05):
+            bmesh.ops.create_cube(bm, size=1, matrix=Matrix.LocRotScale((1.3, 0, z), None, (2.6, 0.06, 0.06)))
+        B.obj(f'TorFluegel{k}', bm, EISEN, None, (k * 2.85, -9, 0), rot=(0, 0, (math.pi / 2 + 0.35) if k < 0 else (math.pi / 2 - 0.35)), smooth=False)
+        bm = bmesh.new()   # Zaun links und rechts vom Tor
+        for j in range(95):
+            x = k * (3.9 + j * 0.42)
+            bmesh.ops.create_cube(bm, size=1, matrix=Matrix.LocRotScale((x, 0, 0.9), None, (0.05, 0.05, 1.8)))
+            bmesh.ops.create_cone(bm, cap_ends=True, segments=4, radius1=0.07, radius2=0, depth=0.18, matrix=Matrix.Translation((x, 0, 1.88)))
+        for z in (0.4, 1.55):
+            bmesh.ops.create_cube(bm, size=1, matrix=Matrix.LocRotScale((k * (3.9 + 94 * 0.42 / 2), 0, z), None, (95 * 0.42, 0.06, 0.07)))
+        B.obj(f'Zaun{k}', bm, EISEN, None, (0, -9, 0), smooth=False)
+    schild = box(B, 'TorSchild', (-3.3, -9.47, 2.0), (0.8, 0.06, 0.5), toon('T_TorSchild', '#2a2238'), bevel=0.01)
+    altbau.text(SC, 'TorSchrift', 'EDISON', 0.17, toon('T_SchildGoldV', '#e8c870', hi=0.9), (-3.3, -9.52, 2.0))
+    for i, (x, y) in enumerate(((-3.6, -2), (3.6, -2), (-3.6, 5.5), (3.6, 5.5), (-9.6, 9), (9.6, 9))):
+        B.rod(f'LaternenPfahl{i}', (x, y, 0), (x, y, 3.0), 0.07, EISEN, None)
+        B.sphere(f'Laterne{i}', (x, y, 3.25), (0.22, 0.22, 0.3), LATERNE, None)
+        B.cone(f'LaternenDach{i}', 3.5, 3.75, 0.3, 0.02, EISEN, None, xy=(x, y), seg=8)
+        ld = bpy.data.lights.new(f'LaternenLicht{i}', 'POINT'); ld.energy, ld.color, ld.shadow_soft_size = 70, (1.0, 0.8, 0.5), 0.3
+        ld.use_custom_distance, ld.cutoff_distance = True, 9
+        lo = bpy.data.objects.new(f'LaternenLicht{i}', ld); SC.collection.objects.link(lo); lo.location = (x, y, 3.1)
+    B.rod('BriefkastenPfahl', (4.6, -8.2, 0), (4.6, -8.2, 1.1), 0.06, HOLZ, None)
+    box(B, 'Briefkasten', (4.6, -8.2, 1.3), (0.4, 0.7, 0.42), toon('T_Briefkasten', '#3a5aa8'), bevel=0.05)
+    box(B, 'BriefkastenFahne', (4.83, -8.0, 1.55), (0.04, 0.08, 0.36), toon('T_FahneRot', '#d83a2a'), bevel=0.0)
+    # ---- Hecken, Bäume, Tannen ----
+    for k in (-1, 1):
+        for j in range(5):
+            if k < 0 or j < 3:
+                box(B, f'Hecke{k}_{j}', (k * 10.4, 7.2 + j * 1.6, 0.55), (1.2, 1.5, 1.1), LAUBD, bevel=0.25)
+        for j in range(9):
+            box(B, f'HeckeA{k}_{j}', (k * 3.6, -8 + j * 1.6, 0.45), (0.9, 1.5, 0.9), LAUBD, bevel=0.22)
+    def baum(name, x, y, s):
+        B.cone(name + 'Stamm', 0, 3.4 * s, 0.38 * s, 0.24 * s, HOLZ, None, xy=(x, y), seg=10)
+        for j in range(4):
+            w = j * 1.7 + x
+            B.sphere(f'{name}Krone{j}', (x + math.cos(w) * 0.9 * s, y + math.sin(w) * 0.9 * s, (3.8 + (j % 3) * 0.7) * s), ((1.5 + (j % 2) * 0.4) * s,) * 3, (LAUB, LAUB2, LAUBD)[j % 3], None)
+    for i, (x, y, s) in enumerate(((-14, 6, 1.3), (14.5, 5, 1.2), (-17, 14, 1.5), (17.5, 13, 1.4), (-24, -3, 1.4), (22, -6, 1.3),
+                                   (-12, -16, 1.2), (12, -18, 1.5), (-30, 22, 1.6), (30, 24, 1.5), (-22, 34, 1.4), (20, 36, 1.5), (0, 40, 1.7))):
+        baum(f'Baum{i}', x, y, s)
+    for i, (x, y, s) in enumerate(((-15, 30, 1.0), (15, 31, 1.1), (-8, 36, 0.9), (8, 37, 1.0), (-26, 10, 1.1), (26, 12, 1.0))):
+        B.cone(f'Tanne{i}Stamm', 0, 1.2 * s, 0.25 * s, 0.2 * s, HOLZ, None, xy=(x, y), seg=8)
+        for j in range(3):
+            B.cone(f'Tanne{i}_{j}', (1.0 + j * 1.5) * s, (3.4 + j * 1.5) * s, (2.0 - j * 0.5) * s, 0.05, LAUBD, None, xy=(x, y), seg=12)
+    # ---- Springbrunnen mit Tentakel-Statue ----
+    STEIN = toon('T_BrunnenStein', '#b8b0a0')
+    BX, BY = 10.8, 14.0
+    B.cone('BrunnenBecken', 0, 0.6, 2.2, 2.2, STEIN, None, xy=(BX, BY), seg=32)
+    B.cone('BrunnenWasser', 0.55, 0.58, 2.0, 2.0, toon('T_BrunnenWasser', '#5ab8e8', hi=0.8), None, xy=(BX, BY), seg=32, bevel=0.0)
+    B.cone('BrunnenSaeule', 0.5, 1.6, 0.35, 0.28, STEIN, None, xy=(BX, BY), seg=16)
+    B.cone('BrunnenTentakel', 1.6, 3.3, 0.36, 0.16, toon('T_StatueGruen', '#6aa86a'), None, xy=(BX, BY), seg=20)
+    B.sphere('BrunnenTentakelKopf', (BX, BY, 3.3), (0.18, 0.18, 0.2), toon('T_StatueGruen', '#6aa86a'), None)
+    for k in (-1, 1):
+        B.sphere(f'BrunnenAuge{k}', (BX + k * 0.1, BY - 0.3, 2.95), (0.08, 0.06, 0.08), STEIN, None)
+    # ---- der Tourbus der Helden: Schiebetür und Beifahrertür auf der Kameraseite ----
+    LACK, LACKH = toon('T_BusLack', '#1fa0a0', hi=0.6), toon('T_BusDach', '#f2e6cc', hi=0.6)   # Türkis und Creme: hebt sich von der lila Villa ab
+    GLAS, CHROM, REIFEN = toon('T_BusGlas', '#28406a', hi=0.8), toon('T_BusChrom', '#c8ccd8', hi=0.9), toon('T_BusReifen', '#141218')
+    FLAMME, FLAMME2 = toon('T_BusFlamme', '#ff8a2a', hi=0.8), toon('T_BusFlamme2', '#ffd23a', hi=0.9)
+    auto = B.empty('Auto', (-2.3, 11.0, 0))
+    box(B, 'AutoUnten', (0, 0, 0.95), (4.9, 2.0, 1.0), LACK, auto, bevel=0.16)
+    box(B, 'AutoOben', (-0.35, 0, 1.85), (4.1, 1.94, 0.95), LACKH, auto, bevel=0.2)
+    box(B, 'AutoDach', (-0.4, 0, 2.36), (3.9, 1.8, 0.12), LACK, auto, bevel=0.04)
+    box(B, 'AutoFrontscheibe', (1.68, 0, 1.85), (0.08, 1.7, 0.7), GLAS, auto, bevel=0.02).rotation_euler = (0, -0.35, 0)
+    for k in (-1, 1):
+        for j, x in enumerate((-1.95, -0.6)):
+            if k < 0 and j == 1:
+                continue   # dort sitzt die Schiebetür mit eigenem Fenster
+            box(B, f'AutoFenster{k}_{j}', (x, k * 0.98, 1.9), (1.05, 0.06, 0.58), GLAS, auto, bevel=0.03)
+        box(B, f'AutoFensterV{k}', (0.95, k * 0.98, 1.9), (0.75, 0.06, 0.58), GLAS, auto, bevel=0.03) if k > 0 else None
+        for j, x in enumerate((-1.6, 1.55)):
+            B.cone(f'AutoRad{k}_{j}', -0.17, 0.17, 0.46, 0.46, REIFEN, auto, xy=(0, 0), seg=24, rot=(math.pi / 2, 0, 0)).location = (x, k * 0.95, 0.46)
+            B.cone(f'AutoNabe{k}_{j}', -0.05, 0.05, 0.2, 0.2, CHROM, auto, seg=16, rot=(math.pi / 2, 0, 0)).location = (x, k * 1.13, 0.46)
+    for k in (-1, 1):
+        B.sphere(f'AutoScheinwerfer{k}', (2.45, k * 0.65, 1.05), (0.06, 0.2, 0.2), toon('T_BusLampe', '#fff2b0', hi=1.0), auto)
+        B.sphere(f'AutoRuecklicht{k}', (-2.45, k * 0.7, 1.1), (0.05, 0.14, 0.18), toon('T_BusRuecklicht', '#e83a2a', hi=0.9), auto)
+    box(B, 'AutoStossV', (2.5, 0, 0.55), (0.18, 2.1, 0.22), CHROM, auto, bevel=0.06)
+    box(B, 'AutoStossH', (-2.5, 0, 0.55), (0.18, 2.1, 0.22), CHROM, auto, bevel=0.06)
+    box(B, 'AutoSchildTraeger', (-0.35, 0, 2.62), (0.1, 0.1, 0.36), CHROM, auto, bevel=0.0)
+    box(B, 'AutoSchild', (-0.35, 0, 2.98), (2.9, 0.1, 0.5), toon('T_BusSchildGrund', '#2a1438'), auto, bevel=0.04)   # Tour-Schild auf dem Dach
+    for k in (-1, 1):
+        altbau.text(SC, f'AutoSchrift{k}', 'TOAST WARS TOUR', 0.27, toon('T_BusSchrift', '#ffe066', hi=0.95), (-0.35, k * 0.07, 2.98),
+                    rot=(math.pi / 2, 0, 0 if k < 0 else math.pi), parent=auto)
+    for x in (-1.6, 0.8):   # Dachträger mit Koffer und Gitarrenkoffer
+        box(B, f'AutoTraeger{x}', (x, 0, 2.48), (0.08, 1.8, 0.08), CHROM, auto, bevel=0.0)
+    box(B, 'AutoKoffer', (-1.1, 0.3, 2.72), (1.1, 0.7, 0.42), toon('T_Koffer', '#8a4a2a'), auto, bevel=0.06)
+    box(B, 'AutoGitarrenkoffer', (1.15, 0.2, 2.66), (1.1, 0.45, 0.24), toon('T_GitKoffer', '#1a1a20'), auto, bevel=0.1)
+
+    def scharnier(name, x0, x1, z0, z1, y, mat, parent, hinge_x):
+        """Tür, deren Ursprung auf der Scharnierkante liegt (dreht sich im Spiel um die Hochachse)."""
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1, matrix=Matrix.LocRotScale(((x0 + x1) / 2 - hinge_x, 0, (z0 + z1) / 2), None, (x1 - x0, 0.08, z1 - z0)))
+        return B.obj(name, bm, mat, parent, (hinge_x, y, 0), smooth=False, bevel=0.03)
+    tv = scharnier('AutoTuerV', 0.45, 1.45, 0.48, 2.25, -1.02, LACK, auto, 1.45)
+    box(B, 'AutoTuerVFenster', (-0.5, -0.05, 1.9), (0.75, 0.04, 0.55), GLAS, tv, bevel=0.02)
+    box(B, 'AutoTuerVGriff', (-0.8, -0.07, 1.35), (0.22, 0.05, 0.06), CHROM, tv, bevel=0.01)
+    st = scharnier('AutoSchiebetuer', -1.45, 0.3, 0.45, 2.25, -1.03, LACK, auto, 0.3)   # gleitet im Spiel nach hinten
+    box(B, 'AutoSchiebeFenster', (-0.6, -0.05, 1.9), (1.1, 0.04, 0.55), GLAS, st, bevel=0.02)
+    box(B, 'AutoSchiebeGriff', (-0.15, -0.07, 1.35), (0.22, 0.05, 0.06), CHROM, st, bevel=0.01)
+    # ---- das Kamera-Tentakel (Lakitu-Hommage): Wolke, hellblauer Tentakel mit Barett und Flieger-Brille, Filmkamera ----
+    kt = B.empty('KamTent', (4.6, 9.4, 2.7))
+    WOLKE, KAM_BLAU = toon('T_KamWolke', '#f6f8ff', hi=0.95), toon('T_KamBlau', '#5ec4f4', hi=0.7)
+    for j, (x, y, z, s) in enumerate(((0, 0, 0, 0.62), (0.5, 0.1, -0.05, 0.45), (-0.5, 0.05, -0.04, 0.48), (0.15, 0.42, 0.02, 0.42), (-0.2, -0.38, 0.02, 0.44), (0.35, -0.3, -0.08, 0.36))):
+        B.sphere(f'KamWolke{j}', (x, y, z), (s, s, s * 0.62), WOLKE, kt)
+    B.cone('KamKoerper', 0.15, 1.45, 0.36, 0.2, KAM_BLAU, kt, seg=24)
+    B.sphere('KamKopf', (0, 0, 1.45), (0.21, 0.21, 0.26), KAM_BLAU, kt)
+    for j, z in enumerate((0.45, 0.72, 0.98)):
+        B.sphere(f'KamSauger{j}', (0, -0.33 + z * 0.1, z), (0.07, 0.03, 0.07), toon('T_KamSauger', '#f4b4d0'), kt)
+    for k in (-1, 1):
+        B.sphere(f'KamAuge{k}', (k * 0.1, -0.18, 1.38), (0.1, 0.08, 0.12), toon('T_KamWeiss', '#ffffff', hi=1.0), kt)
+        B.sphere(f'KamPupille{k}', (k * 0.1, -0.25, 1.37), (0.045, 0.03, 0.055), toon('T_KamPupille', '#120a18'), kt)
+        B.torus(f'KamBrille{k}', (k * 0.11, -0.02, 1.68), 0.085, 0.022, toon('T_KamBrille', '#3a3028', hi=0.5), kt, rot=(math.pi / 2 - 0.5, 0, 0), seg=20, sseg=8)
+    B.sphere('KamMuetze', (0.03, 0.02, 1.7), (0.27, 0.27, 0.08), toon('T_KamMuetze', '#c8283a'), kt, rot=(0.2, -0.15, 0))
+    B.rod('KamMuetzeStiel', (0.03, 0.02, 1.75), (0.05, 0.02, 1.86), 0.025, toon('T_KamMuetze', '#c8283a'), kt)
+    B.rod('KamArm', (0.18, -0.15, 1.0), (0.42, -0.42, 1.2), 0.07, KAM_BLAU, kt, r1=0.05)
+    cam = box(B, 'KamKamera', (0.46, -0.52, 1.26), (0.3, 0.44, 0.28), toon('T_KamGehaeuse', '#2a2a32', hi=0.5), kt, bevel=0.03)
+    B.cone('KamLinse', -0.12, 0.12, 0.1, 0.12, toon('T_KamLinse', '#121216', hi=0.6), kt, seg=16, rot=(math.pi / 2, 0, 0)).location = (0.46, -0.84, 1.26)
+    B.sphere('KamGlas', (0.46, -0.95, 1.26), (0.08, 0.02, 0.08), toon('T_KamGlasLampe', '#6ab4ff', hi=1.0), kt)
+    for j, y in enumerate((-0.38, -0.66)):
+        B.cone(f'KamRolle{j}', -0.04, 0.04, 0.15, 0.15, toon('T_KamRolle', '#3a3a44'), kt, seg=20, rot=(0, math.pi / 2, 0)).location = (0.46, y, 1.56)
+    B.sphere('KamLampe', (0.62, -0.62, 1.38), (0.035, 0.035, 0.035), toon('T_KamRecLampe', '#ff2a2a', hi=1.0), kt)
+    # Licht: tiefe Abendsonne von vorn links, warmes Licht über der Haustür
+    sun(SC, (1.18, 0.0, -0.75), 2.4, (1.0, 0.74, 0.52))
+    ld = bpy.data.lights.new('Licht_Tuer', 'POINT'); ld.energy, ld.color, ld.shadow_soft_size = 160, (1.0, 0.78, 0.48), 0.5
+    ld.use_custom_distance, ld.cutoff_distance = True, 10
+    lo = bpy.data.objects.new('Licht_Tuer', ld); SC.collection.objects.link(lo); lo.location = (0, 14.6, 4.2)
+    return {'Auto': bpy.data.objects['AutoUnten'], 'Haustuer': villa['TuerL'], 'HaustuerR': villa['TuerR'], 'Villa': villa['Haupthaus'],
+            'Brunnen': bpy.data.objects['BrunnenBecken'], 'Statue': bpy.data.objects['BrunnenTentakel'], 'KamTent': bpy.data.objects['KamKoerper'],
+            'TorL': bpy.data.objects['TorPfeiler-1'], 'TorR': bpy.data.objects['TorPfeiler1'], 'Briefkasten': bpy.data.objects['Briefkasten'],
+            'Hecke': bpy.data.objects['Hecke-1_0'], 'HeckeR': bpy.data.objects['Hecke1_0'], 'Laterne': bpy.data.objects['Laterne4']}
+
+
 ROOMS3D = {'hafen': (build_hafen, ('#9ad8f0', '#3a8ad0')), 'uhrwerk': (build_uhrwerk, ('#2a1c3a', '#08060e')), 'landeplatz': (build_landeplatz, ('#7a3a8a', '#140828')), 'keller': (build_keller, ('#2a2232', '#0c0a12')),
            'stockwerk': (build_stockwerk, ('#2a1f46', '#0c0818')), 'dachboden': (build_dachboden, ('#221812', '#0a0604')),
            'testkammer': (build_testkammer, ('#3a4058', '#20242e')),
+           'auffahrt': (build_auffahrt, ('#f7b27a', '#3b2a6e')),
            'mars': (lambda SC: build_mars(SC, False, echt=bool(globals().get('ECHT'))), ('#f4c496', '#7a3c52')), 'mars_froh': (lambda SC: build_mars(SC, True), ('#f4c496', '#7a3c52'))}
 
 

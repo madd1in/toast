@@ -279,6 +279,21 @@ const Sound = (() => {
       { inst: 'drum', seq: Array(8).fill('-:1 C:1 -:1 C:1').join(' ') },
       { inst: 'drum', seq: Array(64).fill('H:0.5').join(' ') },
     ] },
+    // Ankunft vor der Villa (Vorspann-Kameraflug): eigene Komposition, A-Teil gotisch in d-Moll (Orgel, Streicher, Pauke wie
+    // im Schloss-Prolog alter Vampirjagd-Spiele), B-Teil hell und heldenhaft in F-Dur mit Blech – darüber funkelnde Harfe wie
+    // beim Flug um ein Prinzessinnenschloss; der Schluss kippt nach D-Dur
+    ankunft: { bpm: 104, tracks: [
+      { inst: 'organ', seq: 'D3+F3+A3:4 Bb2+D3+F3:4 C3+E3+G3:4 A2+C#3+E3:4 D3+F3+A3:4 G2+Bb2+D3:4 A2+C#3+E3:4 A2+C#3+E3:4 F3+A3+C4:4 C3+E3+G3:4 D3+F3+A3:4 Bb2+D3+F3:4 F3+A3+C4:4 C3+E3+G3:4 Bb2+D3+F3:2 A2+C#3+E3:2 D3+F#3+A3:4' },
+      { inst: 'harp', seq: [['D4', 'A4', 'D5', 'F5'], ['Bb3', 'F4', 'Bb4', 'D5'], ['C4', 'G4', 'C5', 'E5'], ['A3', 'E4', 'A4', 'C#5'], ['D4', 'A4', 'D5', 'F5'], ['G3', 'D4', 'G4', 'Bb4'], ['A3', 'E4', 'A4', 'C#5'], ['A3', 'E4', 'A4', 'C#5'],
+        ['F4', 'C5', 'F5', 'A5'], ['C4', 'G4', 'C5', 'E5'], ['D4', 'A4', 'D5', 'F5'], ['Bb3', 'F4', 'Bb4', 'D5'], ['F4', 'C5', 'F5', 'A5'], ['C4', 'G4', 'C5', 'E5'], ['Bb3', 'F4', 'A3', 'E4'], ['D4', 'A4', 'D5', 'F#5']]
+        .map(([a, b, c, d]) => `${a}:0.5 ${b}:0.5 ${c}:0.5 ${d}:0.5 ${c}:0.5 ${b}:0.5 ${c}:0.5 ${b}:0.5`).join(' ') },
+      { inst: 'strings', seq: 'A4:1.5 D5:0.5 F5:1 E5:1 D5:1.5 F5:0.5 Bb5:1 A5:1 G5:1 E5:0.5 C5:0.5 G4:1 C5:1 C#5:1 E5:1 A5:2 A5:1.5 F5:0.5 D5:1 F5:1 G5:1 Bb5:1 D6:1 Bb5:1 A5:1 G5:0.5 F5:0.5 E5:1 C#5:1 A4:4 -:32' },
+      { inst: 'brass', seq: '-:32 C5:1 F5:1 A5:1.5 G5:0.5 G5:1 E5:1 C5:2 D5:1 F5:1 A5:1 D6:1 Bb5:1.5 A5:0.5 G5:1 F5:1 A5:1 C6:1 A5:1 F5:1 G5:1.5 F5:0.5 E5:1 C5:1 D5:1 F5:1 E5:1 C#5:1 D5:2 F#5:1 A5:1' },
+      { inst: 'tuba', seq: 'D2:2 A1:2 Bb1:2 F2:2 C2:2 G2:2 A1:2 E2:2 D2:2 A1:2 G1:2 D2:2 A1:2 E2:2 A1:2 C#2:2 F2:2 C2:2 C2:2 G1:2 D2:2 A1:2 Bb1:2 F2:2 F2:2 C2:2 C2:2 G1:2 Bb1:2 A1:2 D2:2 A1:2' },
+      { inst: 'drum', seq: Array(16).fill('K:1 -:1 K:1 -:0.5 K:0.5').join(' ') },
+      { inst: 'bell', lvl: 1, seq: Array(8).fill('A6:1 -:1 D6:1 -:1 F6:1 -:1 E6:1 -:1').join(' ') },
+      { inst: 'drum', lvl: 2, seq: Array(32).fill('-:1 H:0.5 H:0.5').join(' ') },
+    ] },
     // Dr. Freds Laborwalzer: schauriger 3/4-Takt mit Theremin, Zupfbass auf der Eins und Orgel auf zwei und drei
     lab: { bpm: 138, tracks: [
       { inst: 'theremin', seq: 'A4:2 D5:1 F5:2 E5:1 D5:1.5 C5:0.5 Bb4:1 A4:3 Bb4:2 D5:1 G5:2 F5:1 E5:1 C#5:1 E5:1 A5:3 F5:2 E5:1 C5:2 A4:1 Bb4:1 D5:1 G5:1 F5:3 D5:1 F5:1 Bb5:1 G5:2 Bb4:1 A4:1 C#5:1 E5:1 D5:3' },
