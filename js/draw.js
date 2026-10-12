@@ -179,13 +179,26 @@ function P(c, pts, fill, lw = 3, stroke) {
   pth(c, pts);
   fs(c, fill, lw, stroke, [x0, y0, x1, y1]);
 }
+// Kästen ohne rechte Winkel (DOTT): die Ecken sitzen leicht versetzt, immer gleich für dieselbe Größe (kein Flackern)
+function schiefKasten(p, x, y, w, h, r) {
+  const k = Math.min(6, w * 0.03, h * 0.08), s = ((Math.round(w) * 73856093) ^ (Math.round(h) * 19349663)) >>> 0;
+  const j = i => (((s >>> (i * 4)) & 15) / 7.5 - 1) * k;
+  const P = [[x + j(0), y + j(1)], [x + w + j(2), y + j(3)], [x + w + j(4), y + h + j(5)], [x + j(6), y + h + j(7)]];
+  const rr = Math.max(0, Math.min(r, w / 2 - 1, h / 2 - 1));
+  p.moveTo((P[0][0] + P[1][0]) / 2, (P[0][1] + P[1][1]) / 2);
+  for (let i = 1; i <= 4; i++) { const a = P[i % 4], b = P[(i + 1) % 4]; if (rr) p.arcTo(a[0], a[1], b[0], b[1], rr); else p.lineTo(a[0], a[1]); }
+  p.closePath();
+}
 function R(c, x, y, w, h, fill, lw = 3, r = 0, stroke) {
   if (deco(c)) {
     const p = new Path2D();
-    if (r) p.roundRect(x, y, w, h, r); else wobblePoly(p, [x, y, x + w, y, x + w, y + h, x, y + h]);
+    if (r) schiefKasten(p, x, y, w, h, r); else wobblePoly(p, [x, y, x + w, y, x + w, y + h, x, y + h]);
     return fsDeco(c, p, fill, lw, stroke, [x, y, x + w, y + h]);
   }
-  c.beginPath(); if (r) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); fs(c, fill, lw, stroke, [x, y, x + w, y + h]);
+  c.beginPath();
+  if (c.isPix) { if (r) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); }
+  else schiefKasten(c, x, y, w, h, r);
+  fs(c, fill, lw, stroke, [x, y, x + w, y + h]);
 }
 function E(c, x, y, rx, ry, fill, lw = 3, rot = 0, stroke) {
   rx = Math.abs(rx); ry = Math.abs(ry);
@@ -200,11 +213,33 @@ function S(c, fill, lw, fn, stroke) { c.beginPath(); fn(); fs(c, fill, lw, strok
 // freie Kurvenform mit Licht-Verlauf (box = Begrenzung für die Schattierung)
 function shape(c, fill, box, fn, lw = 3) { c.beginPath(); fn(); fs(c, fill, lw, null, box); }
 function grad(c, x0, y0, x1, y1, stops) { const g = c.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; }
+// Schiefe Schrift wie in Day of the Tentacle: jeder Schriftzug sitzt leicht schräg (immer gleich, kein Flackern),
+// große Schrift tanzt Buchstabe für Buchstabe ein wenig aus der Reihe
+function schiefWert(s) { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
 function txt(c, s, x, y, font, col, align = 'center', stroke = 0, strokeCol = OUT) {
   if (typeof Lang !== 'undefined' && Lang.cur !== 'de') s = Lang.t(s);
+  s = String(s);
   c.font = font; c.textAlign = align; c.textBaseline = 'alphabetic';
-  if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; c.strokeText(s, x, y); }
-  c.fillStyle = col; c.fillText(s, x, y);
+  const px = +((/(\d+)px/.exec(font) || [0, 14])[1]), h = schiefWert(s);
+  if (c.isPix || !s) {
+    if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; c.strokeText(s, x, y); }
+    c.fillStyle = col; c.fillText(s, x, y);
+    return;
+  }
+  c.save(); c.translate(x, y); c.rotate(((h % 9) - 4) * 0.011);   // bis 2,5 Grad schief
+  if (px >= 20 && s.length <= 40) {   // große Schrift: Buchstaben einzeln, leicht gehüpft und gekippt
+    const ws = [...s].map(ch => c.measureText(ch).width), ges = ws.reduce((a, b) => a + b, 0);
+    let x0 = align === 'center' ? -ges / 2 : align === 'right' ? -ges : 0;
+    c.textAlign = 'left';
+    const pos = ws.map((w, i) => { const p = [x0, Math.sin(i * 1.9 + h) * px * 0.08, Math.sin(i * 2.7 + h * 0.3) * 0.1]; x0 += w; return p; });
+    const zeichne = fn => [...s].forEach((ch, i) => { const [bx, by, r] = pos[i]; c.save(); c.translate(bx, by); c.rotate(r); fn(ch); c.restore(); });
+    if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; zeichne(ch => c.strokeText(ch, 0, 0)); }
+    c.fillStyle = col; zeichne(ch => c.fillText(ch, 0, 0));
+  } else {
+    if (stroke) { c.lineWidth = stroke; c.strokeStyle = strokeCol; c.lineJoin = 'round'; c.strokeText(s, 0, 0); }
+    c.fillStyle = col; c.fillText(s, 0, 0);
+  }
+  c.restore();
 }
 function heart(c, x, y, s, col, lw = 2) {
   S(c, col, lw, () => {

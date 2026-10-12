@@ -296,9 +296,15 @@ function echt3dAusgangPruefen(p) {
       const w = typeof o.walk === 'function' ? o.walk() : o.walk || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10];
       const dx = w[0] - p.x, dy = (w[1] - p.y) * 1.6, d = Math.hypot(dx, dy);
       const drauf = (dx * zx + dy * zy * 1.6) / ((d || 1) * zl);
-      const r = o.rect, inFlaeche = r && p.x > r[0] - 14 && p.x < r[0] + r[2] + 14 && p.y > r[1] && p.y < r[1] + r[3] + 30;
-      if (d < 30 || (d < 80 && drauf > 0.75) || (inFlaeche && drauf > 0.2)) { ziel = o; break; }
+      const r = o.rect, inFlaeche = r && p.x > r[0] - 10 && p.x < r[0] + r[2] + 10 && p.y > r[1] && p.y < r[1] + r[3] + 22;
+      if ((d < 34 && drauf > 0.5) || (d < 64 && drauf > 0.85) || (inFlaeche && drauf > 0.6)) { ziel = o; break; }
     }
+    // erst hindurch, wenn man eine knappe halbe Sekunde zielstrebig darauf zuläuft – Vorbeistreifen zählt nicht
+    const jetzt = performance.now();
+    if (ziel) {
+      if (!p._ausgangDruck || p._ausgangDruck.id !== ziel.id) { p._ausgangDruck = { id: ziel.id, seit: jetzt }; ziel = null; }
+      else if (jetzt - p._ausgangDruck.seit < 420) ziel = null;
+    } else p._ausgangDruck = null;
   }
   p._ausgang3d = null;
   if (!ziel || !ziel.exit) return;

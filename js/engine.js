@@ -1143,7 +1143,7 @@ const UI = {
   inv: Array.from({ length: 12 }, (_, i) => ({ i, x: 328 + (i % 6) * 74, y: 474 + Math.floor(i / 6) * 61, w: 70, h: 57 })),
   ports: PLAYERS.map((id, i) => ({ id, x: 814 + i * 54, y: 508, r: 23 })),
   klo: { x: 562, y: 445, w: 82, h: 22 }, pixel: { x: 650, y: 445, w: 66, h: 22 }, reveal: { x: 722, y: 445, w: 76, h: 22 }, hint: { x: 804, y: 445, w: 62, h: 22 }, menu: { x: 872, y: 445, w: 78, h: 22 },
-  skip: { x: W - 240, y: 10, w: 184, h: 30 }, tempo: { x: W - 316, y: 10, w: 68, h: 30 }, fs: { x: W - 46, y: 8, w: 38, h: 32 },
+  skip: { x: W - 240, y: 10, w: 184, h: 30 }, skipAlle: { x: W - 240, y: 44, w: 184, h: 24 }, tempo: { x: W - 316, y: 10, w: 68, h: 30 }, fs: { x: W - 46, y: 8, w: 38, h: 32 },
 };
 const inRect = (x, y, r, pad = 0) => x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
 function hitUI(x, y) {
@@ -1221,6 +1221,7 @@ function onClick(x, y, right) {
   if (G.menu) return menuClick(x, y);
   if (fsAvailable && inRect(x, y, UI.fs, 4)) { toggleFullscreen(); return; }
   if (G.inIntro && inRect(x, y, UI.skip)) { skipScene(); return; }
+  if (G.inIntro && inRect(x, y, UI.skipAlle)) { G.introAlles = true; skipScene(); return; }
   if (G.inIntro && inRect(x, y, UI.tempo)) { tempoWeiter(); return; }
   if (G.speech) { skipSpeech(); return; }
   if (G.dialog) { const i = dialogHit(x, y); if (i >= 0) { const d = G.dialog; G.dialog = null; Sound.sfx('click'); d.res(d.opts[i].id); } return; }
@@ -1566,7 +1567,7 @@ function drawLangPills() {
   const pills = langPills();
   G.langPills = pills;
   cx.save();
-  txt(cx, 'Sprache · Language', 16, 24, '700 13px "Baloo 2", sans-serif', 'rgba(255,240,255,0.85)', 'left', 3, 'rgba(20,4,30,0.8)');
+  txt(cx, '​Sprache · Language', 16, 24, '700 13px "Baloo 2", sans-serif', 'rgba(255,240,255,0.85)', 'left', 3, 'rgba(20,4,30,0.8)');
   for (const p of pills) {
     const aktiv = (G.settings.lang || 'de') === p.id;
     const hot = inRect(G.mouse.x, G.mouse.y, p, 3);
@@ -1601,7 +1602,7 @@ function setLang(id, user) {
   if (user && id !== 'de' && Voice.available && !G.settings.voice) { G.settings.voice = true; Voice.on = true; }   // Sprachausgabe in der gewählten Sprache
   Lang.set(id).then(ok => {
     if (G.settings.lang !== id) return;
-    if (ok && id !== 'de') { Lang.prewarm(langStrings()); if (user) note(`Sprache: ${LANGS.find(q => q.id === id).label}${Voice.hasVoice ? '' : ' – keine passende Stimme installiert'}`); }
+    if (ok && id !== 'de') { if (typeof vorspannVorwaermen === 'function') vorspannVorwaermen(); Lang.prewarm(langStrings()); if (user) note(`Sprache: ${LANGS.find(q => q.id === id).label}${Voice.hasVoice ? '' : ' – keine passende Stimme installiert'}`); }
     else if (!ok && Lang.state === 'tap') { if (user) note('Tippe noch einmal, um das Sprachpaket zu laden.'); }
     else if (!ok && id !== 'de') { note('Diese Sprache ist gerade nicht verfügbar – ohne Internet bleibt es beim Deutschen.'); }
   });
@@ -1846,7 +1847,7 @@ function drawSpeech(scr) {
   y = Math.max(lines.length * lh + 4, y);
   cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round';
   const pk = Math.min(1, (G.t - sp.start) / 140), pop = pk < 1 ? 0.82 + 0.18 * (1 - Math.pow(1 - pk, 3)) + Math.sin(pk * Math.PI) * 0.06 : 1;
-  cx.save(); cx.translate(x, y); cx.scale(pop, pop); cx.translate(-x, -y);
+  cx.save(); cx.translate(x, y); if (!cx.isPix) cx.rotate(((schiefWert(sp.text) % 7) - 3) * 0.013); cx.scale(pop, pop); cx.translate(-x, -y);   // Sprechtext leicht schief
   readBox(x, y, maxW, lines.length, lh, fsz);
   lines.forEach((l, i) => {
     const ly = y - (lines.length - 1 - i) * lh;
@@ -2022,10 +2023,11 @@ function drawScene() {
   drawCaption(SH - 70);
   drawToasts();
   if (G.inIntro && !G.fast && !G.skipAll) {
-    button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
+    button(UI.skip, 'Szene überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
+    button(UI.skipAlle, 'Alles überspringen  »»', inRect(G.mouse.x, G.mouse.y, UI.skipAlle));
     const tp = vorspulen();
     button(UI.tempo, tp === 1 ? '▶ 1×' : `⏩ ${tp}×`, inRect(G.mouse.x, G.mouse.y, UI.tempo));
-    txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+    txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 86, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
     if (tp > 1) drawVorspulZeichen(tp);
   }
   if (fsAvailable) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
@@ -2057,10 +2059,13 @@ function drawToasts() {
     cx.restore();
   }
 }
-function button(r, label, hot, active) {
+function button(r, label, hot, active) {   // Knöpfe sitzen leicht schief (DOTT), jeder auf seine Art
+  const k = cx.isPix ? 0 : ((schiefWert(String(label)) % 5) - 2) * 0.02;
+  cx.save(); cx.translate(r.x + r.w / 2, r.y + r.h / 2); cx.rotate(k); cx.translate(-r.x - r.w / 2, -r.y - r.h / 2);
   R(cx, r.x, r.y, r.w, r.h, hot ? '#3a2758' : '#24173a', 2, 8, active ? '#ffe066' : '#4a3672');
   const bz = Math.min(uf(14), Math.round(r.h * 0.5));
   txt(cx, label, r.x + r.w / 2, r.y + r.h / 2 + bz * 0.36, `700 ${bz}px "Baloo 2", sans-serif`, hot || active ? '#ffe066' : '#d7c6ff');
+  cx.restore();
 }
 function drawUIBack() {
   if (cx.isPix) { cx.fillStyle = '#150c20'; cx.fillRect(0, SH, W, H - SH); cx.fillStyle = '#2c1c44'; cx.fillRect(0, SH, W, 2); return; }
@@ -3358,10 +3363,11 @@ function drawSceneOverlays() {
     drawCaption(H - 128);
     drawToasts();
     if (G.inIntro && !G.fast && !G.skipAll) {
-      button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
+      button(UI.skip, 'Szene überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
+    button(UI.skipAlle, 'Alles überspringen  »»', inRect(G.mouse.x, G.mouse.y, UI.skipAlle));
       const tp = vorspulen();
     button(UI.tempo, tp === 1 ? '▶ 1×' : `⏩ ${tp}×`, inRect(G.mouse.x, G.mouse.y, UI.tempo));
-    txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+    txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 86, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
     if (tp > 1) drawVorspulZeichen(tp);
     }
     if (fsAvailable && !G.photoMode) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
@@ -4174,6 +4180,7 @@ async function boot() {
   const seitStart = performance.now(); if (seitStart < 1600) await new Promise(r => setTimeout(r, 1600 - seitStart));
   for (const k in bgCache) delete bgCache[k];
   loadSettings(); loadAch();
+  if (G.settings.lang && G.settings.lang !== 'de') setLang(G.settings.lang, false);   // gespeicherte Sprache gleich laden (Übersetzungen aus dem Speicher sofort da)
   G.saved = loadSave(); G.hasSaves = anySave();
   G.screen = 'title';
   music();

@@ -38,13 +38,15 @@ ROOMS.lobby.objs.push({
 // ---------- Vorspann: die Ankunft ----------
 // Kameraflug des Tentakels (Blender-Meter: Ort x, y, z und Blickziel): vom Himmel über dem Tor die Auffahrt hinunter,
 // einmal um die Villa herum und zum Schluss tief hinunter zum Tourbus
+// Bahn des Kamera-Tentakels (Blender-Meter): vom Anflugpunkt am Tor die Auffahrt hinauf, einmal um die Villa, dann zu
+// seinem Platz rechts vom Bus; die Kamera folgt dicht dahinter und landet zum Schluss auf dem Bus
 const ANKUNFT_FLUG = [
-  [0, -46, 16, 0, 20, 7], [0, -20, 7, 0, 20, 6], [-3, -6, 4.2, 0, 18, 5], [-18, 6, 7, -4, 22, 6], [-26, 22, 10, 0, 22, 8],
-  [-18, 40, 14, 0, 22, 9], [0, 48, 17, 0, 22, 9], [18, 40, 14, 0, 22, 9], [26, 20, 10, 0, 20, 7], [15, 4, 6, 0, 14, 3],
-  [5, 3.6, 3.2, -2.2, 11, 1.4], [2.6, 4.6, 2.5, -2.0, 11, 1.25],
+  [1.2, -31.2, 6.1], [0.5, -18, 7], [-2.5, -6, 5.5], [-15, 5, 8], [-23, 20, 10.5], [-17, 37, 13], [0, 43, 15], [17, 37, 13],
+  [23.5, 20, 10.5], [15, 6, 7], [8, 6.5, 4.6], [4.6, 9.4, 3.0],
 ];
-const ANKUNFT_FLUGZEIT = 20000;
-const KT = text => say(null, 'Kamera-Tentakel: ' + T(text));
+const ANKUNFT_FLUG_ENDE = [7.4, 0.8, 2.5, -0.8, 11.2, 1.55];   // Schlussbild: Bus, Haustür und das Tentakel rechts
+const ANKUNFT_FLUGZEIT = 22000;
+const KT = async text => say(null, '​' + await Lang.tAsync('Kamera-Tentakel') + ': ' + await Lang.tAsync(text));   // Sprecher und Satz getrennt übersetzt
 function ankunftTween(key, ziel, ms) {   // G.ankunft[key] weich auf ziel (Spielzeit, läuft mit dem Vorspann-Tempo mit)
   const A = G.ankunft; if (!A) return Promise.resolve();
   if (G.fast || G.skipAll) { A[key] = ziel; return Promise.resolve(); }
@@ -79,16 +81,21 @@ async function ANKUNFT() {
   try {
     await warmRoom('auffahrt');
     await ankunft3dBereit(15000);
-    const flug = typeof echt3dOn === 'function' && echt3dOn(ROOMS.auffahrt) && !!ECHT3D.mod.kameraflug && ECHT3D.mod.kameraflug('auffahrt', ANKUNFT_FLUG, ANKUNFT_FLUGZEIT);
-    G.ankunft.sucher = true;   // Sucherbild der Tentakel-Kamera (REC, Zeitcode)
+    const drei = typeof echt3dOn === 'function' && echt3dOn(ROOMS.auffahrt) && !!ECHT3D.mod.kameraflug;
+    // erste Einstellung (wie Lakitu in Super Mario 64): das Kamera-Tentakel selbst schwebt auf seiner Wolke heran
+    if (drei) { ECHT3D.mod.kameraflug('auffahrt', [[0, -36, 6.4, 1.2, -20, 7.2], [0.3, -35.6, 6.5, 1.2, -24, 6.6]], 5200, 40); G.ankunft.kt = 'anflug'; G.ankunft.anflugT0 = G.t; }
     G.titelKarte = { t0: G.t, dauer: 4200, text: 'Villa Edison. Am Abend …' };
     Sound.sfx('whoosh');
     await fadeTo(0, 900);
-    const t0 = G.t;
-    await wait(1600);
     await KT('Hallo und herzlich willkommen! Hier spricht das Kamera-Tentakel – live vor der Villa Edison!');
+    // das Tentakel dreht ab und fliegt einmal um die Villa; die Kamera folgt ihm, es bleibt schön im Bild
+    const flug = drei && ECHT3D.mod.kameraflug('auffahrt', ANKUNFT_FLUG, ANKUNFT_FLUGZEIT, 44, { folgen: true, ende: ANKUNFT_FLUG_ENDE });
+    G.ankunft.kt = flug ? 'flug' : 'schweben'; Sound.sfx('whoosh');
+    const t0 = G.t;
+    await wait(1200);
     await KT('Ich bleibe den ganzen Abend an euch dran. Wer mag, dreht meinen Blick selbst: rechter Stick, Ziehen oder Wischen.');
     if (flug) await wait(Math.max(0, ANKUNFT_FLUGZEIT - (G.t - t0) - 1200));
+    G.ankunft.kt = 'schweben';
     await KT('Achtung, da kommen sie! Ton läuft … Kamera läuft … und: Action!');
     // die Helden purzeln aus dem Tourbus
     Sound.sfx('door'); await ankunftTween('schiebe', 1, 650);
@@ -100,7 +107,6 @@ async function ANKUNFT() {
     await aussteigen('bernard', 375, 625, 400, 'staunen');
     G.ankunft.sucher = false;
     if (flug) ECHT3D.mod.kameraflugEnde('auffahrt');   // Schnitt auf die Totale: Bus, Villa und Tentakel
-    G.ankunft.kt = 'schweben';
     await say('bernard', 'Laut Brief erwartet uns Dr. Fred im Labor. „SOFORT!!!“ – mit drei Ausrufezeichen. Für seine Verhältnisse ist das fast höflich.');
     await say('hoagie', 'Alter. Guckt mal nach oben. Da filmt uns ein Tentakel. Von einer Wolke.');
     await say('laverne', 'Huhu, Kamera! Darf ich dich später füttern?');
@@ -137,7 +143,14 @@ function ankunft3dBereit(ms) {   // bis die Szene da ist (oder klar ist, dass es
     p();
   });
 }
-{ const prologOhneAnkunft = PROLOG; PROLOG = async function () { ankunftVorladen(); await prologOhneAnkunft(); if (!G.skipAll) await ANKUNFT(); }; }
+// „Szene überspringen“ gilt nur für die laufende Szene (Prolog, Ankunft, Labor); „Alles überspringen“ für den ganzen Vorspann
+{ const prologOhneAnkunft = PROLOG; PROLOG = async function () {
+  G.introAlles = false; ankunftVorladen();
+  await prologOhneAnkunft();
+  if (G.introAlles) return;
+  G.skipAll = false; await ANKUNFT();
+  if (!G.introAlles) G.skipAll = false;
+}; }
 
 // ---------- Sucherbild der Tentakel-Kamera ----------
 function drawSucher() {
@@ -159,3 +172,23 @@ function drawSucher() {
   cx.restore();
 }
 { const kinoOhneSucher = drawKino; drawKino = function () { kinoOhneSucher(); if (G.ankunft && G.ankunft.sucher && G.screen === 'game') drawSucher(); }; }
+
+// ---------- Übersetzung: Vorspann und Titelbild vorab übersetzen ----------
+// Die Texte stehen im Code der Vorspann-Szenen; sobald eine andere Sprache aktiv ist, werden sie im Hintergrund geholt,
+// damit Prolog, Ankunft und Labor gleich übersetzt laufen (und nicht Zeile für Zeile erst Deutsch aufblitzt)
+function vorspannTexte(src) {
+  const out = [];
+  src.replace(/'((?:[^'\\\n]|\\.)*)'/g, (m, t) => { if (t.length > 5 && / /.test(t) && /[a-zäöüß]{3}/.test(t) && /^[A-Za-zÄÖÜäöü„“»«…*(]/.test(t) && !/[{}\[\]=;]|\$\{/.test(t)) out.push(t.replace(/\'/g, "'")); return m; });
+  return out;
+}
+function vorspannVorwaermen() {
+  if (typeof Lang === 'undefined' || Lang.cur === 'de') return;
+  const v = typeof TT_VER !== 'undefined' ? '?v=' + TT_VER : '';
+  Lang.prewarm(vorspannTexte(String(drawTitle)));
+  for (const datei of ['js/prolog.js', 'js/ankunft.js', 'js/vorspann.js', 'js/story.js']) {
+    fetch(datei + v).then(r => r.text()).then(src => {
+      if (datei.endsWith('story.js')) { const a = src.indexOf('async function INTRO'); src = a < 0 ? '' : src.slice(a, src.indexOf('\n}\n', a)); }
+      Lang.prewarm(vorspannTexte(src));
+    }).catch(() => {});
+  }
+}

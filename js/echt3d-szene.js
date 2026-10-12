@@ -918,14 +918,21 @@ export function laufflaeche3d(id) {   // Lauffläche über den ganzen Boden in S
 // a: Kippen nach außen (pro Meter Höhe und Meter Abstand zur Mitte), b/c/d: Wellen seitlich, in die Tiefe, nach oben
 const KRUMM = {};
 // Räume mit Sprungpassagen etwas sanfter, damit Kisten, Stufen und Zahnräder dort bleiben, wo die Physik sie erwartet
-for (const [id, a] of Object.entries({ lobby: 1, stockwerk: 0.7, dachboden: 0.55, keller: 0.9, uhrwerk: 0.55, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9 })) {
+// Kein rechter Winkel mehr: Fächer (a, Wände kippen nach außen) und vor allem Wellen (b, c, d – kippen in alle Richtungen,
+// auch mitten im Raum). Draußen ist der Fächer gedeckelt (xmax), sonst flögen ferne Hügel davon.
+const DRAUSSEN = new Set(['auffahrt', 'garten1776', 'fgarten', 'landeplatz', 'mars']);
+for (const [id, a0] of Object.entries({ lobby: 1, stockwerk: 0.7, dachboden: 0.55, keller: 0.9, uhrwerk: 0.55, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9, testkammer: 0.8,
+  auffahrt: 0.5, garten1776: 0.5, fgarten: 0.5, landeplatz: 0.45, mars: 0.4 })) {
   let ph = 0; for (const ch of id) ph = (ph * 31 + ch.charCodeAt(0)) % 628;
-  KRUMM[id] = { a: 0.042 * a, b: 0.075 * a, c: 0.05 * a, d: 0.06 * a, ph: ph / 100 };
+  const sprung = a0 < 0.8 && !DRAUSSEN.has(id);   // Sprung-Räume: Plattformen müssen bleiben, wo die Physik sie erwartet
+  const fa = a0 * (sprung ? 1.2 : 1.5), fw = a0 * (sprung ? 1.2 : 2.2);
+  KRUMM[id] = { a: 0.042 * fa, b: 0.075 * fw, c: 0.05 * fw, d: 0.06 * fw, ph: ph / 100, xmax: DRAUSSEN.has(id) ? 10 : 0 };
 }
 function krummVersatz(k, x, y, z, out) {   // Verschiebung eines Weltpunkts (three.js-Meter); Boden (y = 0) bleibt, wo er ist
   const h = Math.max(0, Math.min(8, y));
   if (!h) return out.set(0, 0, 0);
-  return out.set(h * (k.a * x + k.b * Math.sin(0.55 * x + 0.35 * z + k.ph)), h * k.d * Math.sin(0.5 * x - 0.3 * z + k.ph * 0.6), h * k.c * Math.sin(0.4 * x + k.ph * 1.7));
+  const xm = k.xmax ? Math.max(-k.xmax, Math.min(k.xmax, x)) : x;
+  return out.set(h * (k.a * xm + k.b * Math.sin(0.55 * x + 0.35 * z + k.ph)), h * k.d * Math.sin(0.5 * x - 0.3 * z + k.ph * 0.6), h * k.c * Math.sin(0.4 * x + k.ph * 1.7));
 }
 // Treffer auf der verbogenen Geometrie -> Punkt vor dem Verbiegen (Fixpunkt: q + Versatz(q) = p)
 function entbiegen(k, p, out) {
@@ -1373,7 +1380,19 @@ function auffahrtTeile(scene, H) {
       });
       if (kt && B0.kt) {
         kt.visible = A.kt !== 'weg';
-        kt.position.set(B0.kt.p.x + Math.sin(s * 0.7) * 0.25, B0.kt.p.y + Math.sin(s * 1.7) * 0.12 + 0.1, B0.kt.p.z + Math.cos(s * 0.55) * 0.18);
+        const Rf = rooms.auffahrt;
+        if (A.kt === 'flug' && Rf && Rf.flugKT) {   // Kameraflug: auf seiner Bahn um die Villa, filmt dabei zu uns her
+          kt.position.copy(Rf.flugKT); kt.position.y += Math.sin(s * 2.4) * 0.12; kt.scale.setScalar(1.15);
+        } else if (A.kt === 'anflug') {   // Vorspann, erste Einstellung: das Tentakel schwebt auf seiner Wolke heran (wie Lakitu)
+          const k = Math.min(1, Math.max(0, (jetzt - (A.anflugT0 || jetzt)) / 3800)), e = 1 - Math.pow(1 - k, 3);
+          const von = bl(9, 26, 13), bis = bl(1.2, -31.2, 6.1);
+          kt.position.lerpVectors(von, bis, e);
+          kt.position.y += Math.sin(s * 2.2) * 0.18 + Math.sin(e * Math.PI) * 1.5;
+          kt.scale.setScalar(1.25);
+        } else {
+          kt.scale.setScalar(1);
+          kt.position.set(B0.kt.p.x + Math.sin(s * 0.7) * 0.25, B0.kt.p.y + Math.sin(s * 1.7) * 0.12 + 0.1, B0.kt.p.z + Math.cos(s * 0.55) * 0.18);
+        }
         if (!kamera) scene.traverse(o => { if (!kamera && o.isCamera) kamera = o; });
         if (kamera) {   // dreht sich (mit Kamera in der Tentakelspitze) immer zum Geschehen
           const ziel = Math.atan2(kamera.position.x - kt.position.x, kamera.position.z - kt.position.z);
@@ -1388,9 +1407,11 @@ function auffahrtTeile(scene, H) {
 
 // ---------- Kameraflug (Vorspann, Super-Mario-64-Hommage): Catmull-Rom-Bahn durch Wegpunkte, Blick auf mitlaufendes Ziel ----------
 // punkte: [[x, y, z, zx, zy, zz], …] in Blender-Metern (Ort und Blickziel); dauer in Spiel-Millisekunden
-export function kameraflug(id, punkte, dauer, fov = 42) {
+export function kameraflug(id, punkte, dauer, fov = 42, opt = {}) {
   const R = rooms[id]; if (!R || !R.ready) return false;
-  R.flug = { punkte: punkte.map(p => [bl(p[0], p[1], p[2]), bl(p[3], p[4], p[5])]), dauer, t0: null, fov };
+  R.flug = { punkte: punkte.map(p => [bl(p[0], p[1], p[2]), bl(p[3] ?? p[0], p[4] ?? p[1], p[5] ?? p[2])]), dauer, t0: null, fov,
+    folgen: !!opt.folgen, ende: opt.ende ? [bl(opt.ende[0], opt.ende[1], opt.ende[2]), bl(opt.ende[3], opt.ende[4], opt.ende[5])] : null };
+  R.flugKT = null;
   return true;
 }
 export function kameraflugEnde(id) { const R = rooms[id]; if (R && R.flug) R.flug.ende = true; }
@@ -1412,7 +1433,18 @@ function flugKamera(R, t) {
   const g = j => P[Math.max(0, Math.min(n, j))];
   _cr(g(i - 1)[0], g(i)[0], g(i + 1)[0], g(i + 2)[0], f, _fp);
   _cr(g(i - 1)[1], g(i)[1], g(i + 1)[1], g(i + 2)[1], f, _fz);
-  _fp.x += Math.sin(t * 0.0021) * 0.06; _fp.y += Math.sin(t * 0.0017) * 0.05;   // Handkamera des Tentakels
+  if (F.folgen) {   // Verfolgung: _fp ist das Tentakel auf seiner Wolke, die Kamera hängt dicht dahinter (leicht seitlich, etwas höher)
+    const u2 = Math.min(n, u + 0.06), i2 = Math.min(n - 1, Math.floor(u2)), f2 = u2 - i2;
+    const vor = _cr(g(i2 - 1)[0], g(i2)[0], g(i2 + 1)[0], g(i2 + 2)[0], f2, new THREE.Vector3());
+    const tan = vor.sub(_fp); tan.y *= 0.4; if (tan.lengthSq() < 1e-6) tan.set(0, 0, -1); tan.normalize();
+    R.flugKT = (R.flugKT || new THREE.Vector3()).copy(_fp);
+    const seite = new THREE.Vector3(-tan.z, 0, tan.x);
+    const kp = _fp.clone().addScaledVector(tan, -5.4).addScaledVector(seite, 1.9); kp.y += 1.5;
+    const kz = _fp.clone().addScaledVector(tan, 2.2); kz.y -= 0.4;   // etwas voraus: das Tentakel sitzt im Bild, der Weg liegt vor ihm
+    if (F.ende) { const e = Math.max(0, Math.min(1, (roh - 0.84) / 0.16)), ee = e * e * (3 - 2 * e); kp.lerp(F.ende[0], ee); kz.lerp(F.ende[1], ee); }
+    _fp.copy(kp); _fz.copy(kz);
+  }
+  _fp.x += Math.sin(t * 0.0021) * 0.06; _fp.y += Math.sin(t * 0.0017) * 0.05;   // Handkamera-Wackeln
   cam.position.copy(_fp);
   if (cam.fov !== F.fov) { cam.fov = F.fov; cam.updateProjectionMatrix(); }
   cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, _fz, _yA));
