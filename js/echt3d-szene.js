@@ -28,13 +28,13 @@ const HELDEN = ['bernard', 'hoagie', 'laverne'];
 // ---------- Materialien: Toon mit drei Stufen, Kontur wie Freestyle ----------
 const matCache = new Map();
 function toon(m, name, noLine) {
-  noLine = noLine || (name && /Wedel|Zunge|Gabel|Meer|Wolke/.test(name));
+  noLine = noLine || (name && (/Wedel|Zunge|Gabel|Meer|Wolke/.test(name) || /_Boden$/.test(name)));   // Bodenkante ohne Kontur (sonst sieht die Naht wie eine Stufe aus)
   const key = m.uuid + (noLine ? 'n' : '');
   if (matCache.has(key)) return matCache.get(key);
   const glow = m.emissive && m.emissive.r + m.emissive.g + m.emissive.b > 0.02;
   const t = glow ? new THREE.MeshBasicMaterial({ color: m.map ? 0xffffff : m.color, map: m.map })
     : new THREE.MeshToonMaterial({ color: m.color, map: m.map, gradientMap: GRAD });
-  t.side = m.side;
+  t.side = m.side; t.name = m.name;
   t.userData.outlineParameters = { thickness: 0.0032, color: INK, alpha: 1, visible: !noLine };
   matCache.set(key, t);
   return t;
@@ -226,6 +226,51 @@ function requisitenBewegen(req, s, ctx) {
   }
 }
 
+// Lobby-Treppe an der linken Seitenwand: 14 Stufen (Blender x0, x1, y0, y1, Oberkante), von vorn nach hinten hinauf
+export const LOBBY_TREPPE = Array.from({ length: 14 }, (_, i) => [-8.05, -6.85, 5.6 + i * 0.47, 6.07 + i * 0.47, 0.3 * (i + 1)]);
+
+// ---------- Kollision: Möbel und Einbauten als Kisten (Blender x0, x1, y0, y1, Oberkante) ----------
+// Was auf dem Boden steht (Sofa, Automat, Tresen, Tische, Schränke, Uhren), versperrt der gesteuerten Figur den Weg;
+// niedrige Dinge sind Plattformen wie in Super Mario 64: hinaufspringen und obendrauf herumlaufen.
+const _kb = new THREE.Box3(), FIGUR_R = 0.28, STUFE = 0.4;   // so hoch steigt man ohne Sprung (Treppenstufe, Bordstein, Podest)
+const KISTEN_EXTRA = { lobby: LOBBY_TREPPE };   // eigene Bauten (Treppe) sperren von der Seite ebenfalls
+function kollisionsKisten(root, out = [], beweglichRe = null) {
+  root.updateMatrixWorld(true);
+  const visit = list => {
+    for (const c of list) {
+      const n = nm(c);
+      if (/^Figur_|^Kamera|^Camera|Wasser|Blase|Meer|Welle|Rauch|Licht|Strahl/.test(n) || (beweglichRe && beweglichRe.test(n)) || c.isLight || c.isCamera) continue;   // Bewegtes und Flüssiges sperrt nicht
+      _kb.setFromObject(c); if (_kb.isEmpty()) continue;
+      const { min, max } = _kb, bx = max.x - min.x, by = max.z - min.z;
+      if (bx > 6 || by > 6 || bx * by > 14) { if (c.children.length) visit(c.children); continue; }   // Boden, Wände, Decke, Gruppen
+      if (min.y > 0.5 || min.y < -0.3 || max.y < 0.3 || Math.min(bx, by) < 0.04) continue;   // Wandschmuck, Teppiche, Schächte
+      out.push({ k: [min.x, max.x, -max.z, -min.z, max.y], o: c });
+    }
+  };
+  visit(root.children);
+  return out;
+}
+function sichtbar(o) { for (let q = o; q; q = q.parent) if (q.visible === false) return false; return true; }
+function kisteSperrt(R, x, y, z) {   // steht an (x, y) etwas, das höher ist als eine Stufe über den Füßen?
+  const r = FIGUR_R;
+  for (const { k, o } of R.kisten) if (k[4] > z + STUFE && x > k[0] - r && x < k[1] + r && y > k[2] - r && y < k[3] + r && (!o || sichtbar(o))) return true;
+  return false;
+}
+function kollision(R, a, p, id, erzwingen) {   // gesteuerte Figur: nicht durch Möbel, sondern an der Kante entlang
+  const z = Math.max(0, a._z3d || 0);
+  if (!kisteSperrt(R, p.x, -p.z, z)) { a._frei3d = [a.x, a.y, id]; return p; }
+  const alt = a._frei3d;
+  if (!erzwingen || !alt || alt[2] !== id) return p;
+  const q = new THREE.Vector3(), nx = a.x, ny = a.y, frei = (x, y) => { toWorld(R.home, x, y, q); return !kisteSperrt(R, q.x, -q.z, z); };
+  // ein Spiel-Schritt kann hinten im Raum 30 cm weit sein: bis an die Kante herantasten, dann an ihr entlang rutschen
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 6; i++) { const t = (lo + hi) / 2; if (frei(alt[0] + (nx - alt[0]) * t, alt[1] + (ny - alt[1]) * t)) lo = t; else hi = t; }
+  let bx = alt[0] + (nx - alt[0]) * lo, by = alt[1] + (ny - alt[1]) * lo;
+  if (frei(nx, by)) bx = nx; else if (frei(bx, ny)) by = ny;
+  a.x = bx; a.y = by; a._frei3d = [bx, by, id]; a._gestossen3d = performance.now();
+  return toWorld(R.home, bx, by, q);
+}
+
 async function ladeRaum(id) {
   const reqDef = REQUISITEN[id];
   const [gltf, data, reqGltf] = await Promise.all([loader.loadAsync(BASE + id + '.glb' + V), fetch(BASE + id + '.json' + V).then(r => r.json()),
@@ -233,6 +278,7 @@ async function ladeRaum(id) {
   const scene = new THREE.Scene(), H = gltf.scene;
   const [hor, top] = data.himmel && data.himmel.length ? data.himmel : ['#3a2a50', '#140828'];
   scene.background = himmel(top, hor);
+  scene.userData.horizont = hor;
   const camera = gltf.cameras[0] || new THREE.PerspectiveCamera(29.6, GW / GH, 0.1, 400);
   camera.aspect = GW / GH; camera.updateProjectionMatrix();
   // Licht aus Blender: Sonnen als gerichtetes Licht (die stärkste wirft Schatten), Lampen als Punktlichter
@@ -251,6 +297,7 @@ async function ladeRaum(id) {
   prep(H, { cast: false, receive: true, ohne: new Set(data.ohneKontur || []) });
   H.traverse(o => { if (o.isMesh && beweglich.has(nm(o))) o.castShadow = true; });
   const extraRe = EXTRA_BEWEGLICH[id];
+  const kisten = kollisionsKisten(H, [], extraRe);
   const stat = mergeStatic(H, n => beweglich.has(n) || !!(extraRe && extraRe.test(n)));
   scene.add(H); scene.add(stat);
   sprungToastStufen(scene, id);
@@ -268,9 +315,12 @@ async function ladeRaum(id) {
   const extra = RAUM_EXTRAS[id] ? RAUM_EXTRAS[id](scene, H) : null;
   H.updateMatrixWorld(true);
   const req = reqGltf ? requisitenAufstellen(scene, camera, reqDef, reqGltf) : null;
+  if (req) for (const r of Object.values(req)) kollisionsKisten({ children: [r.o], updateMatrixWorld() {} }, kisten);
+  for (const k of KISTEN_EXTRA[id] || []) kisten.push({ k, o: null });
   const innen = INNENRAUM.has(id) ? raumSchliessen(scene, camera, id) : null;
+  if (innen) kisten.push(...innen.dekoKisten);   // Möbel an der Vorderwand (nur bei gedrehter Kamera da)
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
-  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen };
+  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten };
 }
 
 async function ladeHafen() {
@@ -473,7 +523,11 @@ function kameraFahren(R, t, actors) {
   if (typeof G !== 'undefined' && G.inIntro) cam.position.addScaledVector(_rt, Math.sin(t * 0.00021) * 0.3).addScaledVector(_up, 0.05 + Math.sin(t * 0.00016) * 0.05);   // Vorspann: langsame Kinofahrt
 
   // freie Kamera: 360° um den Raum, dazu neigen und zoomen – um einen Zielpunkt in der Raummitte
-  const o = R.orbit;
+  const o = R.orbit || (R.innen ? orbit(R.id) : null);
+  if (o && R.innen) {   // Vorspann: Kinokamera an (die Orbit-Kamera trägt sie); danach gleitet sie in die Bühnenansicht zurück
+    if (kinoAktiv(R)) { if (Math.abs(o.yaw) < 3e-3 && !o.zurueck) o.yaw = 3.1e-3; R.kinoAn = true; }
+    else if (R.kinoAn) { R.kinoAn = false; R.kinoSp = null; o.zurueck = true; o.rueckT0 = null; }
+  }
   if (o && (o.zurueck || Math.abs(o.yaw) > 1e-4 || Math.abs(o.pitch) > 1e-4 || Math.abs(o.dist) > 1e-4) && R.kT == null) R.kT = t;
   if (o && (o.zurueck || Math.abs(o.yaw) > 1e-4 || Math.abs(o.pitch) > 1e-4 || Math.abs(o.dist) > 1e-4)) {
     if (o.zurueck) {
@@ -490,13 +544,24 @@ function kameraFahren(R, t, actors) {
     const ran = 1 - 0.55 * (o.w || 0) * Math.min(1, Math.abs(o.yaw) / 1.1);   // je weiter gedreht, desto näher an die Figur – sonst stünde die Kamera vor der Seitenwand
     _ab.copy(R.basis).applyAxisAngle(_yA, o.yaw).applyAxisAngle(pitchAxis, o.pitch)
       .multiplyScalar(Math.max(0.3, ran + o.dist / R.basisLen));
+    if (!R.innen && R.fokus) {   // draußen folgt die Kamera der Figur näher (wie Mario 64) statt im weiten Bühnenabstand
+      const L = _ab.length(), lmax = Math.max(3.2, 7.5 + o.dist);
+      if (L > lmax) _ab.setLength(L + (lmax - L) * Math.min(1, o.w || 0));
+    }
     cam.position.copy(R.ziel).add(_ab);
     if (cam.position.y < 0.45) cam.position.y = 0.45;
+    if (!R.innen && R.fokus && (o.w || 0) > 0.05) {   // draußen: der Kameraarm stößt an Hauswände, Bäume und Zäune und rückt davor
+      R.armN = (R.armN || 0) + 1;
+      if (R.armN % 3 === 0 || !R.armDraussen) R.armDraussen = armFrei(R, R.ziel, cam.position);
+      if (cam.position.distanceTo(R.ziel) > R.armDraussen) cam.position.sub(R.ziel).setLength(R.armDraussen).add(R.ziel);
+    }
     if (R.innen && R.fokus) {   // Innenräume: Third-Person-Kamera wie in Psychonauts 2 / Super Mario 64 – hinter der Figur, im Raum
       const I = R.innen, m = 0.4, w = Math.min(1, o.w || 0), dtk = Math.min(100, t - (R.kT || t));
       const posD = new THREE.Vector3(), zielD = new THREE.Vector3();
-      const gp = gespraechsPartner(R);
-      if (gp) {   // Gespräch: seitlich auf beide Sprecher, Kamera auf der Raumseite zur Vorderwand
+      const kino = kinoAktiv(R);
+      const gp = kino ? null : gespraechsPartner(R);
+      if (kino) kinoKamera(R, posD, zielD, t, actors);
+      else if (gp) {   // Gespräch: seitlich auf beide Sprecher, Kamera auf der Raumseite zur Vorderwand
         const mid = gp.a.clone().add(gp.b).multiplyScalar(0.5), d = gp.b.clone().sub(gp.a); d.y = 0;
         const len = Math.max(0.6, d.length()); d.normalize();
         const n = new THREE.Vector3(-d.z, 0, d.x); if (n.z < 0) n.negate();
@@ -515,24 +580,24 @@ function kameraFahren(R, t, actors) {
         R.armFrei = armFrei(R, zielD, posD);
         // wirksame Entfernung: Raumgrenze (schon in posD) und Hindernisse; zu nah = Blick verstellt
         const wirk = Math.min(posD.distanceTo(zielD), R.armFrei), wunsch = weiteAuto(o);
-        if (!gp && autoKamera && wirk < wunsch * 0.6 && R.armN % 12 === 0 && performance.now() - (R.handT || 0) > 2500) {
+        if (!gp && !kino && autoKamera && wirk < wunsch * 0.6 && R.armN % 12 === 0 && performance.now() - (R.handT || 0) > 2500) {
           const probe = y => {
             const test = new THREE.Vector3(0, posD.y - R.fokus.y, wunsch).applyAxisAngle(_yA, y).add(R.fokus);
             test.set(Math.max(I.x0 + m, Math.min(I.x1 - m, test.x)), test.y, Math.max(I.z0 + m, Math.min(I.z1 - m, test.z)));
             return Math.min(test.distanceTo(zielD), armFrei(R, zielD, test));
           };
           let best = o.yaw, bestL = wirk;
-          for (const dy of [0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.6, -2.6]) {
+          for (const dy of [0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.6, -2.6].filter(d => !(lenktGerade(R) && Math.abs(d) > 1.3))) {
             const y = o.yaw + dy, l = probe(y);
             if (l > bestL + 0.4) { bestL = l; best = y; }
           }
           R.yawZiel = best;
         }
       }
-      if (R.yawZiel != null && !gp && autoKamera) { o.yaw += (R.yawZiel - o.yaw) * Math.min(1, dtk / 700); if (Math.abs(R.yawZiel - o.yaw) < 0.02) R.yawZiel = null; }
+      if (R.yawZiel != null && !gp && !kino && autoKamera) { o.yaw += (R.yawZiel - o.yaw) * Math.min(1, dtk / 700); if (Math.abs(R.yawZiel - o.yaw) < 0.02) R.yawZiel = null; }
       if (R.armFrei && posD.distanceTo(zielD) > R.armFrei) posD.sub(zielD).setLength(R.armFrei).add(zielD);
       if (!R.glatt) R.glatt = { p: posD.clone(), z: zielD.clone() };
-      const k = Math.min(1, dtk / (gp ? 420 : 260));
+      const k = Math.min(1, dtk / (kino ? 950 : gp ? 420 : 260));   // Vorspann: langsame, weiche Kinofahrten
       R.glatt.p.lerp(posD, k); R.glatt.z.lerp(zielD, k);
       cam.position.copy(home.position).lerp(R.glatt.p, w);
       R.ziel.copy(R.zielHome).lerp(R.glatt.z, w);
@@ -544,6 +609,7 @@ function kameraFahren(R, t, actors) {
 
 const armRay = new THREE.Raycaster();
 const weiteAuto = o => Math.max(2.2, 6.2 * (1 + o.dist / 6));
+function lenktGerade(R) { const a = typeof me === 'function' ? me() : null; return !!(a && a._gelenkt && a._lenk3d && performance.now() - a._lenk3d.t < 400); }
 function armFrei(R, von, bis) {   // freie Länge des Kameraarms von der Figur zur Kamera (mindestens 2 m)
   const dir = bis.clone().sub(von), lang = dir.length();
   if (lang < 0.4) return lang;
@@ -556,6 +622,26 @@ function armFrei(R, von, bis) {   // freie Länge des Kameraarms von der Figur z
   return lang;
 }
 // Gesprächspartner der gesteuerten Figur: wer gerade spricht (oder im Dialog steht), im selben Raum
+// ---------- Vorspann-Kino: Sprecher im Halbprofil (Seiten im Wechsel), Läufer begleiten, dazwischen langsame Raumtotale ----------
+function kinoAktiv(R) { return typeof G !== 'undefined' && G.inIntro && !G.prolog && G.screen === 'game' && !!R.innen && !!R.zielHome && !G.menu; }
+function kinoKamera(R, posD, zielD, t, actors) {
+  const I = R.innen, sp = G.speech && G.speech.a, held = sp && sp.room === R.id && sp.visible ? sp : null;
+  const geher = held ? null : actors.find(a => a.walking && a.visible && owns(a, R.id));
+  const wer = held || geher;
+  if (wer) {
+    if (R.kinoSp !== wer) { R.kinoSp = wer; R.kinoN = (R.kinoN || 0) + 1; }
+    const p = toWorld(R.home, wer.x, wer.y, new THREE.Vector3()), seite = R.kinoN % 2 ? 1 : -1;
+    const nah = held ? 3.3 + Math.min(1.2, (G.speech.text || '').length / 90) : 4.6;   // lange Sätze: etwas weiter weg
+    posD.set(p.x + seite * nah * 0.5, held ? 1.6 : 2.1, p.z + nah);
+    zielD.set(p.x - seite * 0.35, held ? 1.3 : 1.0, p.z);
+    posD.x += Math.sin(t * 0.0004) * 0.15;   // Handkamera-Atmen
+  } else {
+    const c = R.zielHome, w = Math.sin(t * 0.00011) * 0.55;
+    posD.set(c.x + Math.sin(w) * 6.5, 2.7 + Math.sin(t * 0.00017) * 0.25, c.z + Math.cos(w) * 6.5);
+    zielD.set(c.x, 1.25, c.z);
+  }
+  posD.y = Math.min(posD.y, I.y1 - 0.4);
+}
 function gespraechsPartner(R) {
   if (typeof G === 'undefined' || !G.state || typeof curId !== 'function') return null;
   const ich = typeof ACT !== 'undefined' && ACT[curId()]; if (!ich || ich.room !== R.id) return null;
@@ -671,12 +757,22 @@ function raumSchliessen(scene, cam, id) {
   const z1 = VORNE_Z;
   // Stoffe: Wand von der Rückwand, Boden: häufigster Stoff unter fünf Tastpunkten
   const wandMat = (Array.isArray(hinten.object.material) ? hinten.object.material[0] : hinten.object.material);
-  const zaehl = new Map();
+  const zaehl = new Map(), proben = [];
   for (const [dx, dz] of [[-4, 0], [4, 0], [0, -1.5], [-2, 1], [2, 1]]) {
     const h = strahl(C.clone().add(new THREE.Vector3(dx, 1.2, dz)), new THREE.Vector3(0, -1, 0));
-    if (h && h.point.y < 0.15) { const m = Array.isArray(h.object.material) ? h.object.material[0] : h.object.material; zaehl.set(m, (zaehl.get(m) || 0) + 1); }
+    if (h && h.point.y < 0.15) { const m = Array.isArray(h.object.material) ? h.object.material[0] : h.object.material; zaehl.set(m, (zaehl.get(m) || 0) + 1); proben.push({ m, p: h.point, uv: h.uv }); }
   }
   const bodenMat = [...zaehl.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0])[0] || wandMat;
+  // Kachelung des vorhandenen Bodens messen (u, v linear in x, z), damit der ergänzte Boden nahtlos weiterläuft
+  let bodenUV = null;
+  const pb = proben.filter(q => q.m === bodenMat && q.uv);
+  for (let i = 0; i < pb.length && !bodenUV; i++) for (let j = i + 1; j < pb.length && !bodenUV; j++) for (let k = j + 1; k < pb.length && !bodenUV; k++) {
+    const [A, B, Cc] = [pb[i], pb[j], pb[k]], x1 = B.p.x - A.p.x, z1_ = B.p.z - A.p.z, x2 = Cc.p.x - A.p.x, z2 = Cc.p.z - A.p.z, det = x1 * z2 - x2 * z1_;
+    if (Math.abs(det) < 0.5) continue;
+    const loes = (f1, f2) => [(f1 * z2 - f2 * z1_) / det, (x1 * f2 - x2 * f1) / det];
+    const [ua, ub] = loes(B.uv.x - A.uv.x, Cc.uv.x - A.uv.x), [va, vb] = loes(B.uv.y - A.uv.y, Cc.uv.y - A.uv.y);
+    bodenUV = { ua, ub, uc: A.uv.x - ua * A.p.x - ub * A.p.z, va, vb, vc: A.uv.y - va * A.p.x - vb * A.p.z };
+  }
   const innenStoff = (m, dunkler) => {
     const n = m.clone(); n.side = THREE.FrontSide;
     if (dunkler && n.color) n.color = n.color.clone().multiplyScalar(dunkler);
@@ -686,15 +782,17 @@ function raumSchliessen(scene, cam, id) {
   const W = innenStoff(wandMat), B = innenStoff(bodenMat), D = innenStoff(wandMat, 0.55);
   const huelle = new THREE.Group(); huelle.name = 'Raumhuelle';
   const flaeche = (w, h, mat, pos, rotY, rotX = 0) => {   // Ebene mit Innenseite zum Raum, Kacheln im Meter-Maßstab
-    const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
+    const g = new THREE.PlaneGeometry(w, h, Math.max(1, Math.ceil(w / 0.6)), Math.max(1, Math.ceil(h / 0.6))), uv = g.attributes.uv;   // fein unterteilt: die schiefe DOTT-Verbiegung greift auch hier
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w * 0.4, uv.getY(i) * h * 0.4);
     const m = new THREE.Mesh(g, mat); m.position.copy(pos); m.rotation.set(rotX, rotY, 0, 'YXZ'); m.receiveShadow = true; huelle.add(m);
     return m;
   };
   const bx = (x0 + x1) / 2, bz = (z0 + z1) / 2, bw = x1 - x0, bd = z1 - z0;
   flaeche(bw, y1, W, new THREE.Vector3(bx, y1 / 2, z1), Math.PI);   // Vorderwand, schaut nach hinten in den Raum
-  if (!links) flaeche(bd, y1, W, new THREE.Vector3(x0, y1 / 2, bz), Math.PI / 2);
-  if (!rechts) flaeche(bd, y1, W, new THREE.Vector3(x1, y1 / 2, bz), -Math.PI / 2);
+  // Seitenwände immer über die ganze Tiefe: wo der Raum eine eigene Wand hat, steckt die Hülle unsichtbar in ihr,
+  // vorn (wo das Bühnenbild offen war) schließt sie die Lücke
+  flaeche(bd, y1, W, new THREE.Vector3(x0 - (links ? 0.06 : 0), y1 / 2, bz), Math.PI / 2);
+  flaeche(bd, y1, W, new THREE.Vector3(x1 + (rechts ? 0.06 : 0), y1 / 2, bz), -Math.PI / 2);
   if (!oben) flaeche(bw, bd, D, new THREE.Vector3(bx, y1, bz), 0, Math.PI / 2);   // Decke, schaut nach unten
   // Boden nur vor dem vorhandenen ergänzen (Abgründe und Treppenlöcher bleiben offen): vordere Bodenkante abtasten
   let zKante = z1;
@@ -703,19 +801,29 @@ function raumSchliessen(scene, cam, id) {
     for (const x of [-6, -3, 0, 3, 6]) { const h = strahl(new THREE.Vector3(x, 1.2, z), new THREE.Vector3(0, -1, 0)); if (h && Math.abs(h.point.y) < 0.2) { bedeckt = true; break; } }
     if (!bedeckt) { zKante = z - 0.25; break; }
   }
-  if (zKante < z1 - 0.05) flaeche(bw, z1 - zKante, B, new THREE.Vector3(bx, -0.012, (zKante + z1) / 2), 0, -Math.PI / 2);
+  if (zKante < z1 - 0.05) {
+    const bt = z1 - zKante + 0.3, g = new THREE.PlaneGeometry(bw, bt, Math.ceil(bw / 0.6), Math.ceil(bt / 0.6));
+    g.rotateX(-Math.PI / 2); g.translate(bx, -0.004, (zKante - 0.3 + z1) / 2);   // greift ein Stück unter den vorhandenen Boden
+    const pos = g.attributes.position, uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      if (bodenUV) uv.setXY(i, bodenUV.ua * x + bodenUV.ub * z + bodenUV.uc, bodenUV.va * x + bodenUV.vb * z + bodenUV.vc);
+      else uv.setXY(i, x * 0.4, -z * 0.4);
+    }
+    const m = new THREE.Mesh(g, B); m.receiveShadow = true; huelle.add(m);
+  }
   scene.add(huelle);
   const deko = vorderwandDeko(id, x0, x1, z1, y1);
   scene.add(deko);
-  return { x0, x1, z0, z1, y1, deko };
+  return { x0, x1, z0, z1, y1, deko, dekoKisten: kollisionsKisten(deko) };
 }
 // Möbel und Dinge an der Vorderwand, damit die Rückseite des Raums nicht leer ist (je Raum ein Thema).
 // Nur bei gedrehter Kamera sichtbar – in der Bühnenansicht stünden sie sonst vor der Kamera.
 function vorderwandDeko(id, x0, x1, z, y1) {
   const g = new THREE.Group(); g.name = 'Vorderwanddeko';
   const M = c => toonMat(c), holz = M(0x6a4428), holzD = M(0x4a2e1a), metall = M(0x8a92a8);
-  const box = (w, h, d, mat, x, y, dz = 0, rot = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); b.position.set(x, y, z - d / 2 - 0.02 - dz); b.rotation.y = rot; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
-  const zyl = (r0, r1, h, mat, x, y, dz) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, 14), mat); c.position.set(x, y, z - dz); c.castShadow = true; g.add(c); return c; };
+  const box = (w, h, d, mat, x, y, dz = 0, rot = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d, Math.ceil(w / 0.5), Math.ceil(h / 0.5), 1), mat); b.position.set(x, y, z - d / 2 - 0.02 - dz); b.rotation.y = rot; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
+  const zyl = (r0, r1, h, mat, x, y, dz) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, 14, Math.ceil(h / 0.5)), mat); c.position.set(x, y, z - dz); c.castShadow = true; g.add(c); return c; };
   const kugel = (r, mat, x, y, dz) => { const k = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat); k.position.set(x, y, z - dz); g.add(k); return k; };
   const bild = (x, y, w, h, farbe) => { box(w + 0.12, h + 0.12, 0.05, M(0xc8a04a), x, y); box(w, h, 0.03, M(farbe), x, y, 0.02); };
   const glas = [0x5aff8a, 0xff5ab8, 0x5ac8ff, 0xffd23a, 0xb88aff].map(c => { const m = new THREE.MeshBasicMaterial({ color: c }); m.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: true }; return m; });
@@ -809,6 +917,219 @@ function krummBiegen(scene, k) {
   }
 }
 
+// ---------- Garten 1776: Welt rundherum für die freie Kamera ----------
+// Das Bühnenbild zeigt nur die Gartenecke. Dreht man die Kamera, soll die ganze Villa dastehen, Wiese und Hügel bis zum
+// Horizont reichen und rechts die Bucht mit dem Hafen von 1776 liegen (Stege, Segelschiffe, Leuchtturm, Möwen).
+function gartenWelt(scene) {
+  const welt = new THREE.Group(); welt.name = 'Rundumwelt';
+  const namens = (re, farbe) => { let f = null; scene.traverse(o => { if (!f && o.isMesh && !Array.isArray(o.material) && re.test(o.material.name || '')) f = o.material; }); return f || toonMat(farbe); };
+  const putz = namens(/Putz/, 0xf0e2c0), gras = namens(/GA_Gras/, 0x6cc04a), ziegel = namens(/GA_Dach/, 0xa04a2a), balken = namens(/G_Balken/, 0x4e3218);
+  const M = c => toonMat(c), ohneKontur = m => { m.userData.outlineParameters = { visible: false }; return m; };
+  const glas = M(0x24345e), laden = M(0x3c6e52), holz = M(0x8a5a32), holzD = M(0x4e3218), gold = M(0xe0b040), weiss = M(0xf2ece0), rotM = M(0xc03a2a), stein = M(0x8a8478);
+  const kachel = (g, k = 0.4) => {   // UVs im Meter-Maßstab: Putz und Gras kacheln, statt über 20 m zu verschmieren
+    const uv = g.attributes.uv, pos = g.attributes.position, n = g.attributes.normal;
+    for (let i = 0; i < uv.count; i++) {
+      const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i));
+      uv.setXY(i, (ax > 0.5 ? pos.getZ(i) : pos.getX(i)) * k, (ay > 0.5 ? pos.getZ(i) : pos.getY(i)) * k);
+    }
+    return g;
+  };
+  const teil = (geo, mat, x, y, h, gier = 0, ziel = welt) => { const m = new THREE.Mesh(geo, mat); m.position.copy(bl(x, y, h)); m.rotation.y = gier; m.receiveShadow = true; ziel.add(m); return m; };
+  const kiste = (x0, x1, y0, y1, h0, h1, mat, k) => teil(kachel(new THREE.BoxGeometry(x1 - x0, h1 - h0, y1 - y0), k), mat, (x0 + x1) / 2, (y0 + y1) / 2, (h0 + h1) / 2);
+  const flach = (geo, mat, x, y, h) => { geo.rotateX(-Math.PI / 2); return teil(geo, mat, x, y, h); };
+  const gierVon = (nx, ny) => Math.atan2(nx, -ny);   // Blender-Normale der Fassade -> Drehung um die Hochachse
+
+  // Boden bis zum Horizont (unter der Wiese des Bühnenbilds) und ein Dunstring, der den Rand in den Himmel blendet
+  flach(kachel(new THREE.CircleGeometry(420, 72), 0.15), gras, 0, 20, -0.15);
+  const hor = scene.userData.horizont || '#d6f1ff', hc = document.createElement('canvas'); hc.width = 4; hc.height = 128;
+  const hg = hc.getContext('2d'), verlauf = hg.createLinearGradient(0, 0, 0, 128), c = new THREE.Color(hor), rgb = `${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)}`;
+  verlauf.addColorStop(0, `rgba(${rgb},0)`); verlauf.addColorStop(0.55, `rgba(${rgb},0.6)`); verlauf.addColorStop(0.8, `rgba(${rgb},1)`); verlauf.addColorStop(1, `rgba(${rgb},1)`);
+  hg.fillStyle = verlauf; hg.fillRect(0, 0, 4, 128);
+  const dunstT = new THREE.CanvasTexture(hc); dunstT.colorSpace = THREE.SRGBColorSpace;
+  const dunst = new THREE.Mesh(new THREE.CylinderGeometry(330, 330, 80, 64, 1, true), ohneKontur(new THREE.MeshBasicMaterial({ map: dunstT, transparent: true, depthWrite: false, side: THREE.BackSide })));
+  dunst.position.copy(bl(0, 20, 22)); dunst.userData.beweglich = true; welt.add(dunst);
+  // Hügelkette ringsum (rechts liegt das Meer, dort keine)
+  const huegelM = [M(0x5aa83a), M(0x6cb848), M(0x4a9a34), M(0x78c058)];
+  for (let i = 0; i < 34; i++) {
+    const w = i / 34 * Math.PI * 2 + Math.sin(i * 7.3) * 0.07, r = 150 + (i % 3) * 26, x = Math.sin(w) * r, y = 20 + Math.cos(w) * r;
+    if (x > 45) continue;
+    const h = teil(new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), huegelM[i % 4], x, y, -1.5, w);
+    h.scale.set(24 + (i * 13) % 20, 10 + (i * 7) % 12, 18 + (i * 5) % 14);
+  }
+
+  // ---- die Villa: Hauptbau hinter der Gartenecke, Gesimse, Fensterreihen mit Läden, Walmdach, zwei Türme, Schornsteine ----
+  const VX0 = -27, VX1 = -5.25, VY0 = 12.72, VY1 = 28, HOCH = 13;
+  kiste(VX0, VX1, VY0, VY1, 0, HOCH, putz);
+  for (const h of [5.42, 9.25, 12.75]) kiste(VX0 - 0.22, VX1 + 0.22, VY0 - 0.22, VY1 + 0.22, h, h + 0.3, balken);   // Gesimse
+  for (const [x, y] of [[VX1, VY1], [VX0, VY1], [VX1, VY0]]) kiste(x - 0.2, x + 0.2, y - 0.2, y + 0.2, 0, HOCH, balken);   // Eckbalken
+  const fenster = (x, y, h, gier, s = 1) => {
+    const g = new THREE.Group(); g.position.copy(bl(x, y, h)); g.rotation.y = gier; g.scale.setScalar(s); welt.add(g);
+    const b = (w, hh, d, mat, px, py, pz, rz = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), mat); m.position.set(px, py, pz); m.rotation.z = rz; g.add(m); };
+    b(1.5, 2.15, 0.14, balken, 0, 0, 0); b(1.2, 1.8, 0.1, glas, 0, 0, 0.05);
+    b(0.08, 1.8, 0.18, balken, 0, 0, 0.06); b(1.2, 0.08, 0.18, balken, 0, 0.25, 0.06);   // Fensterkreuz
+    b(0.55, 1.95, 0.08, laden, -1.06, 0, 0.03, 0.05); b(0.55, 1.95, 0.08, laden, 1.06, 0, 0.03, -0.07);   // schiefe Läden (DOTT)
+    b(1.8, 0.14, 0.42, balken, 0, -1.12, 0.14);   // Fensterbank
+  };
+  const reihe = (ax, ay, bx, by, nx, ny, hoehen, abst = 3.6) => {   // Fenster gleichmäßig auf einer Fassadenstrecke
+    const len = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.floor(len / abst)), gier = gierVon(nx, ny);
+    for (const h of hoehen) for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      fenster(ax + (bx - ax) * t + nx * 0.08, ay + (by - ay) * t + ny * 0.08, h, gier);
+    }
+  };
+  reihe(-23.2, VY0, -10.8, VY0, 0, -1, [2.3]);   // vorn unten: neben der Gartenecke des Bühnenbilds
+  reihe(-23.2, VY0, -6, VY0, 0, -1, [7.35, 11.0]);
+  reihe(VX1, 15.2, VX1, VY1, 1, 0, [2.3, 7.35, 11.0]);   // Gartenseite
+  reihe(VX1, VY1, VX0, VY1, 0, 1, [2.3, 7.35, 11.0]);   // Rückseite
+  reihe(VX0, VY1, VX0, 16, -1, 0, [2.3, 7.35, 11.0]);   // Westseite
+  const walm = new THREE.ConeGeometry(1, 1, 4, 1); walm.rotateY(Math.PI / 4);
+  const dach = teil(walm, ziegel, (VX0 + VX1) / 2, (VY0 + VY1) / 2, HOCH + 3.7);
+  dach.scale.set((VX1 - VX0) * 0.76, 7.4, (VY1 - VY0) * 0.76); dach.rotation.z = 0.035;
+  const turm = (x, y, r, h, dachH, kipp, mitFahne) => {
+    teil(kachel(new THREE.CylinderGeometry(r, r * 1.06, h, 18), 0.4), putz, x, y, h / 2);
+    for (const hh of [h * 0.34, h * 0.67, h - 0.15]) teil(new THREE.CylinderGeometry(r + 0.18, r + 0.18, 0.3, 18), balken, x, y, hh);   // Gesimse am Turm
+    const spitze = teil(new THREE.ConeGeometry(r * 1.3, dachH, 18), ziegel, x, y, h + dachH / 2 - 0.1);
+    spitze.rotation.z = -kipp * 0.14;   // schiefe Zipfelmütze wie im Original
+    const sx = x + Math.sin(kipp * 0.14) * dachH;   // dorthin zeigt die Spitze
+    for (let i = 0; i < 4; i++) for (const hh of [h * 0.22, h * 0.55, h * 0.82]) {   // Turmfenster rundum (zur Wand hin weglassen)
+      const w = i * Math.PI / 2 + (i % 2) * 0.25 + 0.5, nx = Math.sin(w), ny = -Math.cos(w);
+      if (nx > 0.3 && ny > 0.3) continue;
+      fenster(x + nx * (r + 0.05), y + ny * (r + 0.05), hh, gierVon(nx, ny), 0.7);
+    }
+    if (mitFahne) {   // Wetterfahne: ein lila Tentakel statt eines Hahns
+      teil(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), holzD, sx, y, h + dachH + 0.9);
+      const t = teil(new THREE.CapsuleGeometry(0.22, 0.9, 4, 10), M(0x8a3ab8), sx, y, h + dachH + 1.7);
+      t.geometry.translate(0, 0.55, 0); t.rotation.z = -1.2; t.userData.beweglich = true; fahnen.push(t);
+      for (const s of [-1, 1]) { const a = teil(new THREE.SphereGeometry(0.09, 8, 6), weiss, 0, 0, 0, 0, t); a.position.set(0.18, 0.85, s * 0.12); a.userData.beweglich = true; }
+    }
+  };
+  const fahnen = [];
+  turm(VX0, VY0, 3.0, 19, 8.5, 0.6, true);
+  turm(VX1 - 0.6, VY1 - 0.4, 2.1, 16, 6.5, -0.5, false);
+  const rauch = [];
+  for (const [x, y, h] of [[-20, 17.5, 4.6], [-11, 24, 3.6]]) {   // schiefe Schornsteine mit Rauchwölkchen
+    const s = kiste(x - 0.6, x + 0.6, y - 0.6, y + 0.6, HOCH + 1, HOCH + 1 + h, M(0x9a4a3a)); s.rotation.z = 0.06;
+    for (let i = 0; i < 6; i++) {
+      const r = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), ohneKontur(new THREE.MeshBasicMaterial({ color: 0xeef2f6, transparent: true, opacity: 0.5, depthWrite: false })));
+      r.userData = { beweglich: true, x, y, h: HOCH + 1.4 + h, i }; welt.add(r); rauch.push(r);
+    }
+  }
+
+  // ---- hinter der Kamera: Feldweg, Hecke mit Lücke, Bäume, Wegweiser zum Hafen ----
+  flach(new THREE.PlaneGeometry(420, 4.2), M(0xc0a070), 0, -7.5, 0.02);
+  const hecke = M(0x3a7a2e), heckeH = M(0x4e9a3a);
+  for (const [x0, x1] of [[-60, -4], [3, 26]]) {
+    kiste(x0, x1, -3.9, -2.7, 0, 1.25, hecke);
+    for (let x = x0 + 1; x < x1; x += 2.2) teil(new THREE.SphereGeometry(0.75, 10, 6), heckeH, x, -3.3, 1.2 + Math.sin(x) * 0.12).scale.set(1.1, 0.55, 0.9);
+  }
+  const blatt = [M(0x4aa83a), M(0x6cc048), M(0x3a8a2e)];
+  const baum = (x, y, s) => {
+    teil(new THREE.CylinderGeometry(0.28 * s, 0.4 * s, 3.4 * s, 8), holzD, x, y, 1.7 * s);
+    for (let i = 0; i < 4; i++) {
+      const w = i * 1.9 + x;
+      teil(new THREE.SphereGeometry((1.5 + (i % 2) * 0.5) * s, 12, 8), blatt[((i + Math.round(y)) % 3 + 3) % 3], x + Math.cos(w) * 0.9 * s, y + Math.sin(w) * 0.9 * s, (3.6 + (i % 3) * 0.7) * s);
+    }
+  };
+  for (const [x, y, s] of [[-18, -13, 1.3], [-9, -17, 1.1], [7, -14, 1.2], [17, -11, 1.4], [-31, -5, 1.2], [27, -3, 1.0], [-38, 6, 1.5], [-36, 20, 1.3],
+    [-34, 34, 1.4], [-46, 14, 1.2], [22, 3, 1.1], [-12, -30, 1.6], [12, -34, 1.5], [-52, -22, 1.4], [40, -30, 1.3]]) baum(x, y, s);
+  teil(new THREE.CylinderGeometry(0.08, 0.08, 2.4, 6), holzD, 14, -5, 1.2);
+  const schild = teil(new THREE.BoxGeometry(1.6, 0.42, 0.08), holz, 14.6, -5, 2.05, 0); schild.rotation.z = -0.06;
+  teil(new THREE.ConeGeometry(0.3, 0.5, 3), holz, 15.55, -5, 2.05).rotation.z = -Math.PI / 2;
+
+  // ---- die Bucht mit dem Hafen ----
+  flach(new THREE.CircleGeometry(267, 96), M(0xe8d49a), 300, 10, 0.06);   // Strand
+  const meerM = ohneKontur(M(0x2f86c8));
+  flach(new THREE.CircleGeometry(260, 96), meerM, 300, 10, 0.12);
+  const kamm = ohneKontur(new THREE.MeshBasicMaterial({ color: 0xffffff })), wellen = [];
+  for (let i = 0; i < 40; i++) {   // Schaumkämme
+    const x = 46 + (i * 37) % 120, y = -40 + (i * 53) % 140;
+    const w = teil(new THREE.BoxGeometry(2.2 + (i % 3), 0.06, 0.22), kamm, x, y, 0.16, (i % 5) * 0.3);
+    w.userData = { beweglich: true, x, y, ph: i * 0.7 }; wellen.push(w);
+  }
+  for (const y of [4, 15]) {   // zwei Stege auf Pfählen, mit Fässern und Kisten
+    kiste(36, 58, y - 1.1, y + 1.1, 0.75, 0.95, holz);
+    for (let x = 37; x <= 57; x += 2.5) for (const s of [-1, 1]) teil(new THREE.CylinderGeometry(0.14, 0.14, 2.2, 6), holzD, x, y + s * 1.0, -0.2);
+    for (let i = 0; i < 4; i++) teil(new THREE.CylinderGeometry(0.38, 0.38, 0.9, 10), holzD, 40 + i * 4.3, y + (i % 2 ? 0.5 : -0.4), 1.4);
+    kiste(46, 47.1, y - 0.2, y + 0.9, 0.95, 2.0, holz);
+  }
+  const schiffe = [], segelM = new THREE.MeshToonMaterial({ color: 0xf6eedc, gradientMap: GRAD, side: THREE.DoubleSide });
+  segelM.userData.outlineParameters = { thickness: 0.004, color: INK, alpha: 1, visible: true };
+  const segel = (w, h) => {   // bauchiges Rahsegel quer zum Rumpf, vom Wind nach vorn gedrückt
+    const g = new THREE.PlaneGeometry(w, h, 8, 4), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const u = p.getX(i) / (w / 2), v = p.getY(i) / (h / 2); p.setZ(i, 0.55 * (1 - u * u) * (1 - 0.35 * v * v)); }
+    g.computeVertexNormals(); g.rotateY(Math.PI / 2);
+    return new THREE.Mesh(g, segelM);
+  };
+  const schiff = (x, y, gier, s) => {
+    const g = new THREE.Group(); g.position.copy(bl(x, y, 0.15)); g.rotation.y = gier; g.scale.setScalar(s); g.userData.beweglich = true; welt.add(g);
+    const b = (w, h, d, mat, px, py, pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(px, py, pz); g.add(m); return m; };
+    b(9.6, 1.2, 2.2, holzD, 0, 0.1, 0); b(11, 1.1, 3.0, holz, 0, 1.2, 0);   // Rumpf
+    b(2.6, 1.3, 3.0, holz, -4.3, 2.35, 0); b(2.8, 0.2, 3.2, gold, -4.3, 3.05, 0);   // Achterkastell
+    b(11.2, 0.22, 3.12, gold, 0, 1.75, 0);   // Zierleiste
+    for (let i = 0; i < 4; i++) b(0.32, 0.32, 3.14, M(0x1a1410), -2 + i * 1.6, 1.25, 0);   // Stückpforten
+    const bug = new THREE.Mesh(new THREE.ConeGeometry(1.55, 2.8, 4), holz); bug.rotation.set(Math.PI / 4, 0, -Math.PI / 2); bug.scale.set(1, 1, 0.75); bug.position.set(6.8, 1.25, 0); g.add(bug);
+    const spriet = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 5, 6), holzD); spriet.rotation.z = -1.2; spriet.position.set(8.4, 2.5, 0); g.add(spriet);
+    for (const [mx, mh] of [[-2.6, 9], [0.6, 11.5], [3.6, 9.5]]) {
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.17, mh, 8), holzD); mast.position.set(mx, 1.7 + mh / 2, 0); g.add(mast);
+      for (const [sh, sw, sy] of [[0.34, 1, 0.42], [0.28, 0.8, 0.74]]) { const sg = segel(sw * 4.4, sh * mh); sg.position.set(mx + 0.2, 1.7 + mh * sy, 0); g.add(sg); }
+      const f = b(1.0, 0.5, 0.04, rotM, mx + 0.5, 1.95 + mh, 0); f.userData.fahne = true; fahnen.push(f);
+    }
+    mergeUnder(g, c => !!c.userData.fahne);   // ein Schiff = eine Handvoll Zeichenaufrufe
+    schiffe.push({ g, ph: x * 0.37 + y * 0.11 });
+  };
+  schiff(51, 0.9, 0.04, 1); schiff(53, 18.2, Math.PI - 0.05, 0.95); schiff(86, 6, 0.6, 1.1); schiff(128, 44, -0.4, 1.2); schiff(150, -25, 2.2, 1.0);
+  const haus = (x, y, w, d, h, wand, gier) => {   // Hafenhäuser mit Giebeldach, Tür und Fenstern zum Wasser
+    const g = new THREE.Group(); g.position.copy(bl(x, y, 0)); g.rotation.y = gier; welt.add(g);
+    const k = new THREE.Mesh(kachel(new THREE.BoxGeometry(w, h, d)), wand); k.position.y = h / 2; g.add(k);
+    const form = new THREE.Shape([new THREE.Vector2(-d / 2 - 0.3, 0), new THREE.Vector2(d / 2 + 0.3, 0), new THREE.Vector2(0, h * 0.55)]);
+    const gd = new THREE.ExtrudeGeometry(form, { depth: w + 0.5, bevelEnabled: false }); gd.translate(0, 0, -(w + 0.5) / 2); gd.rotateY(Math.PI / 2);
+    const dm = new THREE.Mesh(gd, M(0x6a3a3a)); dm.position.y = h; g.add(dm);
+    const t = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.9, 1.0), M(0x3a2418)); t.position.set(w / 2 + 0.02, 0.95, 0); g.add(t);
+    for (const [py, pz] of [[h * 0.75, -d * 0.28], [h * 0.75, d * 0.28], [h * 0.35, d * 0.3]]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 0.7), glas); f.position.set(w / 2 + 0.03, py, pz); g.add(f); }
+  };
+  const wandF = [M(0xa84a3a), M(0xe8e0cc), M(0x6a7a9a), M(0xd8b878), M(0x8a5a8a)];
+  [[30, 22, 4], [30.5, 28, 5], [29.5, 46, 4.5], [30, 52, 4], [31, 58, 5.5], [30.5, 65, 4]].forEach(([x, y, h], i) => haus(x, y, 4.2, 4.8, h, wandF[i % 5], 0));
+  // Leuchtturm auf der Insel, mit kreisendem Lichtkegel
+  const lt = new THREE.Group(); lt.position.copy(bl(89.7, 37.9, 2.4)); welt.add(lt);
+  for (let i = 0; i < 6; i++) { const r0 = 1.5 - i * 0.1, r1 = 1.4 - i * 0.1, z = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, 1.8, 14), i % 2 ? weiss : rotM); z.position.y = 0.9 + i * 1.8; lt.add(z); }
+  const galerie = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.16, 14), holzD); galerie.position.y = 10.9; lt.add(galerie);
+  const lampe = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 1.3, 12), leuchtMat(0xfff2a0)); lampe.position.y = 11.6; lt.add(lampe);
+  const kappe = new THREE.Mesh(new THREE.ConeGeometry(1.15, 1.3, 12), rotM); kappe.position.y = 12.9; lt.add(kappe);
+  const licht = new THREE.Group(); licht.position.y = 11.6; licht.userData.beweglich = true; lt.add(licht);
+  const kegelM = ohneKontur(new THREE.MeshBasicMaterial({ color: 0xfff4b0, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  for (const s of [-1, 1]) { const k = new THREE.Mesh(new THREE.ConeGeometry(2.6, 26, 16, 1, true), kegelM); k.rotation.z = s * Math.PI / 2; k.position.x = -s * 13.5; licht.add(k); }
+  mergeUnder(lt, c => c === licht);
+  lt.userData.beweglich = true;
+  // Möwen kreisen über dem Hafen
+  const moewen = [], moeweM = ohneKontur(M(0xffffff));
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Group(); m.userData.beweglich = true;
+    for (const s of [-1, 1]) m.add(new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.05, 0.22).translate(s * 0.37, 0, 0), moeweM));
+    welt.add(m); moewen.push(m);
+  }
+
+  // Statisches zusammenfassen (wenige Zeichenaufrufe, wichtig für die Xbox), Bewegtes bleibt einzeln
+  mergeUnder(welt, c => !!c.userData.beweglich || !!(c.parent && c.parent.userData.beweglich));
+  scene.add(welt);
+  return {
+    tick(s) {
+      for (const sh of schiffe) { sh.g.position.y = 0.15 + Math.sin(s * 0.9 + sh.ph) * 0.12; sh.g.rotation.x = Math.sin(s * 0.7 + sh.ph) * 0.03; sh.g.rotation.z = Math.sin(s * 0.55 + sh.ph) * 0.02; }
+      for (const f of fahnen) f.rotation.y = Math.sin(s * 3 + f.position.x) * 0.35;
+      licht.rotation.y = s * 0.7;
+      for (const w of wellen) { const k = (s * 0.18 + w.userData.ph) % 1; w.scale.set(0.4 + k, 1, 1); w.visible = k < 0.85; }
+      moewen.forEach((m, i) => {
+        const w = s * (0.22 + i * 0.03) + i * 1.3, r = 9 + i * 2.2;
+        m.position.copy(bl(46 + Math.cos(w) * r, 10 + Math.sin(w) * r, 9 + i * 1.4 + Math.sin(s + i) * 0.6)); m.rotation.y = w;
+        const schlag = Math.sin(s * 7 + i * 2) * 0.45; m.children[0].rotation.z = -0.3 - schlag; m.children[1].rotation.z = 0.3 + schlag;
+      });
+      for (const r of rauch) {
+        const u = r.userData, k = (s * 0.22 + u.i / 6) % 1;
+        r.position.copy(bl(u.x + k * 2.2, u.y + k * 0.6, u.h + k * 6)); r.scale.setScalar(0.5 + k * 1.7); r.material.opacity = 0.55 * (1 - k);
+      }
+    },
+  };
+}
+
 // ---------- Raum-Extras: Teile, die das Spiel selbst bewegt oder dazubaut ----------
 const EXTRA_BEWEGLICH = {
   uhrwerk: /^(Notsteg|Riesenpendel|Kolben|Zahnrad(\d+|[AB]|Tief\d+)|Zifferblatt|Zeiger(Gross|Klein))$/,
@@ -831,6 +1152,7 @@ function toonMat(farbe) {
 function leuchtMat(farbe) { const m = new THREE.MeshBasicMaterial({ color: farbe }); m.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: true }; return m; }
 const _zA = new THREE.Vector3(0, 0, 1);
 const RAUM_EXTRAS = {
+  garten1776: gartenWelt,
   // Zukunftsgarten: Astgabeln, Wurzelstumpf und Laubpolster als Kletterweg den Apfelbaum hinauf zur Laterne
   fgarten(scene) {
     const holz = toonMat(0x6a4226), laub = toonMat(0x4aa83a), laubH = toonMat(0x7ad85a), weg = new THREE.Group();
@@ -907,19 +1229,20 @@ const RAUM_EXTRAS = {
       scene.add(gang);
       Object.assign(teile, { angel, gang, schein });
     }
+    // Treppe ins Obergeschoss an der linken Seitenwand (frei vom Empfangstresen): begehbare Stufen, oben geht es hinauf
     const holz = toonMat(0x6a4a30), holzH = toonMat(0x755539), holzD = toonMat(0x4a3220), treppe = new THREE.Group();
-    for (let i = 0; i < 15; i++) {
-      const x = -4.35 - i * 0.31, h = 0.28 * (i + 1);
-      const st = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 1.15), i % 2 ? holz : holzH);
-      st.position.copy(bl(x, 12.6, h - 0.05)); st.castShadow = st.receiveShadow = true; treppe.add(st);
-      const wange = new THREE.Mesh(new THREE.BoxGeometry(0.31, h - 0.1, 0.08), holzD);
-      wange.position.copy(bl(x, 12.02, (h - 0.1) / 2)); treppe.add(wange);
-      if (i % 2 === 0) { const stab = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.9, 6), holzD); stab.position.copy(bl(x, 12.06, h + 0.4)); treppe.add(stab); }
+    for (const [i, [x0, x1, y0, y1, h]] of LOBBY_TREPPE.entries()) {
+      const st = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.1, y1 - y0 + 0.04), i % 2 ? holz : holzH);
+      st.position.copy(bl((x0 + x1) / 2, (y0 + y1) / 2, h - 0.05)); st.castShadow = st.receiveShadow = true; treppe.add(st);
+      const block = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h - 0.1, y1 - y0), holzD);   // Treppenkörper darunter
+      block.position.copy(bl((x0 + x1) / 2, (y0 + y1) / 2, (h - 0.1) / 2)); treppe.add(block);
+      if (i % 2 === 0) { const stab = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.9, 6), holzD); stab.position.copy(bl(x1 - 0.04, (y0 + y1) / 2, h + 0.4)); treppe.add(stab); }
     }
-    const lauf = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.07, 0.09), holz);
-    lauf.position.copy(bl(-6.52, 12.06, 2.95)); lauf.rotation.z = -Math.atan2(0.28, 0.31); treppe.add(lauf);
-    const pfosten = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.25, 0.12), holzD); pfosten.position.copy(bl(-4.2, 12.06, 0.62)); treppe.add(pfosten);
-    const knauf = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toonMat(0xc8a04a)); knauf.position.copy(bl(-4.2, 12.06, 1.3)); treppe.add(knauf);
+    const tA = LOBBY_TREPPE[0], tZ = LOBBY_TREPPE[LOBBY_TREPPE.length - 1];
+    const lauf = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, Math.hypot(tZ[3] - tA[2], tZ[4] - tA[4])), holz);   // Handlauf
+    lauf.position.copy(bl(tA[1] - 0.04, (tA[2] + tZ[3]) / 2, (tA[4] + tZ[4]) / 2 + 0.9)); lauf.rotation.x = Math.atan2(tZ[4] - tA[4], tZ[3] - tA[2]); treppe.add(lauf);
+    const pfosten = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.25, 0.12), holzD); pfosten.position.copy(bl(tA[1] - 0.04, tA[2] - 0.1, 0.62)); treppe.add(pfosten);
+    const knauf = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toonMat(0xc8a04a)); knauf.position.copy(bl(tA[1] - 0.04, tA[2] - 0.1, 1.3)); treppe.add(knauf);
     scene.add(treppe);
     return {
       tick(s, ctx) {
@@ -964,6 +1287,7 @@ export const PLATTFORMEN = {
   dachboden: [[2.4, 3.5, 14.8, 15.6, 0.62], [-4.5, -2.3, 14.8, 16.0, 1.28], [4.4, 7.4, 12.9, 14.7, 1.06], [-0.1, 1.4, 15.0, 16.2, 0.84], [-6.7, -5.7, 14.3, 15.3, 0.26]],
   stockwerk: STOCKWERK_STUFEN,
   uhrwerk: [[-2.45, -0.75, 9.35, 11.05, 0.45], [-0.6, 0.6, 9.0, 10.2, kolbenOben], [0.82, 2.58, 9.72, 11.48, 0.8]],   // Zahnrad A, Hubkolben (Höhe läuft mit), Zahnrad B
+  lobby: LOBBY_TREPPE,
   fgarten: KLETTERBAUM.map(([x, y, h]) => [x - 0.42, x + 0.42, y - 0.42, y + 0.42, () => (typeof flagOn === 'function' && flagOn('tree') ? h : -99)]),   // erst, wenn der Baum gewachsen ist
 };
 const SPRUNGLOCH = { stockwerk: [[2.7, 8.35, 7.0, 11.3]], uhrwerk: [[-2.6, 2.8, 5.0, 20.0]] };
@@ -990,8 +1314,10 @@ function plattformHoehe(id, x, y, z) {
   const s = uhrS;
   for (const p of PLATTFORMEN[id] || []) {
     const top = typeof p[4] === 'function' ? p[4](s) : p[4];
-    if (x >= p[0] - 0.25 && x <= p[1] + 0.25 && y >= p[2] - 0.25 && y <= p[3] + 0.25 && top <= z + 0.3) h = Math.max(h, top);
+    if (x >= p[0] - 0.25 && x <= p[1] + 0.25 && y >= p[2] - 0.25 && y <= p[3] + 0.25 && top <= z + STUFE + 0.01) h = Math.max(h, top);
   }
+  const R = rooms[id], r = FIGUR_R;
+  if (R && R.kisten) for (const { k, o } of R.kisten) if (k[4] > h && k[4] <= z + STUFE + 0.01 && x > k[0] - r && x < k[1] + r && y > k[2] - r && y < k[3] + r && (!o || sichtbar(o))) h = k[4];
   return h;
 }
 export function huepfen(a) {   // Sprung zünden – nur, wenn die Figur steht; Tom-&-Jerry-Anlauf: erst 90 ms in die Hocke
@@ -1007,6 +1333,10 @@ function sprungAbheben(a, now) {
 export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py = Blender-Weltposition der Figur
   let z = a._z3d || 0, vz = a._vz3d || 0;
   const sek = Math.min(0.05, dt / 1000), loch = imSprungloch(id, px, py);
+  if (vz === 0) {   // Stufe hinauf (Treppe, flache Kante): ohne Sprung hinaufsteigen
+    const stufe = plattformHoehe(id, px, py, z);
+    if (stufe > z + 0.001 && stufe <= z + STUFE) { a._z3d = stufe; if (stufe > 0.02) a._checkpoint3d = [a.x, a.y, stufe]; return stufe; }
+  }
   if (z <= 0.0001 && vz === 0 && !loch) return z;
   if (loch && z <= 0.0001 && vz === 0) vz = -0.35;
   vz -= G3D * sek;
@@ -1032,10 +1362,19 @@ export function stehHoehe(id, x, y) { return plattformHoehe(id, x, y, 99); }   /
 export function bewegungsZiel(a, dx, dy, sek, id = a.room) {
   const R = rooms[id]; if (!R || !R.ready || !R.home || !R.camera) return null;
   const kraft = Math.hypot(dx, dy); if (kraft < 0.025) return null;
-  const p = toWorld(R.home, a.x, a.y, new THREE.Vector3());
-  _fw.copy(R.camera.getWorldDirection(_fw)); _fw.y = 0;
-  if (_fw.lengthSq() < 1e-5) return null;
-  _fw.normalize(); _rt.crossVectors(_fw, _yA).normalize();
+  const p = toWorld(R.home, a.x, a.y, new THREE.Vector3()), now = performance.now();
+  // Richtung festhalten wie in Super Mario 64: solange der Stick gleich zeigt, gilt die Kamera vom Losgehen –
+  // schwenkt die Kamera unterwegs (Ecke, Treppe), läuft die Figur trotzdem geradeaus weiter
+  const L = a._lenk3d, w = Math.atan2(dy, dx);
+  if (L && L.id === id && now - L.t < 350 && Math.abs(Math.atan2(Math.sin(w - L.w), Math.cos(w - L.w))) < 0.5) _fw.copy(L.fw);
+  else {
+    _fw.copy(R.camera.getWorldDirection(_fw)); _fw.y = 0;
+    if (_fw.lengthSq() < 1e-5) return null;
+    _fw.normalize();
+    a._lenk3d = { id, w, fw: _fw.clone(), t: now };
+  }
+  a._lenk3d.t = now;
+  _rt.crossVectors(_fw, _yA).normalize();
   const schritt = 5.2 * Math.min(1, kraft) * Math.max(0, sek);
   p.addScaledVector(_rt, dx / kraft * schritt).addScaledVector(_fw, -dy / kraft * schritt);
   p.y = 0; p.project(R.home);
@@ -1066,7 +1405,7 @@ function kartenStellen(R, liste) {
     k.mesh.scale.set(w, h, 1);
     k.mesh.position.set(p.x, p.y + (b.fussY - b.canvas.height / 2) / b.k / upm, p.z);
     k.mesh.rotation.set(0, Math.atan2(R.camera.position.x - p.x, R.camera.position.z - p.z), 0);
-    k.mesh.visible = true;
+    k.mesh.visible = !(freiAktiv() && Math.hypot(R.camera.position.x - p.x, R.camera.position.z - p.z) < 1.2);   // direkt vor der Linse: ausblenden
   }
   for (const [key, k] of karten) if (!seen.has(key) || k.mesh.parent !== R.scene) k.mesh.visible = false;
 }
@@ -1074,6 +1413,8 @@ function kartenStellen(R, liste) {
 // ---------- Bild für einen Spiel-Frame ----------
 let lastT = 0;
 const _vis = new Map();
+const _v2 = new THREE.Vector3();
+function curKind(actors) { const id = curId(); const a = actors.find(x => x.id === id); return a ? a.kind : null; }
 export function frame(t, actors, pxW, ctx) {
   const R = rooms[ctx.id]; if (!R || !R.ready) return null;
   const w = Math.max(320, Math.min(1440, Math.round(pxW || 1280))), h = Math.round(w * GH / GW);
@@ -1114,9 +1455,10 @@ export function frame(t, actors, pxW, ctx) {
     seen.add(a.kind);
     if (f.holder.parent !== R.scene) R.scene.add(f.holder);
     if (a.id === curId() && a._checkpointRoom3d !== ctx.id) {
-      a._checkpointRoom3d = ctx.id; a._z3d = 0; a._vz3d = 0; a._checkpoint3d = [a.x, a.y, 0];
+      a._checkpointRoom3d = ctx.id; a._z3d = 0; a._vz3d = 0; a._checkpoint3d = [a.x, a.y, 0]; a._frei3d = null;
     }
     let p = toWorld(R.home, a.x, a.y, _v.clone());
+    if (a.id === curId() && R.kisten && R.kisten.length) p = kollision(R, a, p, ctx.id, !!a._gelenkt || (a._vz3d || 0) !== 0);
     if (f.last && a.walking) f.walkPh += p.distanceTo(f.last) / 0.62 * Math.PI;
     f.last = (f.last || new THREE.Vector3()).copy(p);
     const mf = typeof mimikForm === 'function' ? mimikForm(a, t) : null;
@@ -1137,7 +1479,7 @@ export function frame(t, actors, pxW, ctx) {
         }
       }
     }
-    if (ich && ((a._vz3d || 0) !== 0 || (a._z3d || 0) > 0.0001 || imSprungloch(ctx.id, p.x, -p.z))) {   // gesteuerte Figur: Sprung, Plattform oder Loch
+    if (ich && ((a._vz3d || 0) !== 0 || (a._z3d || 0) > 0.0001 || imSprungloch(ctx.id, p.x, -p.z) || plattformHoehe(ctx.id, p.x, -p.z, a._z3d || 0) > (a._z3d || 0) + 0.001)) {   // gesteuerte Figur: Sprung, Plattform oder Loch
       const z = schwerkraft(a, dt, ctx.id, p.x, -p.z);
       if (a._respawned3d) { p.copy(toWorld(R.home, a.x, a.y, _v)); f.holder.position.copy(p); }
       if (z > 0.0001) f.holder.position.y += z;
@@ -1158,6 +1500,7 @@ export function frame(t, actors, pxW, ctx) {
         const o = orbit(ctx.id); o.yaw = 0.012; o.zurueck = false; o.rueckT0 = null;
       }
       a._pos3d = [p.x, -p.z, a._z3d || 0];   // Blender-Weltlage für Sammelobjekte (js/uhrwerk.js)
+      if (ctx.id === 'lobby' && (a._z3d || 0) > 2.9 && !a._ausgang3d) a._ausgang3d = 'treppe_hoch';   // oben angekommen
       const fz = Math.max(0, a._z3d || 0) + 0.95;   // Folgekamera: weich hinterher, Höhe gedämpft (Sprünge wackeln nicht)
       if (!R.fokus) R.fokus = new THREE.Vector3(p.x, fz, p.z);
       R.fokus.x += (p.x - R.fokus.x) * Math.min(1, dt / 160); R.fokus.z += (p.z - R.fokus.z) * Math.min(1, dt / 160); R.fokus.y += (fz - R.fokus.y) * Math.min(1, dt / 400);
@@ -1252,17 +1595,28 @@ export function frame(t, actors, pxW, ctx) {
       f.root.position.y = Math.sin(t * 0.002 + a.x) * 0.006;   // Gäste: ruhiges Atmen
     }
   }
-  for (const f of Object.values(figs)) f.holder.visible = seen.has(f.id) && f.holder.parent === R.scene;
+  // Mitspieler und Gäste direkt vor der Linse ausblenden (sonst füllt ein Hinterkopf das halbe Bild)
+  for (const f of Object.values(figs)) {
+    let v = seen.has(f.id) && f.holder.parent === R.scene;
+    if (v && f.id !== curKind(actors) && freiAktiv()) { _v2.copy(f.holder.position); _v2.y += 1.0; if (_v2.distanceTo(camera.position) < 1.5) v = false; }
+    f.holder.visible = v;
+  }
   effect.render(R.scene, camera);
   return renderer.domElement;
 }
 export function raumInfo(id) {   // Fehlersuche: Innenmaße und Kameralage
   const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
   const c = R.camera.position;
-  return { innen: R.innen, kamera: [c.x, c.y, c.z].map(v => +v.toFixed(2)), ziel: R.ziel && [R.ziel.x, R.ziel.y, R.ziel.z].map(v => +v.toFixed(2)) };
+  return { innen: R.innen, kamera: [c.x, c.y, c.z].map(v => +v.toFixed(2)), ziel: R.ziel && [R.ziel.x, R.ziel.y, R.ziel.z].map(v => +v.toFixed(2)),
+    kisten: (R.kisten || []).map(({ k, o }) => (o ? o.name : '+') + ' ' + k.map(v => v.toFixed(2)).join(' ')) };
 }
 export function spielPunkt(bx, by, id) {   // Blender-Bodenpunkt -> Spiel-Koordinaten der Bühnenkamera (für Rätsel und Tests)
   const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home) return null;
   const v = bl(bx, by, 0).project(R.home);
   return [(v.x + 1) / 2 * GW, (1 - v.y) / 2 * GH];
+}
+export function kisteAn(bx, by, z = 0, id) {   // Fehlersuche: welche Kisten sperren an diesem Blender-Bodenpunkt?
+  const R = rooms[id || letzterRaum]; if (!R || !R.kisten) return null;
+  const r = FIGUR_R;
+  return R.kisten.filter(({ k, o }) => k[4] > z + STUFE && bx > k[0] - r && bx < k[1] + r && by > k[2] - r && by < k[3] + r && (!o || sichtbar(o))).map(({ k, o }) => (o ? o.name : '+') + ' ' + k.map(v => v.toFixed(2)).join(' '));
 }

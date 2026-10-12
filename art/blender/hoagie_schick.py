@@ -1,7 +1,7 @@
 # Hoagie im Stil des Originals (Day of the Tentacle, 1993) – in Blender ausführen, vorher REPO setzen:
 #   REPO = r'C:/.../Tentakel-Toast'; exec(open(REPO + '/art/blender/hoagie_schick.py').read())
 # Formt das Rig HRig (Szene Rig3D_Hoagie) nach der klassischen Figur um: blaue Baseballkappe verkehrt herum,
-# lange schwarze Haare, schwarzes Metal-Shirt mit Totenkopf und Flammen statt des Blitzes, weite grau-blaue
+# lange schwarze Haare, schwarzes Shirt mit „TOAST WARS“-Logo statt des Blitzes, weite grau-blaue
 # Hose, weiße Turnschuhe. Neue Teile hängen am Rumpf (HR_Torso), damit sie mit Gehen und Mimik mitlaufen.
 # Mehrfach ausführbar: RH_Schick*-Teile werden ersetzt. Danach: WHAT = ['hoagie']; exec(open(REPO + '/art/blender/echt3d_export.py').read())
 import bpy, bmesh, math, sys, importlib
@@ -56,7 +56,7 @@ faerben(('H_HaarBraun', 'H_HaarSchwarz'), HAAR)
 faerben(('Jeans', 'H_HoseGrauBlau'), HOSE)
 faerben(('Stiefel', 'H_Turnschuh'), SNEAKER)
 faerben(('H_Sohle', 'H_TurnschuhSohle'), SOHLE)
-# Shirt: Totenkopf mit Flammen an der Stelle des Blitzes (Lage aus dessen Hülle, im Raum des Rumpfes)
+# Shirt: der Blitz verschwindet, das Motiv sitzt mitten auf dem Bauch (Lage aus der Hülle des Bauchs, im Raum des Rumpfes)
 T = O['HR_Torso']
 blitz = O['RH_Blitz']
 blitz.hide_render = blitz.hide_viewport = True
@@ -66,16 +66,26 @@ inv = T.matrix_world.inverted()
 pts = [inv @ (bauch.matrix_world @ Vector(c)) for c in bauch.bound_box]
 z = (min(p.z for p in pts) + max(p.z for p in pts)) / 2 + 0.06   # Brusthöhe, mitten auf dem Bauch
 x, y = max(p.x for p in pts) - 0.03, (min(p.y for p in pts) + max(p.y for p in pts)) / 2
-G = 1.45   # Motivgröße
-teil('RH_SchickSchaedel', 'kugel', 'HR_Torso', (x, y, z + 0.05 * G), (0.02, 0.085 * G, 0.08 * G), KNOCHEN, seg=16)
-teil('RH_SchickKiefer', 'box', 'HR_Torso', (x - 0.004, y, z - 0.03 * G), (0.014, 0.05 * G, 0.03 * G), KNOCHEN)
-for s in (-1, 1):
-    teil(f'RH_SchickAuge{s}', 'kugel', 'HR_Torso', (x + 0.014, y + s * 0.032 * G, z + 0.04 * G), (0.008, 0.022 * G, 0.024 * G), LOCH, seg=10)
-teil('RH_SchickNase', 'kugel', 'HR_Torso', (x + 0.015, y, z), (0.006, 0.01 * G, 0.014 * G), LOCH, seg=8)
-for i in range(3):
-    teil(f'RH_SchickZahn{i}', 'box', 'HR_Torso', (x + 0.009, y + (i - 1) * 0.022 * G, z - 0.03 * G), (0.004, 0.003 * G, 0.022 * G), LOCH)
-for i, (dy, h, w) in enumerate(((-0.12, 0.09, 0.03), (-0.075, 0.12, 0.032), (0.075, 0.12, 0.032), (0.12, 0.09, 0.03), (0.0, 0.06, 0.05))):
-    for k, mat in enumerate(FEUER):   # zwei Lagen: außen orange, innen gelb
-        teil(f'RH_SchickFlamme{i}{k}', 'kegel', 'HR_Torso', (x - 0.01 + k * 0.006, y + dy * G * (1 - k * 0.05), z - 0.07 * G + h * G * (1 + k * 0.1) * 0.6),
-             (0.012, w * G * (1 - 0.45 * k), h * G * (1 - 0.4 * k)), mat, rot=(dy * 2.2, 0, 0), seg=8)
+# Motiv: „TOAST WARS“ im Stil eines Weltraum-Filmlogos – gelbe Blockschrift, zweizeilig, flach auf den Bauch gewickelt
+# (Shrinkwrap auf RH_Bauch: liegt auf dem Stoff statt wie ein Anhänger davor zu hängen)
+GELB = toon('H_LogoGelb', '#ffd23a', hi=0.8)
+for zeile, (txt_, dz, gr) in enumerate((('TOAST', 0.05, 0.085), ('WARS', -0.045, 0.1))):
+    cd = bpy.data.curves.new(f'RH_SchickLogo{zeile}K', 'FONT')
+    cd.body, cd.size, cd.align_x, cd.align_y = txt_, gr, 'CENTER', 'CENTER'
+    cd.space_character, cd.extrude, cd.offset = 1.12, 0.0, 0.004   # breit gesperrt, leicht fett
+    cd.materials.append(GELB)
+    lo = bpy.data.objects.new(f'RH_SchickLogo{zeile}', cd)
+    SC.collection.objects.link(lo)
+    lo.parent = O['HR_Torso']
+    lo.location = (x + 0.06, y, z + dz)
+    lo.rotation_euler = (math.pi / 2, 0, math.pi / 2)   # Schrift blickt nach vorn (+x)
+    lo.scale = (1.0, 1.25 if zeile == 0 else 1.0, 1.0)
+    sw = lo.modifiers.new('AufsShirt', 'SHRINKWRAP')
+    sw.target, sw.wrap_method, sw.wrap_mode, sw.offset = bauch, 'NEAREST_SURFACEPOINT', 'OUTSIDE_SURFACE', 0.004
+for k in (-1, 1):   # Zierlinien über und unter dem Schriftzug, ebenfalls aufs Shirt gewickelt
+    bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1)
+    me = bpy.data.meshes.new(f'RH_SchickLogoLinie{k}'); bm.to_mesh(me); bm.free(); me.materials.append(GELB)
+    li = bpy.data.objects.new(f'RH_SchickLogoLinie{k}', me); SC.collection.objects.link(li)
+    li.parent, li.location, li.scale = O['HR_Torso'], (x + 0.06, y, z + k * 0.115 + 0.003), (0.004, 0.11, 0.006)
+    sw = li.modifiers.new('AufsShirt', 'SHRINKWRAP'); sw.target, sw.wrap_method, sw.wrap_mode, sw.offset = bauch, 'NEAREST_SURFACEPOINT', 'OUTSIDE_SURFACE', 0.004
 print('Hoagie im Original-Stil:', len([o for o in O if o.name.startswith('RH_Schick')]), 'neue Teile')

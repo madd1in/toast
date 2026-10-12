@@ -757,7 +757,8 @@ function resizeSoon() {
 function onOrient() { G.orientT = performance.now(); resizeSoon(); if (isFullscreen()) lockLandscape(); }
 function onFsChange() {
   resizeSoon();
-  if (isFullscreen()) { lockLandscape(); return; }
+  if (isFullscreen()) { G.warVoll = true; lockLandscape(); return; }
+  if (G.warVoll && performance.now() - (G.orientT || -1e9) >= 1500) G.fsVerlassen = true;   // selbst verlassen: nicht wieder aufdrängen
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { /* ok */ }
   // hat das Drehen (nicht der Spieler) das Vollbild beendet, kehrt es beim nächsten Tippen zurück
   if (G.settings.fullscreen && performance.now() - (G.orientT || -1e9) < 1500) G.fsTried = false;
@@ -773,7 +774,7 @@ function toggleFullscreen() { if (isFullscreen()) exitFullscreen(); else enterFu
 function firstInteraction() {
   Sound.init();
   if (G.settings.lang && G.settings.lang !== 'de' && !Lang.active && Lang.state !== 'loading' && (Lang.supported() || navigator.onLine)) setLang(G.settings.lang, false);
-  if (G.settings.fullscreen && !G.fsTried) { G.fsTried = true; enterFullscreen(); }
+  if (G.settings.fullscreen && (!G.fsTried || (!isFullscreen() && !G.fsVerlassen))) { G.fsTried = true; enterFullscreen(); }
 }
 
 // ---------- Größe & Skalierung ----------
@@ -1142,7 +1143,7 @@ const UI = {
   inv: Array.from({ length: 12 }, (_, i) => ({ i, x: 328 + (i % 6) * 74, y: 474 + Math.floor(i / 6) * 61, w: 70, h: 57 })),
   ports: PLAYERS.map((id, i) => ({ id, x: 814 + i * 54, y: 508, r: 23 })),
   klo: { x: 562, y: 445, w: 82, h: 22 }, pixel: { x: 650, y: 445, w: 66, h: 22 }, reveal: { x: 722, y: 445, w: 76, h: 22 }, hint: { x: 804, y: 445, w: 62, h: 22 }, menu: { x: 872, y: 445, w: 78, h: 22 },
-  skip: { x: W - 240, y: 10, w: 184, h: 30 }, fs: { x: W - 46, y: 8, w: 38, h: 32 },
+  skip: { x: W - 240, y: 10, w: 184, h: 30 }, tempo: { x: W - 316, y: 10, w: 68, h: 30 }, fs: { x: W - 46, y: 8, w: 38, h: 32 },
 };
 const inRect = (x, y, r, pad = 0) => x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
 function hitUI(x, y) {
@@ -1220,6 +1221,7 @@ function onClick(x, y, right) {
   if (G.menu) return menuClick(x, y);
   if (fsAvailable && inRect(x, y, UI.fs, 4)) { toggleFullscreen(); return; }
   if (G.inIntro && inRect(x, y, UI.skip)) { skipScene(); return; }
+  if (G.inIntro && inRect(x, y, UI.tempo)) { tempoWeiter(); return; }
   if (G.speech) { skipSpeech(); return; }
   if (G.dialog) { const i = dialogHit(x, y); if (i >= 0) { const d = G.dialog; G.dialog = null; Sound.sfx('click'); d.res(d.opts[i].id); } return; }
   if (modernUI()) return modernClick(x, y, right);
@@ -1341,7 +1343,16 @@ window.addEventListener('keydown', e => {
 
 // ---------- Controller (Gamepad API, Xbox-Layout) ----------
 try { if ('gamepadInputEmulation' in navigator) navigator.gamepadInputEmulation = 'gamepad'; } catch (e) { /* nur Edge auf Xbox */ }
-const PAD = { prev: [], hold: {}, idx: -1 };
+const PAD = { prev: [], hold: {}, idx: -1, direkt: false };
+const XBOX_EDGE = /xbox/i.test(navigator.userAgent || '');
+// Xbox: im Browser-Modus geht B in der Seitenhistorie zurück – das würde das Spiel verlassen. Stattdessen: Menü schließen.
+if (XBOX_EDGE) {
+  try {
+    history.pushState({ tt: 1 }, '');
+    window.addEventListener('popstate', () => { history.pushState({ tt: 1 }, ''); if (G.menu) G.menu = null; });
+  } catch (e) { /* ok */ }
+  window.addEventListener('gamepadconnected', () => { G.pointer = 'pad'; });
+}
 window.addEventListener('gamepadconnected', e => { PAD.idx = e.gamepad.index; note('Controller: A Aktion · X Standard · B Zurück · Y Tipp · LB/RB Figur · LT/RT Verb · rechter Stick: 3D-Kamera'); });
 window.addEventListener('gamepaddisconnected', () => { PAD.idx = -1; });
 function currentPad() {
@@ -1391,6 +1402,7 @@ function pollPad(dt) {
   const gp = currentPad(); if (!gp) return;
   const btn = i => !!(gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5));
   const now = gp.buttons.map((b, i) => btn(i));
+  if (G.inIntro && G.screen === 'game' && btn(7) && !PAD.prev[7]) tempoWeiter();   // RT: Vorspann-Tempo
   const down = i => now[i] && !PAD.prev[i];
   const dz = v => Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82;
   const ax = dz(gp.axes[0] || 0), ay = dz(gp.axes[1] || 0), rx = dz(gp.axes[2] || 0), ry = dz(gp.axes[3] || 0);
@@ -1404,7 +1416,7 @@ function pollPad(dt) {
     G.mouse.x = Math.max(0, Math.min(W, G.mouse.x + ax * sp * dt / 1000 + (kamera3d ? 0 : rx * 220 * dt / 1000)));
     G.mouse.y = Math.max(0, Math.min(H - 1, G.mouse.y + ay * sp * dt / 1000 + (kamera3d ? 0 : ry * 220 * dt / 1000)));
   } else if ((kamera3d && (rx || ry)) || parkour3d && mag) G.pointer = 'pad';
-  if (now.some(Boolean)) { G.pointer = 'pad'; Sound.init(); }
+  if (now.some(Boolean) || mag > 0) { G.pointer = 'pad'; Sound.init(); PAD.direkt = true; }
   if (down(11) && !(typeof echt3dPadZurueck === 'function' && echt3dPadZurueck())) toggleRetro();
   // Steuerkreuz mit Wiederholung beim Halten
   [[12, 0, -1], [13, 0, 1], [14, -1, 0], [15, 1, 0]].forEach(([i, dx, dy]) => {
@@ -2011,9 +2023,19 @@ function drawScene() {
   drawToasts();
   if (G.inIntro && !G.fast && !G.skipAll) {
     button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
-    txt(cx, 'Klick: nächste Zeile', UI.skip.x + UI.skip.w / 2, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+    const tp = vorspulen();
+    button(UI.tempo, tp === 1 ? '▶ 1×' : tp === 2 ? '⏩ 2×' : '⏩ 4×', inRect(G.mouse.x, G.mouse.y, UI.tempo));
+    txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+    if (tp > 1) drawVorspulZeichen(tp);
   }
   if (fsAvailable) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
+  cx.restore();
+}
+function drawVorspulZeichen(tp) {   // ⏩ in der Ecke, solange schneller läuft
+  const k = 0.75 + 0.25 * Math.sin(G.t * 0.02);
+  cx.save(); cx.globalAlpha = 0.85 * k; cx.translate(70, 70);
+  for (const dx of [-14, 12]) { cx.beginPath(); cx.moveTo(dx - 12, -16); cx.lineTo(dx + 14, 0); cx.lineTo(dx - 12, 16); cx.closePath(); cx.fillStyle = '#ffe066'; cx.fill(); cx.lineWidth = 3; cx.strokeStyle = '#2a0a3a'; cx.stroke(); }
+  txt(cx, tp + '×', 0, 42, '400 18px "Titan One", sans-serif', '#ffe066', 'center', 4, '#2a0a3a');
   cx.restore();
 }
 // Hinweiszeile oben und Erfolgs-Toast (im Spiel und auf dem Titelbildschirm)
@@ -2660,6 +2682,12 @@ function drawTitle() {
     cx.restore();
   }
   txt(cx, 'Spielbar mit Maus, Touch, Tastatur oder Xbox-Controller', bx + bw / 2, y + 16, '600 13px "Baloo 2", sans-serif', 'rgba(255,240,255,0.8)');
+  if (XBOX_EDGE && !PAD.direkt) {   // Edge auf der Xbox startet jede Seite im Browser-Modus (Controller = Mauszeiger)
+    const hy = y + 44, puls = 0.75 + 0.25 * Math.sin(G.t * 0.005);
+    R(cx, bx - 30, hy - 20, bw + 60, 44, `rgba(16,124,16,${0.85 * puls})`, 2, 12, '#9bf09b');
+    txt(cx, 'Xbox: Menü-Taste ☰ gedrückt halten → „Spielsteuerung verwenden“', bx + bw / 2, hy - 1, '800 14px "Baloo 2", sans-serif', '#ffffff');
+    txt(cx, 'dann steuert der Controller direkt – Vollbild kommt beim ersten Druck auf A', bx + bw / 2, hy + 16, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.9)');
+  }
   txt(cx, 'Fan-Projekt · nicht verbunden mit LucasArts, Disney oder Double Fine', W / 2 + 140, H - 14, '600 12px "Baloo 2", sans-serif', 'rgba(255,240,255,0.7)');
 }
 const TITLE_HITS = [['green', 0, 440, 92, 600], ['bernard', 270, 450, 316, 592], ['hoagie', 326, 476, 386, 594], ['laverne', 390, 456, 434, 590], ['lila', 468, 396, 562, 604]];
@@ -3331,7 +3359,10 @@ function drawSceneOverlays() {
     drawToasts();
     if (G.inIntro && !G.fast && !G.skipAll) {
       button(UI.skip, 'Intro überspringen  »', inRect(G.mouse.x, G.mouse.y, UI.skip));
-      txt(cx, 'Klick: nächste Zeile', UI.skip.x + UI.skip.w / 2, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+      const tp = vorspulen();
+    button(UI.tempo, tp === 1 ? '▶ 1×' : tp === 2 ? '⏩ 2×' : '⏩ 4×', inRect(G.mouse.x, G.mouse.y, UI.tempo));
+    txt(cx, 'Klick: nächste Zeile · F / RT: Tempo', UI.skip.x + UI.skip.w / 2 - 38, 56, '600 12px "Baloo 2", sans-serif', 'rgba(255,255,255,0.7)');
+    if (tp > 1) drawVorspulZeichen(tp);
     }
     if (fsAvailable && !G.photoMode) fsIcon(UI.fs, inRect(G.mouse.x, G.mouse.y, UI.fs, 4));
   } finally { VH = SH; }
@@ -4104,9 +4135,10 @@ function updateAmbilight() {
 }
 function frame(ts) {
   if (G.last && ts - G.last < 10.5 && !G.fast) { requestAnimationFrame(frame); return; }   // Monitore mit hoher Bildrate: jedes zweite Bild genügt
-  const dt = Math.min(50, ts - (G.last || ts)); G.last = ts; G.t += dt;
+  const roh = Math.min(50, ts - (G.last || ts)); G.last = ts;
+  const tempo = vorspulen(), dt = roh * tempo; G.t += dt;   // Vorspann wahlweise 2- oder 4-fach
   // adaptive Qualität: bei anhaltendem Ruckeln DPR und Partikeldichte drosseln, später wieder hoch
-  G.fpsAvg += (dt - G.fpsAvg) * 0.03;
+  G.fpsAvg += (roh - G.fpsAvg) * 0.03;
   if (G.t > 4000 && G.t - G.fpsGate > 6000) {
     if (G.fpsAvg > 24 && G.quality > 0.5) { G.quality = 0.5; G.fpsGate = G.t; resize(); }
     else if (G.fpsAvg < 17 && G.quality < 1) { G.quality = 1; G.fpsGate = G.t; resize(); }
@@ -4114,6 +4146,14 @@ function frame(ts) {
   try { update(dt); render(); updateAmbilight(); } catch (e) { console.error(e); }
   requestAnimationFrame(frame);
 }
+// Vorspann-Tempo: ein Druck schaltet 1× → 2× → 4× → 1× (Taste F, RT am Controller oder der Knopf oben rechts); bleibt gespeichert
+function vorspulen() { return G.inIntro && G.screen === 'game' && !G.dialog && !G.menu ? (G.settings.introTempo || 1) : 1; }
+function tempoWeiter() {
+  const t = G.settings.introTempo || 1;
+  G.settings.introTempo = t === 1 ? 2 : t === 2 ? 4 : 1; saveSettings();
+  Sound.sfx('tick'); note(G.settings.introTempo === 1 ? 'Vorspann in normalem Tempo' : `Vorspann in ${G.settings.introTempo}-facher Geschwindigkeit`);
+}
+window.addEventListener('keydown', e => { if (G.inIntro && G.screen === 'game' && !e.repeat && (e.key === 'f' || e.key === 'F')) tempoWeiter(); });
 async function boot() {
   resize(); window.addEventListener('resize', resizeSoon);
   window.addEventListener('orientationchange', onOrient);

@@ -259,7 +259,7 @@ function echt3dParkourAktiv() { return echt3dAktiv() && echt3dSteuerungErlaubt()
 // nächster Hotspot in Reichweite der Figur (Spiel-Einheiten am Boden), für E / A
 function echt3dNaechsterHotspot() {
   const p = me(), room = ROOMS[viewRoomId()]; if (!p || !room) return null;
-  let best = null, bd = 150;
+  let best = null, bd = 120;
   for (const o of room.objs) {
     if (!isVisible(o)) continue;
     const w = typeof o.walk === 'function' ? o.walk() : o.walk || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10];
@@ -271,6 +271,66 @@ function echt3dNaechsterHotspot() {
     if (d < bd) { bd = d; best = { npc: a }; }
   }
   return best;
+}
+// Ausgänge im Echtzeit-3D: wer mit Stick/Tasten hineinläuft, geht hindurch (Türen, Treppen, Leitern, Wege).
+// Nach dem Betreten eines Raums erst ein Stück weg vom Ankunftsort, damit man nicht gleich wieder hinausfällt.
+let echt3dGehtDurch = false;
+function echt3dAusgangPruefen(p) {
+  if (echt3dGehtDurch || G.busy || !p || !echt3dParkourAktiv()) return;
+  const room = ROOMS[p.room]; if (!room) return;
+  if (!p._ankunft || p._ankunft.room !== p.room) p._ankunft = { room: p.room, x: p.x, y: p.y, weg: false };
+  if (!p._ankunft.weg && Math.hypot(p.x - p._ankunft.x, (p.y - p._ankunft.y) * 1.6) > 70) p._ankunft.weg = true;
+  let ziel = null;
+  if (p._ausgang3d) ziel = OBJ[p._ausgang3d];
+  else if (p._gelenkt && p._ankunft.weg) {
+    for (const o of room.objs) {
+      if (!o.exit || !isVisible(o)) continue;
+      const w = typeof o.walk === 'function' ? o.walk() : o.walk || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10];
+      if (Math.hypot(w[0] - p.x, (w[1] - p.y) * 1.6) < 24) { ziel = o; break; }
+    }
+  }
+  p._ausgang3d = null;
+  if (!ziel || !ziel.exit) return;
+  echt3dGehtDurch = true;
+  echt3dLenkungAus(p);
+  echt3dDurchgehen(ziel).finally(() => { echt3dGehtDurch = false; p._z3d = 0; p._vz3d = 0; });
+}
+async function echt3dDurchgehen(o) {   // wie „Gehe zu“, nur ohne Anlauf: die Figur steht schon im Durchgang (Regeln für verschlossene Türen gelten weiter)
+  if (G.busy || G.screen !== 'game') return;
+  G.busy++;
+  try { await resolve('walk', 'o:' + o.id); }
+  catch (e) { console.error(e); }
+  finally { G.busy--; if (!G.busy) G.skipAll = false; }
+  save();
+}
+// Hervorhebung für Controller/Tasten: das nächste Ding vor der Figur bekommt ein Schild mit „X“ (X benutzt genau das)
+function drawEcht3dFokus() {
+  if (!echt3dParkourAktiv() || G.pointer === 'mouse' || G.pointer === 'touch' || G.busy || G.photoMode || cx.isPix) return;
+  const h = echt3dNaechsterHotspot(); if (!h) return;
+  const room = ROOMS[viewRoomId()];
+  let pos = null, name = '', verb = 'look';
+  if (h.npc) {
+    const a = h.npc, sc = roomScale(room, a.y);
+    pos = echt3dKopf(a, room, a.h * sc + 18) || [a.x, a.y - a.h * sc - 18]; name = a.name || a.id; verb = 'talk';
+  } else {
+    const [hx, hy] = hotspotCenter(h);
+    pos = echt3dBildVonSpiel(hx, hy) || (echt3dFrei() ? null : [hx, hy]);
+    name = typeof h.name === 'function' ? h.name() : h.name;
+    verb = h.exit ? 'walk' : (defaultVerb('o:' + h.id) || 'look');
+  }
+  if (!pos) return;
+  const [sx, sy] = toScreen(pos[0], pos[1]);
+  const label = `${T(VERB_LABEL[verb] || verb)} ${T(name)}`;
+  cx.save();
+  cx.font = '800 15px "Baloo 2", sans-serif';
+  const w = cx.measureText(label).width + 44, x = Math.max(w / 2 + 6, Math.min(W - w / 2 - 6, sx)), y = Math.max(30, sy - 18);
+  const puls = 1 + Math.sin(G.t * 0.008) * 0.04;
+  cx.translate(x, y); cx.scale(puls, puls);
+  R(cx, -w / 2, -15, w, 30, 'rgba(18,10,28,0.82)', 2, 15, '#f1d6a0');
+  E(cx, -w / 2 + 16, 0, 10, 10, '#2a6ad8', 2, 0, '#0b0610');
+  txt(cx, 'X', -w / 2 + 16, 5, '400 13px "Titan One", sans-serif', '#ffffff', 'center');
+  txt(cx, label, 12, 5, '800 15px "Baloo 2", sans-serif', '#fff0c8', 'center');
+  cx.restore();
 }
 function echt3dBenutzen() {
   const h = echt3dNaechsterHotspot();
@@ -299,7 +359,7 @@ function echt3dPadBewegen(x, y, dt) {
 }
 function echt3dLenkungAus(a) {   // Stick/Tasten losgelassen: sofort stehen bleiben (statt zum vorausliegenden Ziel weiterzulaufen)
   if (!a || !a._gelenkt) return;
-  a._gelenkt = false; a.target = null; a.walking = false; a.run = false;
+  a._gelenkt = false; a._lenk3d = null; a.target = null; a.walking = false; a.run = false;
   if (a._res) { const done = a._res; a._res = null; done(true); }
 }
 function echt3dPadSpringen() {
@@ -310,6 +370,7 @@ function echt3dPadSpringen() {
 }
 let echt3dVirtualStick = { x: 0, y: 0, aktiv: false };
 function drawEcht3dParkour() {
+  drawEcht3dFokus();
   if (!echt3dParkourAktiv() || (!COARSE && G.pointer !== 'touch') || cx.isPix || G.photoMode) return;
   const y = SH - 66, x = 92, jx = W - 92, r = 45;
   cx.save(); cx.globalAlpha = 0.62;
@@ -560,6 +621,7 @@ function drawEcht3dParkour() {
     if (p && !p.walking) standSeit = standSeit || performance.now(); else standSeit = 0;
     if (!drei || !echt3dSteuerungErlaubt()) { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; }
     if (!drei || !p || p.room !== raum) return;
+    echt3dAusgangPruefen(p);
     const dx = (tasten.has('d') || tasten.has('arrowright') ? 1 : 0) - (tasten.has('a') || tasten.has('arrowleft') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.x : 0);
     const dy = (tasten.has('s') || tasten.has('arrowdown') ? 1 : 0) - (tasten.has('w') || tasten.has('arrowup') ? 1 : 0) + (echt3dVirtualStick.aktiv ? echt3dVirtualStick.y : 0);
     if (dx || dy) echt3dSetzBewegungsziel(p, dx, dy, 0.09);
