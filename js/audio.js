@@ -294,6 +294,41 @@ const Sound = (() => {
       { inst: 'bell', lvl: 1, seq: Array(8).fill('A6:1 -:1 D6:1 -:1 F6:1 -:1 E6:1 -:1').join(' ') },
       { inst: 'drum', lvl: 2, seq: Array(32).fill('-:1 H:0.5 H:0.5').join(' ') },
     ] },
+    // Spuk-Walzer (Obergeschoss, Dachboden): eigene Komposition in e-Moll, 3/4 – Theremin über Orgel, Zupfbass auf der Eins,
+    // Celesta-Tupfer und im zweiten Level ein Cembalo, das in Achteln die Akkorde zerlegt
+    spuk: { bpm: 108, tracks: [
+      { inst: 'theremin', seq: 'B4:2 E5:1 G5:2 F#5:1 E5:1.5 D5:0.5 C5:1 B4:3 B4:2 E5:1 G5:2 B5:1 A5:1.5 G5:0.5 F#5:1 D#5:3 ' +
+        'D5:2 G5:1 F#5:2 A5:1 G5:1.5 F#5:0.5 E5:1 D#5:3 E5:2 C5:1 A4:2 C5:1 B4:1 D#5:1 F#5:1 E5:3' },
+      { inst: 'pizz', seq: ['E2', 'E2', 'A1', 'B1', 'E2', 'C2', 'A1', 'B1', 'G1', 'D2', 'E2', 'B1', 'C2', 'A1', 'B1', 'E2'].map(n => `${n}:1 -:2`).join(' ') },
+      { inst: 'organ', seq: ['E3+G3+B3', 'E3+G3+B3', 'A2+C3+E3', 'B2+D#3+F#3', 'E3+G3+B3', 'C3+E3+G3', 'A2+C3+E3', 'B2+D#3+A3', 'G2+B2+D3', 'D3+F#3+A3', 'E3+G3+B3', 'B2+D#3+F#3', 'C3+E3+G3', 'A2+C3+E3', 'B2+D#3+A3', 'E3+G3+B3'].map(c => `-:1 ${c}:1 ${c}:1`).join(' ') },
+      { inst: 'bell', lvl: 1, seq: Array(8).fill(0).map((_, i) => `${['E6', 'B5', 'G6', 'D#6'][i % 4]}:3 -:3`).join(' ') },
+      { inst: 'pluck', lvl: 2, seq: [['E3', 'B3', 'G4'], ['E3', 'B3', 'G4'], ['A2', 'E3', 'C4'], ['B2', 'F#3', 'D#4'], ['E3', 'B3', 'G4'], ['C3', 'G3', 'E4'], ['A2', 'E3', 'C4'], ['B2', 'F#3', 'A3'],
+        ['G2', 'D3', 'B3'], ['D3', 'A3', 'F#4'], ['E3', 'B3', 'G4'], ['B2', 'F#3', 'D#4'], ['C3', 'G3', 'E4'], ['A2', 'E3', 'C4'], ['B2', 'F#3', 'A3'], ['E3', 'B3', 'G4']].map(([a, b, c]) => `${a}:0.5 ${b}:0.5 ${c}:0.5 ${b}:0.5 ${c}:0.5 ${b}:0.5`).join(' ') },
+      { inst: 'drum', lvl: 2, seq: Array(16).fill('K:1 H:1 H:1').join(' ') },
+    ] },
+    // Uhrwerk (Castlevania-Stimmung, eigene Komposition): treibendes d-Moll, galoppierender Bass in Achteln, Orgel, Arpeggien,
+    // Streicher mit der Melodie, im B-Teil heldenhaftes Blech mit einer dramatischen Wendung nach Es-Dur
+    uhrwerk: { bpm: 140, tracks: [
+      { inst: 'strings', seq: 'D5:1 A4:0.5 D5:0.5 F5:1 E5:1 D5:0.5 E5:0.5 F5:0.5 G5:0.5 A5:2 Bb5:1 A5:0.5 G5:0.5 F5:1 D5:1 E5:1 C5:1 G4:2 ' +
+        'D5:1 A4:0.5 D5:0.5 F5:1 A5:1 D6:1.5 C6:0.5 A5:2 Bb5:1 A5:0.5 G5:0.5 F5:0.5 E5:0.5 D5:1 C#5:2 E5:1 A5:1 -:32' },
+      { inst: 'brass', seq: '-:32 G5:1.5 F5:0.5 D5:1 Bb4:1 A4:1 D5:1 F5:2 Bb5:1.5 A5:0.5 F5:1 D5:1 E5:1 C#5:1 A4:2 G5:1 Bb5:1 D6:2 A5:1 F5:1 D5:2 Eb5:1 G5:1 Bb5:1 Eb6:1 C#6:2 A5:2' },
+      { inst: 'synbass', seq: ['D', 'D', 'Bb', 'C', 'D', 'D', 'Bb', 'A', 'G', 'D', 'Bb', 'A', 'G', 'D', 'Eb', 'A'].map(n => { const o = ['Bb', 'A', 'Eb'].includes(n) ? 1 : 2; return Array(4).fill(`${n}${o}:0.5 ${n}${o + 1}:0.5`).join(' '); }).join(' ') },
+      { inst: 'organ', seq: ['D3+F3+A3', 'D3+F3+A3', 'Bb2+D3+F3', 'C3+E3+G3', 'D3+F3+A3', 'D3+F3+A3', 'Bb2+D3+F3', 'A2+C#3+E3', 'G2+Bb2+D3', 'D3+F3+A3', 'Bb2+D3+F3', 'A2+C#3+E3', 'G2+Bb2+D3', 'D3+F3+A3', 'Eb3+G3+Bb3', 'A2+C#3+E3'].map(c => `${c}:4`).join(' ') },
+      { inst: 'arp', lvl: 1, seq: [['D4', 'F4', 'A4'], ['D4', 'F4', 'A4'], ['Bb3', 'D4', 'F4'], ['C4', 'E4', 'G4'], ['D4', 'F4', 'A4'], ['D4', 'F4', 'A4'], ['Bb3', 'D4', 'F4'], ['A3', 'C#4', 'E4'],
+        ['G3', 'Bb3', 'D4'], ['D4', 'F4', 'A4'], ['Bb3', 'D4', 'F4'], ['A3', 'C#4', 'E4'], ['G3', 'Bb3', 'D4'], ['D4', 'F4', 'A4'], ['Eb4', 'G4', 'Bb4'], ['A3', 'C#4', 'E4']].map(([a, b, c]) => `${a}:0.5 ${b}:0.5 ${c}:0.5 ${b}:0.5 ${a}:0.5 ${b}:0.5 ${c}:0.5 ${b}:0.5`).join(' ') },
+      { inst: 'drum', seq: Array(16).fill('K:1 S:1 K:0.5 K:0.5 S:1').join(' ') },
+      { inst: 'drum', lvl: 2, seq: Array(64).fill('H:0.5 H:0.5').join(' ') },
+    ] },
+    // Testkammer (eigene Komposition): kühle Elektronik in a-Moll, Arpeggien, Glocken-Melodie, Synthbass, knapper Beat
+    kammer: { bpm: 112, tracks: [
+      { inst: 'arp', seq: [['A3', 'C4', 'E4'], ['F3', 'A3', 'C4'], ['C4', 'E4', 'G4'], ['G3', 'B3', 'D4']].map(([a, b, c]) => Array(2).fill(`${a}:0.5 ${b}:0.5 ${c}:0.5 ${b}:0.5`).join(' ')).join(' ').repeat(1) + ' ' +
+        [['A3', 'C4', 'E4'], ['F3', 'A3', 'C4'], ['C4', 'E4', 'G4'], ['G3', 'B3', 'D4']].map(([a, b, c]) => Array(2).fill(`${a}:0.5 ${b}:0.5 ${c}:0.5 ${b}:0.5`).join(' ')).join(' ') },
+      { inst: 'bell', seq: 'E5:2 C5:1 A4:1 F5:2 E5:1 C5:1 G5:3 E5:1 D5:2 B4:2 A5:2 G5:1 E5:1 F5:1 E5:1 C5:2 E5:2 G5:1 E5:1 D5:4' },
+      { inst: 'synbass', seq: 'A1:2 A2:2 F1:2 F2:2 C2:2 C3:2 G1:2 G2:2 A1:2 A2:2 F1:2 F2:2 C2:2 C3:2 G1:2 G2:2' },
+      { inst: 'pad', seq: 'A3+C4+E4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4 A3+C4+E4:4 F3+A3+C4:4 C4+E4+G4:4 G3+B3+D4:4' },
+      { inst: 'drum', seq: Array(8).fill('K:1 H:0.5 H:0.5 S:1 H:0.5 H:0.5').join(' ') },
+      { inst: 'drum', lvl: 2, seq: Array(32).fill('-:0.5 H:0.5').join(' ') },
+    ] },
     // Dr. Freds Laborwalzer: schauriger 3/4-Takt mit Theremin, Zupfbass auf der Eins und Orgel auf zwei und drei
     lab: { bpm: 138, tracks: [
       { inst: 'theremin', seq: 'A4:2 D5:1 F5:2 E5:1 D5:1.5 C5:0.5 Bb4:1 A4:3 Bb4:2 D5:1 G5:2 F5:1 E5:1 C#5:1 E5:1 A5:3 F5:2 E5:1 C5:2 A4:1 Bb4:1 D5:1 G5:1 F5:3 D5:1 F5:1 Bb5:1 G5:2 Bb4:1 A4:1 C#5:1 E5:1 D5:3' },

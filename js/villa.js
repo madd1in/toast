@@ -36,7 +36,7 @@ raum3d('stockwerk', 'img/raum_stockwerk.jpg', {
     if (!Math.floor(t / 6000) % 3) glow(360, 200, 26 + Math.sin(t * 0.003) * 4, '#b8c8ff', 0.16);   // Mondlicht durchs Fenster
   },
 });
-ROOM_FX.stockwerk = { verb: [0.5, 0.1], light: [1, '#c8c2ff', '#1a1428'], bloom: 0.14, amb: ['haus', 'wind'] };
+ROOM_FX.stockwerk = { music: 'spuk', verb: [0.5, 0.1], light: [1, '#c8c2ff', '#1a1428'], bloom: 0.14, amb: ['haus', 'wind'] };
 GRADE.stockwerk = ['#8a86c8', 0.08];
 
 // ---------- Dachboden ----------
@@ -67,7 +67,7 @@ raum3d('dachboden', 'img/raum_dachboden.jpg', {
     if (Math.floor(t / 9000) % 4 === 3) for (let i = 0; i < 3; i++) glow(300 + i * 60 + Math.sin(t * 0.001 + i) * 10, 200 - ((t / 30 + i * 60) % 160), 3, '#e8e2d0', 0.3);   // Staub im Lichtstrahl
   },
 });
-ROOM_FX.dachboden = { verb: [0.6, 0.12], light: [1, '#d8cdb0', '#241a12'], bloom: 0.12, amb: ['haus'], motes: 'dust' };
+ROOM_FX.dachboden = { music: 'spuk', verb: [0.6, 0.12], light: [1, '#d8cdb0', '#241a12'], bloom: 0.12, amb: ['haus'], motes: 'dust' };
 GRADE.dachboden = ['#c8a86a', 0.1];
 
 // ---------- Lobby: Treppe hinauf (gemalter Anbau wie der Aufzug im Vorraum) ----------

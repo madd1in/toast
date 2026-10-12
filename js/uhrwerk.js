@@ -103,7 +103,7 @@ raum3d('uhrwerk', 'img/raum_uhrwerk.jpg', {
   },
 });
 Object.defineProperty(ROOMS.uhrwerk, 'walk', { configurable: true, get: () => imEcht3d('uhrwerk') ? UHR_WALK_VOLL : UHR_WALK_STEG });
-ROOM_FX.uhrwerk = { verb: [1.3, 0.2], light: [1, '#ffd8a0', '#120a18'], bloom: 0.22, amb: ['clock', 'wind', 'owl'], motes: 'dust' };
+ROOM_FX.uhrwerk = { music: 'uhrwerk', verb: [1.3, 0.2], light: [1, '#ffd8a0', '#120a18'], bloom: 0.22, amb: ['clock', 'wind', 'owl'], motes: 'dust' };
 GRADE.uhrwerk = ['#8a6ac8', 0.08];
 ROOMS.uhrwerk.zustand3d = {};
 ROOMS.uhrwerk.onEnter = async () => {

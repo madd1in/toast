@@ -174,7 +174,7 @@ ROOMS.vorraum.objs.push({ id: 'zur_testkammer', name: 'Aufzug zur Testkammer', r
 Object.assign(ROOM_FX, {
   hafen: { verb: [0.4, 0.08], light: [1, '#fff0c8', '#2a4a70'], bloom: 0.24, amb: ['wind', 'birds'], music: 'samba' },
   landeplatz: { verb: [0.9, 0.12], light: [-1, '#ffb8f0', '#1c0c48'], bloom: 0.36, amb: ['future', 'traffic'], motes: 'firefly' },
-  testkammer: { verb: [1.8, 0.2], light: [1, '#f4f8ff', '#3a4058'], bloom: 0.2, amb: ['hum', 'beeps'], music: 'lab', reflect: 0.12 },
+  testkammer: { verb: [1.8, 0.2], light: [1, '#f4f8ff', '#3a4058'], bloom: 0.2, amb: ['hum', 'beeps'], music: 'kammer', reflect: 0.12 },
 });
 MAP_ORDER.past.push('hafen');
 JUKEBOX.splice(JUKEBOX.findIndex(j => j[0] === 'tavern') + 1, 0, ['samba', 'Hafen-Samba']);

@@ -2269,7 +2269,7 @@ function drawJukebox(bx, by, bw) {
     txt(cx, lbl, px - tw / 2 + 14, base + 125, '700 13px "Baloo 2", sans-serif', '#ffe066', 'left');
   }
 }
-const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['lab', 'Dr. Freds Laborwalzer'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
+const JUKEBOX = [['title', 'Titelmelodie'], ['present', 'Gegenwart'], ['lounge', 'Lobby-Lounge'], ['lab', 'Dr. Freds Laborwalzer'], ['past', 'Jahr 1776'], ['tavern', 'Taverne „Zum Krummen Kamin“'], ['future', 'Zukunft'], ['march', 'Wachparade'], ['palace', 'Lilas Palast'], ['ankunft', 'Ankunft vor der Villa'], ['spuk', 'Spuk-Walzer'], ['uhrwerk', 'Im Uhrwerk'], ['kammer', 'Testkammer'], ['rock', 'Tentakel-Rock (Begleitband)'], ['ending', 'Abspann']];
 const HELP = [
   'Modern (HD): Linksklick = hingehen oder passende Aktion · Rechtsklick = Aktionsmenü',
   'Inventar: Maus an den unteren Rand oder I · Gegenstand anklicken, dann Ziel oder Gesicht',
