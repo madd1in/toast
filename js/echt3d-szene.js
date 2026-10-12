@@ -140,6 +140,7 @@ export async function init(base = 'img/3d/') {
   GRAD = new THREE.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, THREE.RedFormat);
   GRAD.minFilter = GRAD.magFilter = THREE.NearestFilter; GRAD.needsUpdate = true;
   loader = new GLTFLoader();
+  schilderP = fetch(BASE + 'schilder.json' + V).then(r => r.json()).catch(() => ({}));
   const ids = [...HELDEN, 'guybrush', 'jack'];
   const glbs = await Promise.all(ids.map(n => loader.loadAsync(BASE + n + '.glb' + V)));
   ids.forEach((id, i) => addFig(id, glbs[i].scene, RIGS[id] || null));
@@ -293,6 +294,57 @@ function kollision(R, a, p, id, erzwingen) {   // gesteuerte Figur: nicht durch 
   return toWorld(R.home, bx, by, q);
 }
 
+// ---------- übersetzte Schilder (img/3d/schilder.json, js/schilder.js): Schrift-Meshes gegen Texturen tauschen ----------
+let schilderP = Promise.resolve({});
+function schildTextur(st) {   // Text in Schildgröße auf eine Leinwand, Zeilen und Schriftgröße passend
+  const ziel = typeof schildText === 'function' ? schildText(st.t) : st.t;
+  if (st.zuletzt === ziel) return;
+  st.zuletzt = ziel;
+  const c = st.canvas, g = c.getContext('2d'), zeilen = String(ziel).split('\n');
+  g.clearRect(0, 0, c.width, c.height);
+  let fs = c.height / zeilen.length * 0.84;
+  g.font = `400 ${fs}px "Titan One", sans-serif`;
+  const breit = Math.max(...zeilen.map(z => g.measureText(z).width));
+  if (breit > c.width * 0.96) fs *= c.width * 0.96 / breit;
+  g.font = `400 ${fs}px "Titan One", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  zeilen.forEach((z, i) => {
+    const y = c.height / 2 + (i - (zeilen.length - 1) / 2) * fs * 1.02;
+    g.lineWidth = Math.max(2, fs * 0.12); g.strokeStyle = '#140a1c'; g.strokeText(z, c.width / 2, y);
+    g.fillStyle = st.farbe; g.fillText(z, c.width / 2, y);
+  });
+  st.tex.needsUpdate = true;
+}
+function schilderBauen(H, liste) {   // vor dem Verbiegen: die Tafeln biegen sich mit dem Raum
+  const out = [];
+  if (!liste) return out;
+  H.traverse(o => {
+    const st = o.isMesh && liste[nm(o)]; if (!st || !st.t) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    const bb = o.geometry.boundingBox, w = bb.max.x - bb.min.x, h = bb.max.z - bb.min.z;
+    if (w < 0.02 || h < 0.01) return;
+    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = Math.max(32, Math.min(512, Math.round(512 * h / w * 1.25)));
+    const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }); mat.userData.outlineParameters = { visible: false };
+    const geo = new THREE.PlaneGeometry(w * 1.04, h * 1.25, 4, 2); geo.rotateX(-Math.PI / 2);   // Schrift liegt im glTF in der x-z-Ebene, Vorderseite +y
+    geo.translate((bb.min.x + bb.max.x) / 2, bb.max.y + 0.004, (bb.min.z + bb.max.z) / 2);
+    const tafel = new THREE.Mesh(geo, mat); tafel.name = 'Schild_' + nm(o);
+    tafel.position.copy(o.position); tafel.quaternion.copy(o.quaternion); tafel.scale.copy(o.scale);
+    o.parent.add(tafel); tafel.visible = false;
+    out.push({ mesh: o, tafel, canvas, tex, t: st.t, farbe: st.c || '#ffe066', zuletzt: null });
+  });
+  return out;
+}
+function schilderTick(R) {   // jede Sekunde: Sprache gewechselt oder Übersetzung eingetroffen?
+  if (!R.schilder || !R.schilder.length) return;
+  const jetzt = performance.now(); if (jetzt - (R.schildT || 0) < 1000) return; R.schildT = jetzt;
+  const fremd = typeof Lang !== 'undefined' && Lang.cur !== 'de';
+  for (const st of R.schilder) {
+    const ziel = fremd && typeof schildText === 'function' ? schildText(st.t) : st.t, an = fremd && ziel && ziel !== st.t;
+    st.mesh.visible = !an; st.tafel.visible = an;
+    if (an) schildTextur(st);
+  }
+}
+
 async function ladeRaum(id) {
   const reqDef = REQUISITEN[id];
   const [gltf, data, reqGltf] = await Promise.all([loader.loadAsync(BASE + id + '.glb' + V), fetch(BASE + id + '.json' + V).then(r => r.json()),
@@ -320,7 +372,9 @@ async function ladeRaum(id) {
   H.traverse(o => { if (o.isMesh && beweglich.has(nm(o))) o.castShadow = true; });
   const extraRe = EXTRA_BEWEGLICH[id];
   const kisten = kollisionsKisten(H, [], extraRe);
-  const stat = mergeStatic(H, n => beweglich.has(n) || !!(extraRe && extraRe.test(n)));
+  const schildListe = (await schilderP)[id] || null;   // Schrift-Meshes bleiben einzeln (für die Übersetzung)
+  const stat = mergeStatic(H, n => beweglich.has(n) || !!(extraRe && extraRe.test(n)) || !!(schildListe && schildListe[n]));
+  const schilder = schilderBauen(H, schildListe);
   scene.add(H); scene.add(stat);
   sprungToastStufen(scene, id);
   const nodes = new Map();
@@ -342,7 +396,7 @@ async function ladeRaum(id) {
   const innen = INNENRAUM.has(id) ? raumSchliessen(scene, camera, id) : null;
   if (innen) kisten.push(...innen.dekoKisten);   // Möbel an der Vorderwand (nur bei gedrehter Kamera da)
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
-  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten };
+  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
 }
 
 async function ladeHafen() {
@@ -778,18 +832,20 @@ function raumSchliessen(scene, cam, id) {
     }
     return null;
   };
-  const messen = (dir, quer) => {   // 9 Strahlen über Möbelhöhe, Median der Treffer
+  let rueckTreffer = [];
+  const messen = (dir, quer, merken) => {   // 9 Strahlen über Möbelhöhe, Median der Treffer
     const r = [];
     for (const hgt of [2.4, 3.0, 3.6]) for (const q of [-2, 0, 2]) {
       const o = C.clone().add(new THREE.Vector3(0, hgt, 0)).addScaledVector(quer, q), h = strahl(o, dir);
       if (h) r.push(h);
     }
+    if (merken) rueckTreffer = r.slice();
     if (r.length < 4) return null;
     r.sort((a, b) => a.distance - b.distance);
     return r[Math.floor(r.length / 2)];
   };
   const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
-  const hinten = messen(new THREE.Vector3(0, 0, -1), X), links = messen(new THREE.Vector3(-1, 0, 0), Z), rechts = messen(new THREE.Vector3(1, 0, 0), Z);
+  const hinten = messen(new THREE.Vector3(0, 0, -1), X, true), links = messen(new THREE.Vector3(-1, 0, 0), Z), rechts = messen(new THREE.Vector3(1, 0, 0), Z);
   if (!hinten) return null;   // ohne Rückwand ist es kein Innenraum
   const oben = strahl(C.clone().add(new THREE.Vector3(0, 0.5, 0)), new THREE.Vector3(0, 1, 0));
   const z0 = C.z - hinten.distance + 0.02, x0 = links ? C.x - links.distance + 0.02 : -10.5, x1 = rechts ? C.x + rechts.distance - 0.02 : 10.5;
@@ -813,6 +869,16 @@ function raumSchliessen(scene, cam, id) {
     const [ua, ub] = loes(B.uv.x - A.uv.x, Cc.uv.x - A.uv.x), [va, vb] = loes(B.uv.y - A.uv.y, Cc.uv.y - A.uv.y);
     bodenUV = { ua, ub, uc: A.uv.x - ua * A.p.x - ub * A.p.z, va, vb, vc: A.uv.y - va * A.p.x - vb * A.p.z };
   }
+  // Tapete: Muster der Rückwand messen (u, v linear in x und Höhe), damit die ergänzten Wände dasselbe Muster im selben Maßstab zeigen
+  let wandUV = null;
+  const pw = rueckTreffer.filter(h => h.uv && (Array.isArray(h.object.material) ? h.object.material[0] : h.object.material) === wandMat);
+  for (let i = 0; i < pw.length && !wandUV; i++) for (let j = i + 1; j < pw.length && !wandUV; j++) for (let k = j + 1; k < pw.length && !wandUV; k++) {
+    const [A, B2, C2] = [pw[i], pw[j], pw[k]], x1 = B2.point.x - A.point.x, y1_ = B2.point.y - A.point.y, x2 = C2.point.x - A.point.x, y2 = C2.point.y - A.point.y, det = x1 * y2 - x2 * y1_;
+    if (Math.abs(det) < 0.3) continue;
+    const loes = (f1, f2) => [(f1 * y2 - f2 * y1_) / det, (x1 * f2 - x2 * f1) / det];
+    const [ua, ub] = loes(B2.uv.x - A.uv.x, C2.uv.x - A.uv.x), [va, vb] = loes(B2.uv.y - A.uv.y, C2.uv.y - A.uv.y);
+    wandUV = { ua, ub, uc: A.uv.x - ua * A.point.x - ub * A.point.y, va, vb, vc: A.uv.y - va * A.point.x - vb * A.point.y };
+  }
   const innenStoff = (m, dunkler) => {
     const n = m.clone(); n.side = THREE.FrontSide;
     if (dunkler && n.color) n.color = n.color.clone().multiplyScalar(dunkler);
@@ -825,6 +891,16 @@ function raumSchliessen(scene, cam, id) {
     const g = new THREE.PlaneGeometry(w, h, Math.max(1, Math.ceil(w / 0.6)), Math.max(1, Math.ceil(h / 0.6))), uv = g.attributes.uv;   // fein unterteilt: die schiefe DOTT-Verbiegung greift auch hier
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w * 0.4, uv.getY(i) * h * 0.4);
     const m = new THREE.Mesh(g, mat); m.position.copy(pos); m.rotation.set(rotX, rotY, 0, 'YXZ'); m.receiveShadow = true; huelle.add(m);
+    if (wandUV && mat === W && !rotX) {   // senkrechte Wand: Muster wie die Rückwand (Seitenwände laufen in der Tiefe weiter)
+      m.updateMatrixWorld(true);
+      const pos3 = g.attributes.position, v = new THREE.Vector3(), seite = Math.abs(Math.sin(rotY)) > 0.5;
+      for (let i = 0; i < uv.count; i++) {
+        v.fromBufferAttribute(pos3, i).applyMatrix4(m.matrixWorld);
+        const hx = seite ? -v.z : v.x;
+        uv.setXY(i, wandUV.ua * hx + wandUV.ub * v.y + wandUV.uc, wandUV.va * hx + wandUV.vb * v.y + wandUV.vc);
+      }
+      uv.needsUpdate = true;
+    }
     return m;
   };
   const bx = (x0 + x1) / 2, bz = (z0 + z1) / 2, bw = x1 - x0, bd = z1 - z0;
@@ -921,7 +997,7 @@ const KRUMM = {};
 // Kein rechter Winkel mehr: Fächer (a, Wände kippen nach außen) und vor allem Wellen (b, c, d – kippen in alle Richtungen,
 // auch mitten im Raum). Draußen ist der Fächer gedeckelt (xmax), sonst flögen ferne Hügel davon.
 const DRAUSSEN = new Set(['auffahrt', 'garten1776', 'fgarten', 'landeplatz', 'mars']);
-for (const [id, a0] of Object.entries({ lobby: 1, stockwerk: 0.7, dachboden: 0.55, keller: 0.9, uhrwerk: 0.55, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9, testkammer: 0.8,
+for (const [id, a0] of Object.entries({ lobby: 1.35, stockwerk: 0.7, dachboden: 0.55, keller: 0.9, uhrwerk: 0.55, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9, testkammer: 0.8,
   auffahrt: 0.5, garten1776: 0.5, fgarten: 0.5, landeplatz: 0.45, mars: 0.4 })) {
   let ph = 0; for (const ch of id) ph = (ph * 31 + ch.charCodeAt(0)) % 628;
   const sprung = a0 < 0.8 && !DRAUSSEN.has(id);   // Sprung-Räume: Plattformen müssen bleiben, wo die Physik sie erwartet
@@ -1454,7 +1530,7 @@ function flugKamera(R, t) {
 // ---------- Raum-Extras: Teile, die das Spiel selbst bewegt oder dazubaut ----------
 const EXTRA_BEWEGLICH = {
   uhrwerk: /^(Notsteg|Riesenpendel|Kolben|Zahnrad(\d+|[AB]|Tief\d+)|Zifferblatt|Zeiger(Gross|Klein))$/,
-  lobby: /^L_Uhr$/,
+  lobby: /^L_Uhr$|^L_Konf/,
   auffahrt: /^(KamTent|Auto|TuerL|TuerR)$/,
 };
 // Uhrwerk-Takt (Sekunden): Kolben-Oberkante und Pendelwinkel – Bild und Sprungphysik nutzen dieselben Formeln
@@ -1536,6 +1612,15 @@ const RAUM_EXTRAS = {
   // Lobby: die Standuhr schwingt als Geheimtür auf (Scharnier rechts), dahinter Gang mit Kerzenschein;
   // dazu die Treppe ins Obergeschoss hinter dem Empfang, an der Rückwand entlang nach links hinauf
   lobby(scene, H) {
+    // Tür zum Konferenzsaal auf Labortür-Größe (Tür, Rahmen und Schild wachsen gemeinsam um die Unterkante)
+    const konf = []; H.traverse(o => { if (/^(Schild_)?L_Konf/.test(nm(o)) && o.parent === H) konf.push(o); });   // samt übersetzter Schildtafel
+    if (konf.length) {
+      H.updateMatrixWorld(true);
+      const bb = new THREE.Box3(); for (const o of konf) bb.expandByObject(o);
+      const gruppe = new THREE.Group(); gruppe.position.set((bb.min.x + bb.max.x) / 2, 0, bb.max.z); scene.add(gruppe);
+      for (const o of konf) gruppe.attach(o);
+      gruppe.scale.set(1.32, 1.36, 1);
+    }
     let uhr = null; H.traverse(o => { if (!uhr && nm(o) === 'L_Uhr') uhr = o; });
     const teile = {};
     if (uhr) {
@@ -1567,6 +1652,7 @@ const RAUM_EXTRAS = {
     lauf.position.copy(bl(tA[1] - 0.04, (tA[2] + tZ[3]) / 2, (tA[4] + tZ[4]) / 2 + 0.9)); lauf.rotation.x = Math.atan2(tZ[4] - tA[4], tZ[3] - tA[2]); treppe.add(lauf);
     const pfosten = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.25, 0.12), holzD); pfosten.position.copy(bl(tA[1] - 0.04, tA[2] - 0.1, 0.62)); treppe.add(pfosten);
     const knauf = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toonMat(0xc8a04a)); knauf.position.copy(bl(tA[1] - 0.04, tA[2] - 0.1, 1.3)); treppe.add(knauf);
+    treppe.userData.keinKrumm = true;   // die Treppe bleibt gerade: man läuft auf genau diesen Stufen (Physik)
     scene.add(treppe);
     return {
       tick(s, ctx) {
@@ -1781,6 +1867,7 @@ export function frame(t, actors, pxW, ctx) {
   if (R.anim) hafenAnim(R.anim, s);
   uhrS = s;
   if (R.extra) R.extra.tick(s, ctx);
+  schilderTick(R);
   if (R.req) requisitenBewegen(R.req, s, ctx);
   if (R.home) kartenStellen(R, ctx.karten);
   if (R.innen && R.innen.deko) R.innen.deko.visible = freiAktiv();

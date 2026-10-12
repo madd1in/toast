@@ -1602,7 +1602,7 @@ function setLang(id, user) {
   if (user && id !== 'de' && Voice.available && !G.settings.voice) { G.settings.voice = true; Voice.on = true; }   // Sprachausgabe in der gewählten Sprache
   Lang.set(id).then(ok => {
     if (G.settings.lang !== id) return;
-    if (ok && id !== 'de') { if (typeof vorspannVorwaermen === 'function') vorspannVorwaermen(); Lang.prewarm(langStrings()); if (user) note(`Sprache: ${LANGS.find(q => q.id === id).label}${Voice.hasVoice ? '' : ' – keine passende Stimme installiert'}`); }
+    if (ok && id !== 'de') { if (typeof vorspannVorwaermen === 'function') vorspannVorwaermen(); if (typeof schilderVorwaermen === 'function') schilderVorwaermen(); Lang.prewarm(langStrings()); if (user) note(`Sprache: ${LANGS.find(q => q.id === id).label}${Voice.hasVoice ? '' : ' – keine passende Stimme installiert'}`); }
     else if (!ok && Lang.state === 'tap') { if (user) note('Tippe noch einmal, um das Sprachpaket zu laden.'); }
     else if (!ok && id !== 'de') { note('Diese Sprache ist gerade nicht verfügbar – ohne Internet bleibt es beim Deutschen.'); }
   });
@@ -1744,7 +1744,8 @@ function drawBg(room) {
     HDS.deco = HDS.shadow = true; HDS.scale = s;
     Lang.bgTag(true);
     try { room.draw(g); } finally { HDS.deco = HDS.shadow = false; Lang.bgTag(false); }
-    finishBg(g, c, room); bgCache[key] = c;
+    finishBg(g, c, room); if (typeof bgKrumm === 'function') bgKrumm(c, room);   // krumme Wände (js/krumm2d.js)
+    bgCache[key] = c;
     const ks = Object.keys(bgCache); for (let i = 0; i < ks.length - BG_KEEP; i++) if (ks[i] !== key) delete bgCache[ks[i]];
   }
   cx.drawImage(c, 0, 0, W, SH);
