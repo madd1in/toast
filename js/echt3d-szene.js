@@ -37,8 +37,27 @@ function toon(m, name, noLine) {
     : new THREE.MeshToonMaterial({ color: m.color, map: m.map, gradientMap: GRAD });
   t.side = m.side; t.name = m.name;
   t.userData.outlineParameters = { thickness: 0.0032, color: INK, alpha: 1, visible: !noLine };
+  if (!glow && t.map && TEXTUR_WELLIG.test(t.name || '') && !TEXTUR_GERADE.test(t.name || '')) texturWelle(t);
   matCache.set(key, t);
   return t;
+}
+// Muster wie von Hand gemalt: Pflastersteine, Dielen, Tapete, Ziegel und Wiese laufen in sanften Wellen statt in
+// Linealreihen. Der Shader verschiebt die Bildkoordinaten nach der Weltlage (Meter) – gleich stark, egal wie fein
+// eine Textur gekachelt ist (Bildkoordinaten pro Meter aus den Ableitungen). Schilder, Bilder und Himmel bleiben gerade.
+const TEXTUR_WELLIG = /Pflaster|Mauer|Rasen|Dielen|Ziegel|Erde|Wiese|Stein|Putz|Holz|Gras|Fels|Sand|Teppich|Paneel|Boden|Kacheln|Parkett|Tapete|Marmor|Wand|Steg|Taefel|Ufer/;
+const TEXTUR_GERADE = /Himmel|Landschaft|Zifferblatt|Zettel|Tafel|Plakat|Gemaelde|Dia\b|Banner|Fahne|Flagge|Segel|Anakonda|Glas|Moebel/;
+function texturWelle(t) {
+  t.onBeforeCompile = sh => {
+    sh.vertexShader = 'varying vec3 vWellLage;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWellLage = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'varying vec3 vWellLage;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#ifdef USE_MAP
+      vec3 wl = vWellLage;
+      float uvProM = max(length(dFdx(vMapUv)), length(dFdy(vMapUv))) / max(1e-4, max(length(dFdx(wl)), length(dFdy(wl))));
+      vec2 welle = vec2(sin(wl.x * 0.85 + wl.z * 0.55 + wl.y * 0.6 + 1.3) + 0.6 * sin(wl.z * 1.7 - wl.x * 0.45 + wl.y * 1.1),
+                        sin(wl.z * 1.05 - wl.x * 0.7 + wl.y * 0.8 + 2.1) + 0.6 * sin(wl.x * 1.9 + wl.y * 1.3 + 0.3));
+      diffuseColor *= texture2D(map, vMapUv + welle * 0.075 * min(uvProM, 8.0));
+    #endif`);
+  };
+  t.customProgramCacheKey = () => 'welle';
 }
 function prep(root, { cast = false, receive = true, ohne = null } = {}) {
   root.traverse(o => {
@@ -372,7 +391,7 @@ async function ladeRaum(id) {
   const [gltf, data, reqGltf] = await Promise.all([loader.loadAsync(BASE + id + '.glb' + V), fetch(BASE + id + '.json' + V).then(r => r.json()),
     reqDef ? loader.loadAsync(BASE + reqDef.datei + '.glb' + V).catch(e => { console.error('Echtzeit-3D Requisiten', id, e); return null; }) : null]);
   const scene = new THREE.Scene(), H = gltf.scene;
-  const [hor, top] = data.himmel && data.himmel.length ? data.himmel : ['#3a2a50', '#140828'];
+  const [hor, top] = data.himmel && data.himmel.length ? data.himmel : HIMMEL_EXTRA[id] || ['#3a2a50', '#140828'];
   scene.background = himmel(top, hor);
   scene.userData.horizont = hor;
   const camera = gltf.cameras[0] || new THREE.PerspectiveCamera(29.6, GW / GH, 0.1, 400);
@@ -391,6 +410,7 @@ async function ladeRaum(id) {
   for (const [vis, hid] of Object.values(data.zustaende || {})) for (const n of [...vis, ...hid]) beweglich.add(n);
   for (const s of Object.values(data.sprites || {})) for (const n of s.teile) beweglich.add(n);
   prep(H, { cast: false, receive: true, ohne: new Set(data.ohneKontur || []) });
+  if (RAUM_VORBAU[id]) RAUM_VORBAU[id](H);
   H.traverse(o => { if (o.isMesh && beweglich.has(nm(o))) o.castShadow = true; });
   const extraRe = EXTRA_BEWEGLICH[id];
   const kisten = kollisionsKisten(H, [], extraRe);
@@ -478,7 +498,35 @@ function addFig(id, root, rig) {
   for (const k of Object.keys(nodes)) delete nodes[k];
   root.traverse(o => { if (!o.userData.merged) nodes[nm(o)] = o; });
   const base = {}; for (const [k, o] of Object.entries(nodes)) base[k] = { q: o.quaternion.clone(), p: o.position.clone(), s: o.scale.clone() };
+  figurVerbiegen(id, holder);
   figs[id] = { id, holder, root, top, nodes, base, rig, yaw: -0.56, walkPh: 0, last: null, blinkT: 2000 + Math.random() * 3000 };
+}
+// Figuren wie gezeichnet – jede auf ihre Art schief: lehnt sich zur Seite, steht im S, dreht die Schultern gegen die
+// Hüfte, wird oben breiter oder schmaler und streckt sich. In der Grundhaltung einmal in die Form gebacken (in
+// Figuren-Koordinaten, die Füße bleiben, wo sie sind); die Gelenke bewegen die verbogenen Teile danach wie gewohnt
+function figurVerbiegen(id, holder) {
+  holder.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(holder), H = Math.max(0.3, bb.max.y - Math.max(0, bb.min.y)), y0 = Math.max(0, bb.min.y);
+  let s = 11; for (const ch of id) s = (s * 31 + ch.charCodeAt(0)) % 10007;
+  const r = k => ((s * (k * 2654435761 % 977 + 1)) % 1000) / 500 - 1;   // feste Zufallszahlen je Figur (-1 … 1)
+  const lx = 0.14 * r(1), lz = 0.08 * r(2), sk = 0.06 * r(3), dreh = 0.42 * r(4), beule = 0.12 + 0.06 * r(5), ph = 3 * r(6), streck = 0.1 * r(7);
+  const inv = new THREE.Matrix4().copy(holder.matrixWorld).invert(), m = new THREE.Matrix4(), mi = new THREE.Matrix4(), v = new THREE.Vector3();
+  holder.traverse(o => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    o.geometry = o.geometry.clone();   // Teile teilen sich manchmal ein Modell (Augen) – jedes biegt seine Kopie
+    m.multiplyMatrices(inv, o.matrixWorld); mi.copy(m).invert();
+    const pos = o.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m);
+      const h = Math.max(0, (v.y - y0) / H), w = dreh * h, c = Math.cos(w), sn = Math.sin(w), b = 1 + beule * Math.sin(h * Math.PI * 1.4 + ph) * h;
+      const x = v.x * b, z = v.z * b;
+      v.x = x * c - z * sn + lx * H * h * h + sk * H * Math.sin(h * Math.PI * 1.6);
+      v.z = x * sn + z * c + lz * H * h * h;
+      v.y = y0 + (v.y - y0) * (1 + streck * h);
+      v.applyMatrix4(mi); pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    pos.needsUpdate = true; o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere();
+  });
 }
 
 // ---------- Gelenke der Helden (wie figur_rig.py / figur_frames.py, stufenlos) ----------
@@ -830,7 +878,7 @@ export function bildVonSpiel(gx, gy, id) {   // Spiel-Punkt (Bühnenansicht) -> 
   return [(p.x + 1) / 2 * GW, (1 - p.y) / 2 * GH];
 }
 export function kopfPunkt(gx, gy, hoehePx, id) {
-  const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home || !freiAktiv()) return null;
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready || !R.home || !(freiAktiv() || R.flug)) return null;
   const p = toWorld(R.home, gx, gy, new THREE.Vector3()), upm = unitsPerMeter(R.home, p);
   p.y += hoehePx / upm;
   fischZurueck(p.project(R.camera));
@@ -944,6 +992,7 @@ function raumSchliessen(scene, cam, id) {
   }
   const innenStoff = (m, dunkler) => {
     const n = m.clone(); n.side = THREE.FrontSide;
+    if (m.onBeforeCompile && m.customProgramCacheKey) { n.onBeforeCompile = m.onBeforeCompile; n.customProgramCacheKey = m.customProgramCacheKey; }   // gleiche Wellen wie die Wand daneben
     if (dunkler && n.color) n.color = n.color.clone().multiplyScalar(dunkler);
     n.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: false };
     return n;
@@ -1059,11 +1108,11 @@ const KRUMM = {};
 // Räume mit Sprungpassagen etwas sanfter, damit Kisten, Stufen und Zahnräder dort bleiben, wo die Physik sie erwartet
 // Kein rechter Winkel mehr: Fächer (a, Wände kippen nach außen) und vor allem Wellen (b, c, d – kippen in alle Richtungen,
 // auch mitten im Raum). Draußen ist der Fächer gedeckelt (xmax), sonst flögen ferne Hügel davon.
-const DRAUSSEN = new Set(['auffahrt', 'garten1776', 'fgarten', 'landeplatz', 'mars']);
-for (const [id, a0] of Object.entries({ lobby: 1.35, stockwerk: 0.7, dachboden: 0.55, keller: 0.9, uhrwerk: 0.55, labor: 1, konferenz: 1, gasthaus: 0.9, vorraum: 0.9, thron: 0.9, testkammer: 0.8,
-  auffahrt: 0.5, garten1776: 0.5, fgarten: 0.5, landeplatz: 0.45, mars: 0.4 })) {
+const DRAUSSEN = new Set(['auffahrt', 'garten1776', 'fgarten', 'landeplatz', 'mars', 'prolog']);
+for (const [id, a0] of Object.entries({ lobby: 1.35, stockwerk: 1.3, dachboden: 1.1, keller: 1.0, uhrwerk: 0.9, labor: 1, konferenz: 1.1, gasthaus: 1.0, vorraum: 1.0, thron: 1.0, testkammer: 0.9,
+  auffahrt: 0.5, garten1776: 0.5, fgarten: 0.5, landeplatz: 0.45, mars: 0.4, prolog: 0.6 })) {
   let ph = 0; for (const ch of id) ph = (ph * 31 + ch.charCodeAt(0)) % 628;
-  const sprung = a0 < 0.8 && !DRAUSSEN.has(id);   // Sprung-Räume: Plattformen müssen bleiben, wo die Physik sie erwartet
+  const sprung = false;   // früher sanfter für die Sprung-Räume – jetzt biegen die Figuren auf Stufen und Kisten mit (frame)
   const fa = a0 * (sprung ? 1.2 : 1.5), fw = a0 * (sprung ? 1.2 : 2.2);
   KRUMM[id] = { a: 0.042 * fa, b: 0.075 * fw, c: 0.05 * fw, d: 0.06 * fw, ph: ph / 100, xmax: DRAUSSEN.has(id) ? 10 : 0 };
 }
@@ -1083,12 +1132,19 @@ function entbiegen(k, p, out) {
 // Bäume draußen: jeder lehnt sich in seine eigene Richtung, krümmt sich S-förmig und verdreht die Krone (wie gezeichnet)
 function baeumeVerbiegen(scene) {
   scene.updateMatrixWorld(true);
-  const gruppen = new Map();
+  const gruppen = new Map(), kronen = [];
   scene.traverse(o => {
     if (!o.isMesh) return;
-    let m = null; for (let q = o; q && !m; q = q.parent) m = /^(Baum[A-Z]?\d+|Tanne\d+)/.exec(q.name || '');
+    if (/^P_Krone/.test(o.name || '')) { kronen.push(o); return; }
+    let m = null; for (let q = o; q && !m; q = q.parent) m = /^(Baum[A-Z]?\d+|Tanne\d+|P_Stamm\d+)/.exec(q.name || '');
     if (m) { if (!gruppen.has(m[1])) gruppen.set(m[1], []); gruppen.get(m[1]).push(o); }
   });
+  const _bc = new THREE.Vector3(), _bs = new THREE.Vector3();
+  for (const k of kronen) {   // Prolog: die Kronenkugeln zum nächsten Stamm
+    k.getWorldPosition(_bc); let best = null, bd = 1e9;
+    for (const [key, ms] of gruppen) if (key.startsWith('P_Stamm')) { ms[0].getWorldPosition(_bs); const d = Math.hypot(_bs.x - _bc.x, _bs.z - _bc.z); if (d < bd) { bd = d; best = key; } }
+    if (best && bd < 4) gruppen.get(best).push(k);
+  }
   const v = new THREE.Vector3(), inv = new THREE.Matrix4(), bb = new THREE.Box3();
   for (const [key, ms] of gruppen) {
     bb.makeEmpty(); for (const o of ms) bb.expandByObject(o);
@@ -1519,6 +1575,105 @@ function gartenWelt(scene) {
 // Spukhaus rundherum: in Blender hat nur die Vorderseite Fenster – Seiten und Rückseite bekommen hier ihre eigenen
 // (warmes Licht, Kreuz, schiefe Läden, Fensterbank), damit die Umrundung im Vorspann keine kahlen Wände zeigt.
 // Jedes Fenster sucht sich per Strahl von außen die (schiefe) Wand und richtet sich nach ihr aus.
+// Jedes Fenster (mit Läden und Bank), jede Gaube, die Haustür und jede Laterne bekommt ihre eigene Schiefe: gekippt,
+// zum Trapez gezogen, geschert; Laternen lehnen sich und tragen einen dicken Kopf. Teile eines Fensters biegen gemeinsam.
+function fassadeVerbiegen(H) {
+  H.updateMatrixWorld(true);
+  const gruppen = new Map(), lampen = [];
+  H.traverse(o => {
+    if (!o.isMesh) return;
+    const n = nm(o);
+    let m = /^(?:Laden)?(Fenster(?:H?[OU]|S-?1[OU])\d)/.exec(n) || /^Gaube(?:Dach|Fenster|Korpus)(\d)/.exec(n) || /^(KuppelFenster\d)/.exec(n);
+    let key = m ? (m[0].startsWith('Gaube') ? 'Gaube' + m[1] : m[1]) : /^(Tuer[LR]|TuerRahmen|Klinke\d)$/.test(n) ? 'Haustuer' : null;
+    if (/^Laterne|^LaternenDach|^LaternenPfahl|^LaterneDach/.test(n)) { lampen.push(o); return; }
+    if (!key) return;
+    if (!gruppen.has(key)) gruppen.set(key, []);
+    gruppen.get(key).push(o);
+  });
+  // Laternen: Teile nach ihrer Lage zusammenfassen (Mast, Gehäuse und Dach stehen übereinander)
+  const _c = new THREE.Vector3(), bbL = new THREE.Box3();
+  for (const o of lampen) {
+    bbL.setFromObject(o).getCenter(_c);
+    let g = null; for (const [k, v] of gruppen) if (k.startsWith('Lampe') && Math.hypot(v.x - _c.x, v.z - _c.z) < 0.7) { g = k; break; }
+    if (!g) { g = 'Lampe' + gruppen.size; const arr = []; arr.x = _c.x; arr.z = _c.z; gruppen.set(g, arr); }
+    gruppen.get(g).push(o);
+  }
+  const v = new THREE.Vector3(), mm = new THREE.Matrix4(), mi = new THREE.Matrix4(), bb = new THREE.Box3(), schon = new Set();
+  for (const [key, ms] of gruppen) {
+    bb.makeEmpty(); for (const o of ms) bb.expandByObject(o);
+    const cx = (bb.min.x + bb.max.x) / 2, cy = (bb.min.y + bb.max.y) / 2, cz = (bb.min.z + bb.max.z) / 2, y0 = bb.min.y, hoch = Math.max(0.2, bb.max.y - y0);
+    const ex = bb.max.x - bb.min.x, ez = bb.max.z - bb.min.z, ueberX = ex >= ez;   // waagrechte Achse in der Wand
+    let s = 5; for (const ch of key) s = (s * 31 + ch.charCodeAt(0)) % 10007;
+    const r = k => ((s * (k * 7919 % 997 + 3)) % 1000) / 500 - 1;
+    const lampe = key.startsWith('Lampe');
+    const win = 0.13 * r(1) + (r(1) > 0 ? 0.04 : -0.04), trapez = 0.2 * r(2), scher = 0.14 * r(3), lx = 0.16 * r(4), lz = 0.12 * r(5), kopf = 0.22 + 0.12 * r(6);
+    for (const o of ms) {
+      if (!o.geometry || !o.geometry.attributes.position) continue;
+      if (schon.has(o)) continue; schon.add(o);
+      o.geometry = o.geometry.clone(); o.updateMatrixWorld(true); mm.copy(o.matrixWorld); mi.copy(mm).invert();
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(mm);
+        if (lampe) {   // Mast lehnt sich (je höher, desto mehr), oben ein dicker Kopf
+          const h = Math.max(0, (v.y - y0) / hoch), k = 1 + kopf * Math.max(0, h - 0.7) / 0.3;
+          v.x = cx + (v.x - cx) * k + lx * hoch * h * h; v.z = cz + (v.z - cz) * k + lz * hoch * h * h;
+        } else {
+          let a = ueberX ? v.x - cx : v.z - cz, b = v.y - cy;
+          const c = Math.cos(win), sn = Math.sin(win), a2 = a * c - b * sn, b2 = a * sn + b * c;
+          a = a2 * (1 + trapez * b2 / (hoch / 2)) + scher * b2; b = b2;
+          if (ueberX) v.x = cx + a; else v.z = cz + a;
+          v.y = cy + b;
+        }
+        v.applyMatrix4(mi); pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      pos.needsUpdate = true; o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere();
+    }
+  }
+}
+// Himmel für Szenen ohne eigene Angabe in Blender (Horizont, oben)
+const HIMMEL_EXTRA = { prolog: ['#cfeeff', '#3f8ee0'] };
+// Vor dem Zusammenfassen der festen Teile (danach gibt es die einzelnen Fenster nicht mehr)
+const RAUM_VORBAU = {
+  // Prolog-Landschaft wie gemalt: die Wiese wellt sich, der Fluss schlängelt sich schiefer, Ufer, Steine und Brücke
+  // wandern mit; dort, wo die Tentakel stehen (und Rohr und Fleck sind), bleibt alles, wie es war
+  prolog(H) {
+    H.updateMatrixWorld(true);
+    const fall = (x, y) => Math.max(0, Math.min(1, (Math.hypot(x - 20, y - 46) - 7) / 14));   // Blender-Meter
+    const hoch = (x, y) => 0.9 * fall(x, y) * (Math.sin(x * 0.13 + y * 0.07) + 0.6 * Math.sin(y * 0.21 - x * 0.05));
+    const quer = (x, y) => { const f = fall(x, y); return [f * (1.6 * Math.sin(y * 0.25) + 0.7 * Math.sin(x * 0.4)), f * 1.2 * Math.sin(x * 0.22 + 0.8)]; };
+    const v = new THREE.Vector3(), mm = new THREE.Matrix4(), mi = new THREE.Matrix4(), c = new THREE.Vector3(), bb = new THREE.Box3();
+    const flussig = /^P_(Fluss|Ufer|Stein|Brett|Gelaender|Pfosten)/;
+    const teile = []; H.traverse(o => { if (o.isMesh) teile.push(o); });
+    for (const o of teile) {
+      const n = nm(o);
+      if (/^P_(Boden|Fluss|Ufer)$/.test(n)) {   // Flächen: jeder Punkt für sich
+        o.geometry = o.geometry.clone(); mm.copy(o.matrixWorld); mi.copy(mm).invert();
+        const pos = o.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(mm);
+          const bx = v.x, by = -v.z; v.y += hoch(bx, by);
+          if (n !== 'P_Boden') { const [qx, qy] = quer(bx, by); v.x += qx; v.z -= qy; }
+          v.applyMatrix4(mi); pos.setXYZ(i, v.x, v.y, v.z);
+        }
+        pos.needsUpdate = true; o.geometry.computeVertexNormals(); o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere();
+      } else if (!/^P_(Huegel|Berg|HausHuegel|Rohr|Schleim)/.test(n)) {   // Dinge auf dem Boden (Bäume mit Kronen): als Ganzes mit
+        let imHaus = false; for (let q = o.parent; q; q = q.parent) if (nm(q) === 'P_Haus') imHaus = true;
+        if (imHaus) continue;   // das Haus auf dem Hügel bleibt beisammen
+        bb.setFromObject(o);
+        bb.getCenter(c); const bx = c.x, by = -c.z, d = new THREE.Vector3(0, hoch(bx, by), 0);
+        if (flussig.test(n)) { const [qx, qy] = quer(bx, by); d.x += qx; d.z -= qy; }
+        const ziel = o.getWorldPosition(new THREE.Vector3()).add(d);
+        o.position.copy(o.parent ? o.parent.worldToLocal(ziel) : ziel);
+      }
+    }
+  },
+  auffahrt(H) {
+    // die Rück- und Seitenfenster aus Blender stecken (durch die schiefe Wand) in der Mauer – villaRundum setzt eigene davor
+    const weg = []; H.traverse(o => { if (/^(Laden)?Fenster(H[OU]|S-?1[OU])/.test(nm(o))) weg.push(o); });
+    for (const o of weg) if (o.parent) o.parent.remove(o);
+    fassadeVerbiegen(H);
+  },
+};
 function villaRundum(scene, H) {
   scene.updateMatrixWorld(true);
   const glas = leuchtMat(0xffd27a), rahmen = toonMat(0xf2eee6), laden = toonMat(0x1f3a2a), gruppe = new THREE.Group(); gruppe.name = 'VillaRundum';
@@ -1552,11 +1707,79 @@ function villaRundum(scene, H) {
   }
   scene.add(gruppe);
 }
+// Der Tourbus als Gruselbus im Stil der 60er (Hommage an den Bus aus Scooby-Doo): oben himmelblau, unten grasgrün,
+// ein orangener Zierstreifen und große orangene Blumen auf beiden Seiten – und krumm wie ein Zeichentrick-Van
+function gruselBus(scene, auto, tv, st) {
+  const farbe = (re, hex) => auto.traverse(o => {
+    if (!o.isMesh) return;
+    const ms = [].concat(o.material), neu = ms.map(m => re.test(m.name || '') ? Object.assign(m.clone(), { name: m.name }) : m);
+    neu.forEach((m, i) => { if (m !== ms[i]) m.color.set(hex); });
+    o.material = Array.isArray(o.material) ? neu : neu[0];
+  });
+  farbe(/BusDach/, 0x5ec6e0); farbe(/BusLack/, 0x7cc443);
+  auto.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(auto), x0 = bb.min.x, x1 = bb.max.x, y0 = bb.min.y, H = bb.max.y - y0;
+  // Lack zweifarbig: über dem Zierstreifen himmelblau, darunter grün (eine Fläche, darum per Höhe im Shader)
+  const blau = new THREE.Color(0x5ec6e0), teilung = y0 + H * 0.47;
+  auto.traverse(o => {
+    if (!o.isMesh) return;
+    const oy = o.getWorldPosition(new THREE.Vector3()).y;   // relativ zum Teil: der Bus federt beim Aussteigen
+    for (const m of [].concat(o.material)) if (/BusLack/.test(m.name || '') && !m.userData.zweifarbig) {
+      m.userData.zweifarbig = true;
+      m.onBeforeCompile = sh => {
+        sh.uniforms.uTeilung = { value: teilung - oy }; sh.uniforms.uOben = { value: blau };
+        sh.vertexShader = 'varying vec3 vWeltLage;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWeltLage = (modelMatrix * vec4(transformed, 1.0)).xyz - modelMatrix[3].xyz;');
+        sh.fragmentShader = 'varying vec3 vWeltLage;\nuniform float uTeilung;\nuniform vec3 uOben;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  if (vWeltLage.y > uTeilung) diffuseColor.rgb = uOben;');
+      };
+      m.customProgramCacheKey = () => 'gruselbus';
+      m.needsUpdate = true;
+    }
+  });
+  const orange = toonMat(0xf28a1e), gelb = toonMat(0xffd43a), streifen = toonMat(0xf07a18);
+  const teile = [auto, tv, st].filter(Boolean), boxen = teile.map(o => new THREE.Box3().setFromObject(o));
+  const anhaengen = (m) => {   // an das Teil hängen, auf dem die Blume sitzt (Schiebetür und Fahrertür bewegen sich)
+    const w = m.getWorldPosition(new THREE.Vector3());
+    let ziel = auto; for (const i of [2, 1]) if (teile[i] && boxen[i].containsPoint(w)) { ziel = teile[i]; break; }
+    ziel.attach(m);
+  };
+  for (const seite of [1, -1]) {
+    const z = seite > 0 ? bb.max.z + 0.012 : bb.min.z - 0.012, rot = seite > 0 ? 0 : Math.PI;
+    const band = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 - 0.5, 0.07, 0.015), streifen);   // Zierstreifen zwischen Blau und Grün
+    band.position.set((x0 + x1) / 2, y0 + H * 0.47, z); scene.add(band); auto.attach(band);
+    [[0.18, 0.3, 0.34], [0.42, 0.22, 0.24], [0.6, 0.36, 0.3], [0.8, 0.26, 0.22], [0.3, 0.58, 0.18]].forEach(([u, v, r], i) => {
+      const blume = new THREE.Group(), x = seite > 0 ? x0 + (x1 - x0) * u : x1 - (x1 - x0) * u;
+      for (let k = 0; k < 5; k++) {
+        const w = k / 5 * Math.PI * 2 + i, bl_ = new THREE.Mesh(new THREE.CircleGeometry(r * 0.42, 14), orange);
+        bl_.position.set(Math.cos(w) * r * 0.55, Math.sin(w) * r * 0.55, 0); bl_.scale.set(1, 1.25, 1); bl_.rotation.z = w + Math.PI / 2; blume.add(bl_);
+      }
+      const mitte = new THREE.Mesh(new THREE.CircleGeometry(r * 0.3, 14), gelb); mitte.position.z = 0.004; blume.add(mitte);
+      blume.position.set(x, y0 + H * v, z); blume.rotation.set(0, rot, i * 0.4); scene.add(blume); anhaengen(blume);
+    });
+  }
+  // krumm wie gezeichnet: das Dach wölbt sich in der Mitte, oben schmaler, vorn ein wenig nach vorn gekippt
+  const mx = (x0 + x1) / 2, mz = (bb.min.z + bb.max.z) / 2, L = (x1 - x0) / 2, v = new THREE.Vector3(), mm = new THREE.Matrix4(), mi = new THREE.Matrix4();
+  auto.updateMatrixWorld(true);
+  auto.traverse(o => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    o.geometry = o.geometry.clone(); mm.copy(o.matrixWorld); mi.copy(mm).invert();
+    const pos = o.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(mm);
+      const u = (v.x - mx) / L, h = Math.max(0, (v.y - y0) / H);
+      v.y += 0.07 * H * (1 - u * u) * h;
+      v.x = mx + (v.x - mx) * (1 - 0.05 * h) + 0.07 * H * h * h;
+      v.z = mz + (v.z - mz) * (1 - 0.13 * h) + 0.04 * H * u * h;
+      v.applyMatrix4(mi); pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    pos.needsUpdate = true; o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere();
+  });
+}
 function auffahrtTeile(scene, H) {
   villaRundum(scene, H);
   const auto = find(H, 'Auto'), kt = find(H, 'KamTent'), tv = find(H, 'AutoTuerV'), st = find(H, 'AutoSchiebetuer');
   const tuer = [find(H, 'TuerL'), find(H, 'TuerR')];
   if (auto) mergeUnder(auto, c => c === tv || c === st);   // der Bus: eine Handvoll Zeichenaufrufe, Türen bleiben beweglich
+  if (auto) gruselBus(scene, auto, tv, st);
   const rollen = [];
   if (kt) { kt.traverse(o => { if (/^KamRolle\d$/.test(nm(o))) rollen.push(o); }); mergeUnder(kt, c => rollen.includes(c) || /^KamLampe$/.test(nm(c))); }
   const lampe = kt && find(kt, 'KamLampe');
@@ -1675,6 +1898,7 @@ const EXTRA_BEWEGLICH = {
   uhrwerk: /^(Notsteg|Riesenpendel|Kolben|Zahnrad(\d+|[AB]|Tief\d+)|Zifferblatt|Zeiger(Gross|Klein))$/,
   lobby: /^L_Uhr$|^L_Konf|^L_Bilderrahmen|^L_Leinwand|^L_Rahmenrosette|^L_Plakett/,
   auffahrt: /^(KamTent|Auto|TuerL|TuerR)$/,
+  prolog: /^P_Schleim/,
 };
 // Uhrwerk-Takt (Sekunden): Kolben-Oberkante und Pendelwinkel – Bild und Sprungphysik nutzen dieselben Formeln
 let uhrS = 0;   // Spielzeit des letzten Bildes in Sekunden – Takt für Bild und Physik
@@ -1692,7 +1916,46 @@ function toonMat(farbe) {
 }
 function leuchtMat(farbe) { const m = new THREE.MeshBasicMaterial({ color: farbe }); m.userData.outlineParameters = { thickness: 0.003, color: INK, alpha: 1, visible: true }; return m; }
 const _zA = new THREE.Vector3(0, 0, 1);
+// ---------- Prolog „Wie alles begann“ in 3D: Glibberstrahl aus Dr. Freds Rohr, Fleck, Arme-Blitz ----------
+export const PROLOG3D = { muendung: [24.05, 56.59, 1.1], wasser: [24.3, 53.4, 0.05], fleck: [21.025, 50.95, 0.05], gruen: [19.414, 42.909, 0], lila: [20.616, 45.384, 0], haus: [24, 74, 6] };
+function prologTeile(scene, H) {
+  const P = PROLOG3D, a = bl(...P.muendung), e = bl(...P.wasser);
+  const lila = leuchtMat(0xb44ae0), hell = leuchtMat(0xecc0ff);
+  const kurve = new THREE.CatmullRomCurve3([a, a.clone().lerp(e, 0.3).add(new THREE.Vector3(0.3, 0.15, 0)), a.clone().lerp(e, 0.7).add(new THREE.Vector3(0.12, -0.1, 0)), e]);
+  const strahlGeo = new THREE.TubeGeometry(kurve, 40, 0.17, 8), strahl = new THREE.Mesh(strahlGeo, lila); strahl.visible = false; scene.add(strahl);
+  const tropfen = Array.from({ length: 7 }, () => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), hell); m.visible = false; scene.add(m); return m; });
+  let fleck = null; const blasen = [];
+  H.traverse(o => { if (nm(o) === 'P_Schleimfleck') fleck = o; else if (/^P_SchleimBlase/.test(nm(o))) blasen.push({ o, y: o.position.y }); });
+  const f0 = fleck && fleck.scale.clone();
+  const blitz = new THREE.PointLight(0xff7ad9, 0, 10, 2); blitz.position.copy(bl(P.lila[0], P.lila[1], 1.8)); scene.add(blitz);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xff9ae8, transparent: true }); ringMat.userData.outlineParameters = { visible: false };
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.07, 8, 40), ringMat); ring.rotation.x = Math.PI / 2; ring.position.copy(bl(P.lila[0], P.lila[1], 0.9)); ring.visible = false; scene.add(ring);
+  const proSegment = 8 * 6;
+  return {
+    tick(s) {
+      const pr = typeof G !== 'undefined' && G.prolog, t = typeof G !== 'undefined' ? G.t : 0;
+      const k = pr && pr.sludgeT ? Math.min(1, (t - pr.sludgeT) / 600) : 0, wachs = pr && pr.sludgeT ? Math.min(1, (t - pr.sludgeT) / 4000) : (pr ? 0 : 1);
+      strahl.visible = k > 0; strahlGeo.setDrawRange(0, Math.max(1, Math.floor(40 * k)) * proSegment);
+      strahl.position.x = Math.sin(s * 9) * 0.03;
+      tropfen.forEach((m, i) => { m.visible = k >= 1; if (m.visible) { m.position.copy(kurve.getPoint((s * 0.7 + i / 7) % 1)); m.position.x += Math.sin(i * 3 + s * 6) * 0.06; } });
+      if (fleck && f0) { const g = 0.3 + 0.7 * wachs + Math.sin(s * 3) * 0.03 * wachs; fleck.scale.set(f0.x * g, f0.y, f0.z * g); }
+      blasen.forEach(({ o, y }, i) => { o.visible = wachs > 0.15; o.position.y = y + Math.abs(Math.sin(s * 2.2 + i * 1.7)) * 0.12; });
+      const arme = pr && pr.armsT ? t - pr.armsT : -1;
+      blitz.intensity = arme >= 0 ? 40 * Math.max(0, 1 - arme / 1300) : 0;
+      ring.visible = arme >= 0 && arme < 1300;
+      if (ring.visible) { const q = arme / 1300; ring.scale.setScalar(0.4 + q * 3.2); ringMat.opacity = 1 - q; }
+    },
+  };
+}
+// Spiel-Punkt (Bühnenkamera) zu einem Ort in Blender-Metern – wo Figuren stehen sollen, die im Raum frei platziert sind
+export function spielVonWelt(id, p) {
+  const R = rooms[id]; if (!R || !R.ready || !R.camera) return null;
+  if (!R.home) kameraLoesen(R);
+  const v = bl(p[0], p[1], p[2] || 0).project(R.home);
+  return [(v.x + 1) / 2 * GW, (1 - v.y) / 2 * GH];
+}
 const RAUM_EXTRAS = {
+  prolog: prologTeile,
   garten1776: gartenWelt,
   auffahrt: auffahrtTeile,
   // Zukunftsgarten: Astgabeln, Wurzelstumpf und Laubpolster als Kletterweg den Apfelbaum hinauf zur Laterne
@@ -1793,18 +2056,20 @@ const RAUM_EXTRAS = {
     // Treppe ins Obergeschoss an der linken Seitenwand (frei vom Empfangstresen): begehbare Stufen, oben geht es hinauf
     const holz = toonMat(0x6a4a30), holzH = toonMat(0x755539), holzD = toonMat(0x4a3220), treppe = new THREE.Group();
     for (const [i, [x0, x1, y0, y1, h]] of LOBBY_TREPPE.entries()) {
-      const st = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.1, y1 - y0 + 0.04), i % 2 ? holz : holzH);
-      st.position.copy(bl((x0 + x1) / 2, (y0 + y1) / 2, h - 0.05)); st.castShadow = st.receiveShadow = true; treppe.add(st);
+      const w = Math.sin(i * 2.3) * 0.11, vs = Math.sin(i * 1.7 + 1) * 0.07;   // jede Stufe ein wenig verdreht und versetzt
+      const st = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 + 0.08 + Math.sin(i * 3.1) * 0.08, 0.1, y1 - y0 + 0.06), i % 2 ? holz : holzH);
+      st.position.copy(bl((x0 + x1) / 2 + vs, (y0 + y1) / 2, h - 0.05)); st.rotation.set(Math.sin(i * 1.3) * 0.03, w, Math.sin(i * 2.9) * 0.04); st.castShadow = st.receiveShadow = true; treppe.add(st);
       const block = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h - 0.1, y1 - y0), holzD);   // Treppenkörper darunter
       block.position.copy(bl((x0 + x1) / 2, (y0 + y1) / 2, (h - 0.1) / 2)); treppe.add(block);
-      if (i % 2 === 0) { const stab = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.9, 6), holzD); stab.position.copy(bl(x1 - 0.04, (y0 + y1) / 2, h + 0.4)); treppe.add(stab); }
+      if (i % 2 === 0) { const stab = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.9, 6), holzD); stab.position.copy(bl(x1 - 0.04, (y0 + y1) / 2, h + 0.4)); stab.rotation.set(Math.sin(i * 1.9) * 0.18, 0, Math.sin(i * 2.6) * 0.16); treppe.add(stab); }
     }
     const tA = LOBBY_TREPPE[0], tZ = LOBBY_TREPPE[LOBBY_TREPPE.length - 1];
     const lauf = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, Math.hypot(tZ[3] - tA[2], tZ[4] - tA[4])), holz);   // Handlauf
     lauf.position.copy(bl(tA[1] - 0.04, (tA[2] + tZ[3]) / 2, (tA[4] + tZ[4]) / 2 + 0.9)); lauf.rotation.x = Math.atan2(tZ[4] - tA[4], tZ[3] - tA[2]); treppe.add(lauf);
-    const pfosten = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.25, 0.12), holzD); pfosten.position.copy(bl(tA[1] - 0.04, tA[2] - 0.1, 0.62)); treppe.add(pfosten);
-    const knauf = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toonMat(0xc8a04a)); knauf.position.copy(bl(tA[1] - 0.04, tA[2] - 0.1, 1.3)); treppe.add(knauf);
-    treppe.userData.keinKrumm = true;   // die Treppe bleibt gerade: man läuft auf genau diesen Stufen (Physik)
+    const pfosten = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.25, 0.12), holzD); pfosten.position.copy(bl(tA[1] - 0.04, tA[2] - 0.1, 0.62)); pfosten.rotation.set(0.06, 0.2, -0.12); treppe.add(pfosten);
+    const knauf = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), toonMat(0xc8a04a)); knauf.position.copy(bl(tA[1] + 0.03, tA[2] - 0.14, 1.3)); knauf.scale.set(1, 1.3, 0.9); treppe.add(knauf);
+    lauf.rotation.z = 0.05;   // der Handlauf hängt ein wenig durch und schief
+    // biegt mit dem Raum wie alles andere – wer auf den Stufen steht, wird in frame() genauso verschoben
     scene.add(treppe);
     return {
       tick(s, ctx) {
@@ -2005,7 +2270,7 @@ function kartenStellen(R, liste) {
 // ---------- Bild für einen Spiel-Frame ----------
 let lastT = 0;
 const _vis = new Map();
-const _v2 = new THREE.Vector3();
+const _v2 = new THREE.Vector3(), _kv = new THREE.Vector3();
 let schattenN = 0, letzterSchatten = null;
 function curKind(actors) { const id = curId(); const a = actors.find(x => x.id === id); return a ? a.kind : null; }
 export function frame(t, actors, pxW, ctx) {
@@ -2079,6 +2344,8 @@ export function frame(t, actors, pxW, ctx) {
       if (z > 0.0001) f.holder.position.y += z;
       else if (z < -0.0001) f.holder.position.y += z;
     }
+    // steht man auf einer Stufe, Kiste oder Treppe im verbogenen Raum, verbiegt man sich mit – genau wie der Boden darunter
+    if (R.krumm && f.holder.position.y > 0.001) f.holder.position.add(krummVersatz(R.krumm, f.holder.position.x, f.holder.position.y, f.holder.position.z, _kv));
     if (ich) {
       if (R.innen && autoKamera) {   // Auto-Kamera hinter der Figur (Blickrichtung f.yaw: +x vorn, Kamera auf der Gegenseite)
         // wie Super Mario 64: die Kamera bleibt auf der vorderen Raumhälfte (höchstens ~70° seitlich) und schwenkt beim

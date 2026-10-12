@@ -9,7 +9,7 @@
 // ============================================================
 const ECHT3D = {
   mod: null, loading: false, failed: false,
-  rooms: { auffahrt: 1, hafen: 1, landeplatz: 1, keller: 1, lobby: 1, labor: 1, konferenz: 1, gasthaus: 1, garten1776: 1, fgarten: 1, vorraum: 1, thron: 1, testkammer: 1, mars: 1, stockwerk: 1, dachboden: 1, uhrwerk: 1 },
+  rooms: { prolog: 1, auffahrt: 1, hafen: 1, landeplatz: 1, keller: 1, lobby: 1, labor: 1, konferenz: 1, gasthaus: 1, garten1776: 1, fgarten: 1, vorraum: 1, thron: 1, testkammer: 1, mars: 1, stockwerk: 1, dachboden: 1, uhrwerk: 1 },
 };
 const ECHT3D_XBOX = /xbox/i.test(navigator.userAgent || '');   // Konsole: kleineres 3D-Bild, ohne Schatten (js/echt3d-szene.js)
 // Bildrate halten: das 3D-Bild wird kleiner gerechnet, wenn die Bilder zu lange dauern, und wieder größer, wenn Luft ist

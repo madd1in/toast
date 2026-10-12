@@ -111,7 +111,7 @@ def build_prolog():
     # das Herrenhaus vom Titelbild (Kopie der Szene „Haus“), vergrößert auf den Hügel rechts gestellt
     src = bpy.data.scenes['Haus']
     H = B.empty('P_Haus')
-    H.location, H.rotation_euler, H.scale = (24, 74, 1.3), (0, 0, 0.25), (1.75, 1.75, 1.75)
+    H.location, H.rotation_euler, H.scale = (24, 74, 1.3), (0, 0, 0.25), (2.6, 2.6, 2.6)   # das Spukhaus (spukhaus.py) ist schmaler als das alte Herrenhaus
     made = {}
     for o in src.objects:
         if o.type not in ('MESH', 'CURVE', 'FONT', 'EMPTY'):
@@ -133,25 +133,32 @@ def build_prolog():
     B.rod('P_Rohr1', (mo.x + 1.2, mo.y + 2.0, 1.8), tuple(mo), 0.45, PIPE, None, seg=20)
     B.sphere('P_RohrKnie', (mo.x + 1.2, mo.y + 2.0, 1.8), (0.5, 0.5, 0.5), PIPE, None)
     sun(SC, (0.75, 0.0, -0.6), 2.4, (1.0, 0.96, 0.88))
-    win = bpy.context.window
-    prev = win.scene
-    win.scene = SC
-    bpy.context.view_layer.update()
+    win = bpy.context.window   # im Hintergrund-Job (blender -b) gibt es kein Fenster
+    prev = win.scene if win else None
+    if win:
+        win.scene = SC
+    SC.view_layers[0].update()
 
     def px(co):
         q = world_to_camera_view(SC, cam, Vector(co))
         return [round(q.x * PW, 1), round((1 - q.y) * PH, 1)]
     anchors = {'muendung': px(tuple(mo)), 'wasser': px((mouth.x, mouth.y, 0.05)), 'fleck': px((fleck.x, fleck.y, 0.05)), 'ufer_gruen': px(tuple(gruen_at)), 'ufer_lila': px(tuple(lila_at)),
                'haus': px((24, 74, 6)), 'ppm_ufer': round(abs(px(tuple(lila_at + Vector((0, 0, 2))))[1] - px(tuple(lila_at))[1]) / 2.0, 2)}
+    # Orte in Blender-Metern für das Echtzeit-3D (js/prolog.js): Rohr, Schleim, Ufer der beiden Tentakel, Haus, Kamera
+    welt = {'muendung': [round(c, 3) for c in mo], 'wasser': [round(mouth.x, 3), round(mouth.y, 3), 0.05], 'fleck': [round(fleck.x, 3), round(fleck.y, 3), 0.05],
+            'gruen': [round(c, 3) for c in gruen_at], 'lila': [round(c, 3) for c in lila_at], 'haus': [24, 74, 6], 'kamera': [round(c, 3) for c in cam.location]}
+    json.dump(welt, open(REPO + '/art/render/prolog3d.json', 'w'), indent=1)
     try:
-        pv = globals().get('PREVIEW')
-        r.resolution_percentage = int(pv * 100) if pv else 100
-        r.filepath = REPO + ('/art/render/prolog_preview.png' if pv else '/art/render/prolog.png')
-        bpy.ops.render.render(write_still=True, scene=SC.name)
+        if not os.environ.get('OHNE_RENDER'):   # nur die 3D-Szene neu bauen (Export fürs Echtzeit-3D), ohne das große Panorama
+            pv = globals().get('PREVIEW')
+            r.resolution_percentage = int(pv * 100) if pv else 100
+            r.filepath = REPO + ('/art/render/prolog_preview.png' if pv else '/art/render/prolog.png')
+            bpy.ops.render.render(write_still=True, scene=SC.name)
     finally:
         r.resolution_percentage = 100
-        win.scene = prev
-    json.dump(anchors, open(REPO + '/art/render/prolog.json', 'w'), indent=1)
+        if win:
+            win.scene = prev
+    json.dump(anchors, open(REPO + '/art/render/prolog.json' if not os.environ.get('OHNE_RENDER') else REPO + '/art/render/prolog_neu.json', 'w'), indent=1)
     print('prolog', anchors)
 
 

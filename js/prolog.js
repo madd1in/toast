@@ -36,8 +36,29 @@ function drawTentSprite(c, im, x, y, h, flip, filter, rot) {
   c.drawImage(im, -w * 0.5, -h, w, h);
   c.restore();
 }
+// Im Echtzeit-3D zeigt die Szene selbst alles (Kamerafahrt, Tentakel, Glibber) – dann malt der Prolog nichts dazu
+function prolog3d() { return typeof echt3dOn === 'function' && echt3dOn(ROOMS.prolog) && !!(ECHT3D.mod && ECHT3D.mod.kameraflug); }
+// Kamerafahrt (Blender-Meter: Ort und Blickziel): über die Blumenwiese links, an der Brücke vorbei, hinauf zum Haus
+// auf dem Hügel und dann hinunter ans Ufer, wo die beiden Tentakel neben Dr. Freds Abflussrohr stehen
+const PROLOG_FLUG = [
+  [-26, 2, 2.4, -30, 40, 2.5], [-16, 6, 3.2, -14, 40, 2.5], [-6, 12, 3.6, -5, 27, 0.8], [4, 18, 4.5, 14, 50, 3],
+  [10, 24, 6.5, 24, 74, 8], [18, 31, 4.0, 20, 46, 1.6], [25.8, 37.6, 2.6, 19.0, 47.5, 1.0],   // Schluss: Lila in der Mitte, Grün links, Rohr und Haus dahinter
+];
+function prolog3dWarten(ms) {
+  const t0 = performance.now();
+  return new Promise(fertig => {
+    const p = () => {
+      const m = ECHT3D.mod;
+      if (!G.settings.echt3d || G.settings.retro || ECHT3D.failed || G.skipAll || performance.now() - t0 > ms || (m && m.ready && (m.raumGeladen('prolog') || m.failed('prolog')))) return fertig();
+      if (m && m.ready) m.hasRoom('prolog');
+      setTimeout(p, 100);
+    };
+    p();
+  });
+}
 function drawProlog(c, t) {
   const P = G.prolog;
+  if (P && prolog3d()) return;
   if (!P || !imgOk(PROLOG_IMG)) { c.fillStyle = '#5aa848'; c.fillRect(0, 0, W, SH); return; }
   const cam = prologCam(t);
   c.save();
@@ -89,7 +110,18 @@ async function PROLOG() {
   G.inIntro = true;
   G.prolog = { t0: G.t + 400, panMs: 10000, sludgeT: 0, drinkT: 0, armsT: 0, zoomT: 0 };
   const keep = G.viewRoom; G.viewRoom = 'prolog'; markVisit('prolog'); music();
+  const tentakel = ['green', 'lila'], vorher = {};
+  for (const id of tentakel) { const a = ACT[id]; vorher[id] = { room: a.room, x: a.x, y: a.y, dir: a.dir, visible: a.visible }; }
   try {
+    if (G.settings.echt3d && !G.settings.retro && typeof echt3dLoad === 'function') { echt3dLoad(); await prolog3dWarten(9000); G.prolog.t0 = G.t + 400; }
+    if (prolog3d()) {   // Echtzeit-3D: Kamerafahrt durch die Szene, die Tentakel stehen als 3D-Figuren am Ufer
+      ECHT3D.mod.kameraflug('prolog', PROLOG_FLUG, G.prolog.panMs + 2600, 38);
+      const O = ECHT3D.mod.PROLOG3D, g = ECHT3D.mod.spielVonWelt('prolog', O.gruen), l = ECHT3D.mod.spielVonWelt('prolog', O.lila);
+      if (g && l) {
+        Object.assign(ACT.green, { room: 'prolog', x: g[0], y: g[1], dir: 1, visible: true, target: null, walking: false });
+        Object.assign(ACT.lila, { room: 'prolog', x: l[0], y: l[1], dir: -1, visible: true, target: null, walking: false });
+      }
+    }
     G.titelKarte = { t0: G.t, dauer: 4400, text: 'Wie alles begann ...', logo: true };   // Kino-Titelkarte mit Logo (js/vorspann.js)
     await fadeTo(0, 900);
     await wait(3500); G.titelKarte = null;
@@ -106,6 +138,8 @@ async function PROLOG() {
     await say('lila', 'MUAHAHAHA! Zuerst den Fluss! Dann die Wiese! Dann … ALLES!');
     await fadeTo(1, 900, 'black');
   } finally {
+    if (typeof ECHT3D !== 'undefined' && ECHT3D.mod && ECHT3D.mod.kameraflugEnde) ECHT3D.mod.kameraflugEnde('prolog');
+    for (const id of tentakel) Object.assign(ACT[id], vorher[id], { target: null, walking: false });
     G.prolog = null; G.viewRoom = keep; G.caption = null;
   }
 }
