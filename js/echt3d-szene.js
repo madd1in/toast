@@ -962,8 +962,19 @@ function raumSchliessen(scene, cam, id) {
   const z0 = C.z - hinten.distance + 0.02, x0 = links ? C.x - links.distance + 0.02 : -10.5, x1 = rechts ? C.x + rechts.distance - 0.02 : 10.5;
   const y1 = oben ? 0.5 + oben.distance - 0.02 : Math.max(4.6, 0);
   const z1 = VORNE_Z;
-  // Stoffe: Wand von der Rückwand, Boden: häufigster Stoff unter fünf Tastpunkten
-  const wandMat = (Array.isArray(hinten.object.material) ? hinten.object.material[0] : hinten.object.material);
+  // Stoffe: Wand von der Rückwand – der häufigste wandartige Stoff unter allen Treffern hinten und seitlich (ein einzelner
+  // Treffer kann ein Gemälde, eine Tür oder ein Schrank sein), Boden: häufigster Stoff unter fünf Tastpunkten
+  const stoffVon = h => Array.isArray(h.object.material) ? h.object.material[(h.face && h.face.materialIndex) || 0] || h.object.material[0] : h.object.material;
+  const wandZaehl = new Map();
+  for (const h of [...rueckTreffer, links, rechts].filter(Boolean)) {
+    const m = stoffVon(h), wandig = /Wand|Tapete|Mauer|Putz|Paneel|Kachel|Ziegel|Taefel/.test(m.name || '') && !TEXTUR_GERADE.test(m.name || '');
+    wandZaehl.set(m, (wandZaehl.get(m) || 0) + (wandig ? 10 : 1));
+  }
+  let wandMat = [...wandZaehl.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0])[0] || stoffVon(hinten);
+  if (!/Wand|Tapete|Mauer|Putz|Paneel|Kachel|Ziegel/.test(wandMat.name || '')) {   // nur Vorhang, Schrank o. Ä. getroffen: die Wandfarbe des Raums suchen
+    let w = null; scene.traverse(o => { if (!w && o.isMesh) for (const m of [].concat(o.material)) if (!w && /Wand|Tapete|Mauer|Putz|Paneel/.test(m.name || '') && !TEXTUR_GERADE.test(m.name || '')) w = m; });
+    if (w) wandMat = w;
+  }
   const zaehl = new Map(), proben = [];
   for (const [dx, dz] of [[-4, 0], [4, 0], [0, -1.5], [-2, 1], [2, 1]]) {
     const h = strahl(C.clone().add(new THREE.Vector3(dx, 1.2, dz)), new THREE.Vector3(0, -1, 0));
@@ -982,7 +993,7 @@ function raumSchliessen(scene, cam, id) {
   }
   // Tapete: Muster der Rückwand messen (u, v linear in x und Höhe), damit die ergänzten Wände dasselbe Muster im selben Maßstab zeigen
   let wandUV = null;
-  const pw = rueckTreffer.filter(h => h.uv && (Array.isArray(h.object.material) ? h.object.material[0] : h.object.material) === wandMat);
+  const pw = rueckTreffer.filter(h => h.uv && stoffVon(h) === wandMat);
   for (let i = 0; i < pw.length && !wandUV; i++) for (let j = i + 1; j < pw.length && !wandUV; j++) for (let k = j + 1; k < pw.length && !wandUV; k++) {
     const [A, B2, C2] = [pw[i], pw[j], pw[k]], x1 = B2.point.x - A.point.x, y1_ = B2.point.y - A.point.y, x2 = C2.point.x - A.point.x, y2 = C2.point.y - A.point.y, det = x1 * y2 - x2 * y1_;
     if (Math.abs(det) < 0.3) continue;
@@ -1043,7 +1054,7 @@ function raumSchliessen(scene, cam, id) {
   scene.add(huelle);
   const deko = vorderwandDeko(id, x0, x1, z1, y1);
   scene.add(deko);
-  return { x0, x1, z0, z1, y1, deko, dekoKisten: kollisionsKisten(deko) };
+  return { x0, x1, z0, z1, y1, deko, dekoKisten: kollisionsKisten(deko), wand: wandMat.name, boden: bodenMat.name };
 }
 // Möbel und Dinge an der Vorderwand, damit die Rückseite des Raums nicht leer ist (je Raum ein Thema).
 // Nur bei gedrehter Kamera sichtbar – in der Bühnenansicht stünden sie sonst vor der Kamera.
