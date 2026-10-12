@@ -601,7 +601,10 @@ function walkPoseRoh(r, ph) {
 // Die Szene wird etwas weitwinkliger in ein Zwischenbild gerechnet, ein Shader zieht die Mitte groß und staucht den
 // Rand rund – wie eine Fischaugen-Linse. Klicks und Sprechblasen-Punkte rechnen dieselbe Verzeichnung hin und zurück.
 // In der Bühnenansicht (gemalte Kamera) bleibt das Bild unverzerrt, damit es Punkt für Punkt zum Spiel passt.
-const FISCH = { k: 0.075, fovPlus: 14 };
+// k: Stärke (Mitte 1 + k·(Seitenverhältnis² + 1) mal vergrößert), ss: Zwischenbild entsprechend feiner gerechnet, damit
+// die vergrößerte Mitte nicht pixelig wird (statt 4× Kantenglättung – das Überabtasten glättet die Kanten mit)
+const FISCH = { k: 0.06, fovPlus: 11, ss: 1.35 };
+const fischPlus = () => SPARSAM ? 0 : FISCH.fovPlus;   // Xbox und schwache Geräte: ohne Linse (spart einen ganzen Bildschritt)
 const ASP = 960 / 440;
 let fischS = 0, fischRT = null, fischMat = null, fischSzene = null, fischKam = null;
 const fischZ = k => 1 / (1 + k * (ASP * ASP + 1));   // Ecken bleiben Ecken: nichts außerhalb des Zwischenbilds
@@ -616,7 +619,7 @@ function fischZurueck(v) {   // Punkt im unverzerrten Bild (NDC) -> Stelle auf d
   for (let i = 0; i < 8; i++) { const px = sx * ASP, f = (1 + k * (px * px + sy * sy)) * z; sx = ux / f; sy = uy / f; }
   return v.set(sx, sy, v.z);
 }
-function fischZiel(R) { if (R.flug) return 1; const o = R.orbit; return o ? Math.min(1, Math.max(0, o.w || 0)) : 0; }
+function fischZiel(R) { if (SPARSAM) return 0; if (R.flug) return 1; const o = R.orbit; return o ? Math.min(1, Math.max(0, o.w || 0)) : 0; }
 function fischBauen() {
   fischKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   fischMat = new THREE.ShaderMaterial({
@@ -793,7 +796,7 @@ function kameraFahren(R, t, actors) {
       R.ziel.copy(R.zielHome).lerp(R.glatt.z, w);
     }
     cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, R.ziel, _yA));
-    const fovZiel = home.fov + ((kinoAktiv(R) ? 40 : WEITWINKEL) + FISCH.fovPlus - home.fov) * Math.min(1, o.w || 0);
+    const fovZiel = home.fov + ((kinoAktiv(R) ? 40 : WEITWINKEL) + fischPlus() - home.fov) * Math.min(1, o.w || 0);
     if (Math.abs(cam.fov - fovZiel) > 0.05) { cam.fov = fovZiel; cam.updateProjectionMatrix(); }
   } else if (cam.fov !== home.fov) { cam.fov = home.fov; cam.updateProjectionMatrix(); }
   R.kT = t;
@@ -1899,7 +1902,7 @@ function flugKamera(R, t) {
   }
   _fp.x += Math.sin(t * 0.0021) * 0.06; _fp.y += Math.sin(t * 0.0017) * 0.05;   // Handkamera-Wackeln
   cam.position.copy(_fp);
-  if (cam.fov !== F.fov + FISCH.fovPlus) { cam.fov = F.fov + FISCH.fovPlus; cam.updateProjectionMatrix(); }
+  if (cam.fov !== F.fov + fischPlus()) { cam.fov = F.fov + fischPlus(); cam.updateProjectionMatrix(); }
   cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, _fz, _yA));
   return true;
 }
@@ -2478,9 +2481,10 @@ export function frame(t, actors, pxW, ctx) {
   fischS = fischZiel(R);
   if (fischS > 0.01) {
     if (!fischMat) fischBauen();
-    if (!fischRT || fischRT.width !== w || fischRT.height !== h) {
+    const rw = Math.min(2560, Math.round(w * FISCH.ss)), rh = Math.round(h * rw / w);
+    if (!fischRT || fischRT.width !== rw || fischRT.height !== rh) {
       if (fischRT) fischRT.dispose();
-      fischRT = new THREE.WebGLRenderTarget(w, h, { samples: SPARSAM ? 0 : 4, colorSpace: THREE.SRGBColorSpace });
+      fischRT = new THREE.WebGLRenderTarget(rw, rh, { samples: 0, colorSpace: THREE.SRGBColorSpace });
     }
     renderer.setRenderTarget(fischRT); effect.render(R.scene, camera); renderer.setRenderTarget(null);
     const k = FISCH.k * fischS; fischMat.uniforms.tex.value = fischRT.texture; fischMat.uniforms.k.value = k; fischMat.uniforms.z.value = fischZ(k);

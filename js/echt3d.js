@@ -17,8 +17,8 @@ const ECHT3D_Q = { k: 1, ema: 16, letzt: 0 };
 function echt3dBreite(voll) {
   const jetzt = performance.now(), d = ECHT3D_Q.letzt ? Math.min(120, jetzt - ECHT3D_Q.letzt) : 16; ECHT3D_Q.letzt = jetzt;
   ECHT3D_Q.ema += (d - ECHT3D_Q.ema) * 0.05;
-  if (ECHT3D_Q.ema > 24) ECHT3D_Q.k = Math.max(0.45, ECHT3D_Q.k - 0.006); else if (ECHT3D_Q.ema < 17.5) ECHT3D_Q.k = Math.min(1, ECHT3D_Q.k + 0.0015);   // Ziel: flüssige 50–60 Bilder
-  return Math.max(480, Math.round(voll * ECHT3D_Q.k / 160) * 160);   // in Stufen, damit der Renderer nicht dauernd neu anlegt
+  if (ECHT3D_Q.ema > 24) ECHT3D_Q.k = Math.max(0.62, ECHT3D_Q.k - 0.004); else if (ECHT3D_Q.ema < 17.5) ECHT3D_Q.k = Math.min(1, ECHT3D_Q.k + 0.0015);   // Ziel: flüssige 50–60 Bilder
+  return Math.max(Math.min(800, Math.round(voll)), Math.round(voll * ECHT3D_Q.k / 160) * 160);   // nie unter 800 Bildpunkte Breite (sonst pixelig)   // in Stufen, damit der Renderer nicht dauernd neu anlegt
 }
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
 // Läuft dieser Raum im Echtzeit-3D? Nur der Raum, den man gerade sieht, wird dafür auch geladen – Abfragen für andere
