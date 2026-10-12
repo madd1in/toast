@@ -957,6 +957,170 @@ function krummBiegen(scene, k) {
   }
 }
 
+// ---------- Zukunftsgarten: Welt rundherum (Tentakel-Palast = die Villa in der Zukunft, Raumhafen links) ----------
+function zukunftWelt(scene) {
+  const welt = new THREE.Group(); welt.name = 'Zukunftswelt';
+  const namens = (re, farbe) => { let f = null; scene.traverse(o => { if (!f && o.isMesh && !Array.isArray(o.material) && re.test(o.material.name || '')) f = o.material; }); return f || toonMat(farbe); };
+  const wand = namens(/Palastmauer|Palast|Marmor/, 0x7a3aa8), wiese = namens(/FG_Wiese|Wiese/, 0x5a3a8a);
+  const M = c => toonMat(c), ohne = m => { m.userData.outlineParameters = { visible: false }; return m; };
+  const gold = M(0xe8b830), lila = M(0x8a3ac8), lilaD = M(0x4a1a78), glasT = leuchtMat(0x7ff0ff), glasM = leuchtMat(0xff7ad8), metall = M(0xb8c0d8), dunkel = M(0x241838);
+  const teil = (geo, mat, x, y, h, gier = 0, ziel = welt) => { const m = new THREE.Mesh(geo, mat); m.position.copy(bl(x, y, h)); m.rotation.y = gier; m.receiveShadow = true; ziel.add(m); return m; };
+  const kachel = g => {   // UVs im Meter-Maßstab
+    const uv = g.attributes.uv, pos = g.attributes.position, n = g.attributes.normal;
+    for (let i = 0; i < uv.count; i++) {
+      const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i));
+      uv.setXY(i, (ax > 0.5 ? pos.getZ(i) : pos.getX(i)) * 0.4, (ay > 0.5 ? pos.getZ(i) : pos.getY(i)) * 0.4);
+    }
+    return g;
+  };
+  const kiste = (x0, x1, y0, y1, h0, h1, mat) => teil(kachel(new THREE.BoxGeometry(x1 - x0, h1 - h0, y1 - y0)), mat, (x0 + x1) / 2, (y0 + y1) / 2, (h0 + h1) / 2);
+  const flach = (geo, mat, x, y, h) => { geo.rotateX(-Math.PI / 2); return teil(geo, mat, x, y, h); };
+  const gierVon = (nx, ny) => Math.atan2(nx, -ny);
+  // Boden, Dunstring in Abendrot-Magenta, Hügel
+  flach(new THREE.CircleGeometry(420, 72), wiese, 0, 20, -0.15);
+  const hor = scene.userData.horizont || '#c85a8e', hc = document.createElement('canvas'); hc.width = 4; hc.height = 128;
+  const hg = hc.getContext('2d'), vl = hg.createLinearGradient(0, 0, 0, 128), c = new THREE.Color(hor), rgb = `${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)}`;
+  vl.addColorStop(0, `rgba(${rgb},0)`); vl.addColorStop(0.55, `rgba(${rgb},0.55)`); vl.addColorStop(0.8, `rgba(${rgb},1)`); vl.addColorStop(1, `rgba(${rgb},1)`);
+  hg.fillStyle = vl; hg.fillRect(0, 0, 4, 128);
+  const dt = new THREE.CanvasTexture(hc); dt.colorSpace = THREE.SRGBColorSpace;
+  const dunst = new THREE.Mesh(new THREE.CylinderGeometry(330, 330, 80, 64, 1, true), ohne(new THREE.MeshBasicMaterial({ map: dt, transparent: true, depthWrite: false, side: THREE.BackSide })));
+  dunst.position.copy(bl(0, 20, 22)); dunst.userData.beweglich = true; welt.add(dunst);
+  const huegelM = [M(0x6a3a9a), M(0x7a4aa8), M(0x5a2a88)];
+  for (let i = 0; i < 30; i++) {
+    const w = i / 30 * Math.PI * 2 + Math.sin(i * 5.1) * 0.07, r = 160 + (i % 3) * 25, x = Math.sin(w) * r, y = 20 + Math.cos(w) * r;
+    teil(new THREE.SphereGeometry(1, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), huegelM[i % 3], x, y, -1.5, w).scale.set(22 + (i * 11) % 18, 9 + (i * 7) % 10, 18 + (i * 5) % 12);
+  }
+
+  // ---- der Tentakel-Palast (die Villa Edison im Jahr 2226): hinter der Palastmauer rechts ----
+  const PX0 = 6.0, PX1 = 28, PY0 = 13.05, PY1 = 30, HOCH = 13;
+  kiste(PX0, PX1, PY0, PY1, 0, HOCH, wand);
+  for (const h of [0.4, 5.4, 9.2, 12.7]) kiste(PX0 - 0.2, PX1 + 0.2, PY0 - 0.2, PY1 + 0.2, h, h + 0.32, gold);   // goldene Gesimse
+  const fenster = (x, y, h, gier, mat = glasM) => {
+    const g = new THREE.Group(); g.position.copy(bl(x, y, h)); g.rotation.y = gier; welt.add(g);
+    const b = (w, hh, d, m, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), m); o.position.set(px, py, pz); g.add(o); };
+    b(1.5, 2.3, 0.14, gold, 0, 0, 0); b(1.15, 1.9, 0.1, mat, 0, -0.1, 0.05);
+    const bogen = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.12, 16, 1, false, -Math.PI / 2, Math.PI), mat); bogen.rotation.x = Math.PI / 2; bogen.position.set(0, 0.85, 0.06); g.add(bogen);   // Rundbogen
+  };
+  const reihe = (ax, ay, bx, by, nx, ny, hoehen, abst = 3.4) => {
+    const len = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.floor(len / abst)), gier = gierVon(nx, ny);
+    for (const h of hoehen) for (let i = 0; i < n; i++) { const t = (i + 0.5) / n; fenster(ax + (bx - ax) * t + nx * 0.08, ay + (by - ay) * t + ny * 0.08, h, gier, (i + Math.round(h)) % 3 ? glasM : glasT); }
+  };
+  reihe(10, PY0, PX1, PY0, 0, -1, [2.6, 7.3, 11.0]);
+  reihe(PX0, PY0, 9.6, PY0, 0, -1, [7.3, 11.0]);
+  reihe(PX1, PY0, PX1, PY1, 1, 0, [2.6, 7.3, 11.0]);
+  reihe(PX1, PY1, PX0, PY1, 0, 1, [2.6, 7.3, 11.0]);
+  reihe(PX0, PY1, PX0, 15.5, -1, 0, [2.6, 7.3, 11.0]);
+  // Dach: lila Walmdach, darauf eine goldene Zwiebelkuppel mit Tentakel-Spitze
+  const walm = new THREE.ConeGeometry(1, 1, 4, 1); walm.rotateY(Math.PI / 4);
+  teil(walm, lilaD, (PX0 + PX1) / 2, (PY0 + PY1) / 2, HOCH + 3.4).scale.set((PX1 - PX0) * 0.76, 6.8, (PY1 - PY0) * 0.76);
+  const kx = (PX0 + PX1) / 2, ky = (PY0 + PY1) / 2;
+  teil(new THREE.CylinderGeometry(2.4, 2.6, 2.2, 20), gold, kx, ky, HOCH + 6.2);
+  const zwiebel = teil(new THREE.SphereGeometry(2.9, 24, 16), lila, kx, ky, HOCH + 9.0); zwiebel.scale.set(1, 1.15, 1);
+  teil(new THREE.ConeGeometry(1.2, 4.2, 20), lila, kx, ky, HOCH + 13.0);
+  const spitzeT = teil(new THREE.CapsuleGeometry(0.45, 2.6, 6, 14), lila, kx, ky, HOCH + 16.4); spitzeT.rotation.z = 0.25;
+  for (const s of [-1, 1]) teil(new THREE.SphereGeometry(0.2, 10, 8), M(0xffffff), kx - 0.2 + s * 0.22, ky - 0.42, HOCH + 17.0);
+  // Tentakel-Türme an den Ecken: gewundene Säulen mit Saugnapf-Ringen und glühender Spitze
+  const tentTurm = (x, y, h, farbe) => {
+    const m = M(farbe);
+    for (let i = 0; i < 6; i++) {
+      const r0 = 1.9 - i * 0.26, r1 = 1.9 - (i + 1) * 0.26, z0 = i * h / 6;
+      const seg = teil(new THREE.CylinderGeometry(r1, r0, h / 6 + 0.05, 16), m, x + Math.sin(i * 0.9) * 0.35, y, z0 + h / 12);
+      seg.rotation.z = Math.sin(i * 0.9) * 0.08;
+      teil(new THREE.TorusGeometry(r1 + 0.05, 0.12, 6, 18), gold, x + Math.sin(i * 0.9) * 0.35, y, z0 + h / 6).rotation.x = Math.PI / 2;
+    }
+    teil(new THREE.SphereGeometry(0.5, 14, 10), glasM, x + Math.sin(5.4) * 0.35, y, h + 0.4);
+  };
+  tentTurm(PX0 + 0.3, PY1 - 0.5, 21, 0x7a2ab8); tentTurm(PX1 - 0.3, PY0 + 0.3, 19, 0x9a3ad8); tentTurm(PX1 - 0.3, PY1 - 0.3, 17, 0x6a1aa8);
+  // Banner mit Tentakel-Wappen an der Front
+  for (const x of [12, 17, 22]) {
+    kiste(x - 0.9, x + 0.9, PY0 - 0.12, PY0 - 0.05, 3.6, 8.6, M(0x5a1a8a));
+    teil(new THREE.CapsuleGeometry(0.25, 1.4, 4, 10), gold, x, PY0 - 0.2, 6.3);
+    for (const s of [-1, 1]) teil(new THREE.SphereGeometry(0.08, 8, 6), M(0xffffff), x + s * 0.11, PY0 - 0.46, 7.0);
+  }
+  const fahnen = [];
+  for (const [x, y, h] of [[PX0 + 0.3, PY1 - 0.5, 21.9], [PX1 - 0.3, PY0 + 0.3, 19.9]]) {
+    teil(new THREE.CylinderGeometry(0.06, 0.06, 3.0, 6), metall, x, y, h + 1.5);
+    const f = teil(new THREE.BoxGeometry(1.6, 0.9, 0.05), M(0xc83ad8), x + 0.8, y, h + 2.5); f.userData.beweglich = true; fahnen.push(f);
+  }
+
+  // ---- der Raumhafen (links, wo der Weg zum Landeplatz hinführt) ----
+  const RX = -58, RY = 34;
+  const pad = (x, y, r) => {
+    teil(new THREE.CylinderGeometry(r, r + 0.4, 0.6, 32), M(0x3a3a50), x, y, 0.3);
+    teil(new THREE.TorusGeometry(r - 0.6, 0.12, 6, 40), glasT, x, y, 0.65).rotation.x = Math.PI / 2;
+    teil(new THREE.TorusGeometry(r * 0.45, 0.1, 6, 32), glasM, x, y, 0.65).rotation.x = Math.PI / 2;
+  };
+  pad(RX, RY, 9); pad(RX + 24, RY + 8, 7); pad(RX - 6, RY + 26, 8);
+  // Kontrollturm mit Kanzel und Blinklichtern
+  teil(new THREE.CylinderGeometry(1.4, 2.2, 22, 16), metall, RX + 14, RY - 8, 11);
+  teil(new THREE.CylinderGeometry(4.2, 2.6, 2.6, 24), dunkel, RX + 14, RY - 8, 23.3);
+  teil(new THREE.CylinderGeometry(4.25, 4.25, 1.2, 24, 1, true), glasT, RX + 14, RY - 8, 23.6);
+  teil(new THREE.ConeGeometry(2.0, 3.0, 16), metall, RX + 14, RY - 8, 26.1);
+  const blink = [];
+  for (const [x, y, h] of [[RX + 14, RY - 8, 27.8], [RX + 26, RY + 22, 9.5], [RX - 18, RY + 12, 11]]) {
+    const b = teil(new THREE.SphereGeometry(0.4, 10, 8), leuchtMat(0xff3a3a), x, y, h); b.userData.beweglich = true; blink.push(b);
+  }
+  // Hangar-Kuppeln
+  for (const [x, y, r] of [[RX + 26, RY + 22, 7], [RX - 18, RY + 12, 8], [RX + 6, RY + 40, 6]]) {
+    teil(new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), M(0xd8dce8), x, y, 0);
+    kiste(x - r * 0.4, x + r * 0.4, y - r - 0.1, y - r + 0.5, 0, r * 0.55, dunkel);
+  }
+  // das grüne Lieferraumschiff auf Pad 1 (vgl. Landeplatz) und eine Rakete auf Pad 3
+  const schiff = new THREE.Group(); schiff.position.copy(bl(RX, RY, 3.2)); schiff.rotation.y = 0.5; schiff.userData.beweglich = true; welt.add(schiff);
+  const rumpf = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 14), M(0x3ab86a)); rumpf.scale.set(7, 2.4, 3.2); schiff.add(rumpf);
+  const kanzel = new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 10), glasT); kanzel.position.set(4.4, 1.3, 0); schiff.add(kanzel);
+  for (const s of [-1, 1]) { const fl = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.3, 2.6), M(0x2a8a50)); fl.position.set(-2.4, -0.4, s * 3.6); fl.rotation.y = s * 0.3; schiff.add(fl); }
+  for (const s of [-1, 1]) { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.2, 1.4, 14), glasM); d.rotation.z = Math.PI / 2; d.position.set(-7.2, -0.3, s * 1.2); schiff.add(d); }
+  for (const [x, z] of [[3, 1.8], [3, -1.8], [-3, 1.8], [-3, -1.8]]) { const bein = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 2.6, 8), metall); bein.position.set(x, -2.2, z); schiff.add(bein); }
+  mergeUnder(schiff);
+  const rakete = new THREE.Group(); rakete.position.copy(bl(RX - 6, RY + 26, 0.6)); welt.add(rakete);
+  const rk = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 14, 20), M(0xf2ece0)); rk.position.y = 7.6; rakete.add(rk);
+  const rs = new THREE.Mesh(new THREE.ConeGeometry(1.6, 4.6, 20), M(0xd8302a)); rs.position.y = 16.9; rakete.add(rs);
+  for (let i = 0; i < 4; i++) { const fl = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 2.6), M(0xd8302a)); const w = i * Math.PI / 2; fl.position.set(Math.cos(w) * 2.2, 2.4, Math.sin(w) * 2.2); fl.rotation.y = -w; rakete.add(fl); }
+  for (let i = 0; i < 3; i++) { const bu = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.12, 14), glasT); bu.rotation.x = Math.PI / 2; bu.position.set(0, 9 + i * 2.2, 1.66); rakete.add(bu); }
+  // Weg zum Raumhafen: leuchtende Spur
+  for (let i = 0; i < 18; i++) teil(new THREE.BoxGeometry(1.4, 0.06, 0.4), glasT, -6 - i * 2.8, 10 + i * 1.3, 0.04, -0.43);
+  // hinter der Kamera und ringsum: Zukunftsbäume (Lollipop mit Leuchtkugeln) und Schwebelaternen
+  const krone = [M(0xff6ad8), M(0x6ad8ff), M(0xb86aff)];
+  for (const [x, y, s] of [[-14, -10, 1.2], [10, -14, 1.3], [-26, 2, 1.1], [24, -4, 1.2], [-6, -24, 1.4], [18, 40, 1.3], [-24, 30, 1.2], [36, 20, 1.4], [-40, -8, 1.3]]) {
+    teil(new THREE.CylinderGeometry(0.15 * s, 0.25 * s, 4 * s, 8), metall, x, y, 2 * s);
+    teil(new THREE.SphereGeometry(1.6 * s, 16, 12), krone[Math.abs(Math.round(x + y)) % 3], x, y, 4.6 * s);
+    teil(new THREE.TorusGeometry(1.9 * s, 0.08, 6, 24), gold, x, y, 4.6 * s).rotation.x = Math.PI / 2 - 0.3;
+  }
+  // Verkehr am Himmel: Untertassen und Schwebeautos ziehen ihre Bahnen
+  const verkehr = [];
+  for (let i = 0; i < 7; i++) {
+    const g = new THREE.Group(); g.userData.beweglich = true;
+    if (i % 2) {   // Untertasse
+      const d = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), metall); d.scale.set(2.2, 0.45, 2.2); g.add(d);
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8), glasT); k.position.y = 0.45; g.add(k);
+    } else {   // Schwebeauto mit Heckflossen
+      const b = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.7, 1.4), M([0xff4a8a, 0x4ad8ff, 0xffd23a][i % 3])); g.add(b);
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), glasT); k.position.set(0.3, 0.45, 0); k.scale.set(1.4, 0.8, 1); g.add(k);
+      const f = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 0.6, 10), glasM); f.rotation.z = Math.PI / 2; f.position.x = -1.6; g.add(f);
+    }
+    welt.add(g); verkehr.push({ g, r: 40 + i * 14, h: 14 + (i % 4) * 5, w0: i * 0.9, sp: (i % 2 ? 0.05 : -0.07) * (1 + i * 0.1), cx: -10 + (i % 3) * 15, cy: 40 + (i % 2) * 20 });
+  }
+
+  mergeUnder(welt, c => !!c.userData.beweglich || !!(c.parent && c.parent.userData.beweglich));
+  scene.add(welt);
+  // die gemalte Sternenhimmel-Kulisse des Bühnenbilds: nur in der Bühnenansicht, beim Drehen wäre sie eine flache Tafel
+  const kulisse = []; scene.traverse(o => { if (o.isMesh && !Array.isArray(o.material) && /Himmel/.test(o.material.name || '')) kulisse.push(o); });
+  return {
+    tick(s) {
+      const frei = freiAktiv(); for (const k of kulisse) k.visible = !frei;
+      for (const f of fahnen) f.rotation.y = Math.sin(s * 2.6 + f.position.x) * 0.35;
+      blink.forEach((b, i) => { b.visible = Math.floor(s * 1.6 + i * 0.5) % 2 === 0; });
+      schiff.position.y = 3.2 + Math.sin(s * 0.8) * 0.12;
+      for (const v of verkehr) {
+        const w = v.w0 + s * v.sp;
+        v.g.position.copy(bl(v.cx + Math.cos(w) * v.r, v.cy + Math.sin(w) * v.r, v.h + Math.sin(s * 0.7 + v.w0) * 0.8));
+        v.g.rotation.y = -w + (v.sp > 0 ? -Math.PI / 2 : Math.PI / 2);
+      }
+    },
+  };
+}
+
 // ---------- Garten 1776: Welt rundherum für die freie Kamera ----------
 // Das Bühnenbild zeigt nur die Gartenecke. Dreht man die Kamera, soll die ganze Villa dastehen, Wiese und Hügel bis zum
 // Horizont reichen und rechts die Bucht mit dem Hafen von 1776 liegen (Stege, Segelschiffe, Leuchtturm, Möwen).
@@ -1301,7 +1465,8 @@ const RAUM_EXTRAS = {
       }
     });
     scene.add(weg);
-    return { tick() { weg.visible = typeof flagOn === 'function' && flagOn('tree'); } };
+    const welt = zukunftWelt(scene);   // Tentakel-Palast und Raumhafen ringsum
+    return { tick(s, ctx) { weg.visible = typeof flagOn === 'function' && flagOn('tree'); welt.tick(s, ctx); } };
   },
   // Uhrwerk: Zahnräder drehen sich, die Zeiger laufen rückwärts, der Kolben pumpt, das Riesenpendel schwingt,
   // die Kerzen flackern; der Notsteg (nur fürs vorgerenderte Bild) verschwindet, ein echter Kristall schwebt
