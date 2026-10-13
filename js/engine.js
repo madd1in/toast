@@ -1092,6 +1092,13 @@ function sentence() {
   }
   return G.hover ? `${v} ${nameOf(G.hover)}` : v;
 }
+// Rest der Satzzeile in einer anderen Sprache: Namen einzeln übersetzt, „mit“/„an“ aus dem Glossar – sonst übersetzt die
+// Maschine Bruchstücke wie „Toast an“ als „toast on“ (das Null-Breiten-Leerzeichen verhindert eine zweite Übersetzung)
+function satzRest() {
+  const n = k => T(nameOf(k)), w = Lang.wort(G.verb === 'give' ? 'an' : 'mit');
+  if (G.first) return '​ ' + n(G.first) + ' ' + w + (G.hover && G.hover !== G.first ? ' ' + n(G.hover) : '');
+  return G.hover ? '​ ' + n(G.hover) : '';
+}
 async function runSentence(v, a, b) {
   if (G.busy || G.screen !== 'game') return;
   const tok = ++actToken;
@@ -2114,7 +2121,7 @@ function drawUI() {
   drawUIBack();
   const mx = G.mouse.x, my = G.mouse.y;
   if (!G.busy && !G.dialog) {
-    const full = sentence(), verb = VERB_LABEL[G.verb || 'walk'], rest = full.slice(verb.length), f = '600 19px "Baloo 2", sans-serif';
+    const full = sentence(), verb = VERB_LABEL[G.verb || 'walk'], rest = Lang.cur === 'de' ? full.slice(verb.length) : satzRest(), f = '600 19px "Baloo 2", sans-serif';
     cx.font = f; const w1 = cx.measureText(T(verb)).width, w2 = cx.measureText(T(rest)).width, x0 = 366 - (w1 + w2) / 2;
     txt(cx, verb, x0, 462, '800 19px "Baloo 2", sans-serif', G.verb ? '#ffe066' : '#b8a4e8', 'left');
     txt(cx, rest, x0 + w1, 462, f, G.hover || G.first ? '#ffffff' : '#d7c6ff', 'left');

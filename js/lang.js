@@ -13,6 +13,22 @@ const LANGS = [
   { id: 'de', label: 'Deutsch' }, { id: 'en', label: 'English' }, { id: 'fr', label: 'Français' }, { id: 'es', label: 'Español' },
   { id: 'ja', label: '日本語' }, { id: 'zh', label: '中文' }, { id: 'ko', label: '한국어' },
 ];
+// Kurze Bedienwörter ohne Zusammenhang übersetzt die Maschine oft falsch („Weiter“ → „Further“, „Rede mit“ → „Talk to me“) –
+// die Verben und Menüwörter stehen deshalb fest drin, wie in den alten SCUMM-Übersetzungen
+const GLOSSAR = (() => {
+  const de = ['Gib', 'Nimm', 'Benutze', 'Öffne', 'Schau an', 'Drücke', 'Schließe', 'Rede mit', 'Ziehe', 'Gehe zu', 'Streicheln', 'Weiter', 'Weiterspielen', 'Zurück', 'Nochmal', 'Gegenwart', 'Zukunft', 'Jahr 1776', 'Extras', 'Notizbuch'];
+  const zu = {
+    en: ['Give', 'Pick up', 'Use', 'Open', 'Look at', 'Push', 'Close', 'Talk to', 'Pull', 'Walk to', 'Pet', 'Continue', 'Continue', 'Back', 'Again', 'Present', 'Future', 'Year 1776', 'Extras', 'Notebook'],
+    fr: ['Donner', 'Prendre', 'Utiliser', 'Ouvrir', 'Regarder', 'Pousser', 'Fermer', 'Parler à', 'Tirer', 'Aller vers', 'Caresser', 'Continuer', 'Continuer', 'Retour', 'Encore', 'Présent', 'Futur', 'An 1776', 'Bonus', 'Carnet'],
+    es: ['Dar', 'Coger', 'Usar', 'Abrir', 'Mirar', 'Empujar', 'Cerrar', 'Hablar con', 'Tirar de', 'Ir a', 'Acariciar', 'Continuar', 'Continuar', 'Atrás', 'Otra vez', 'Presente', 'Futuro', 'Año 1776', 'Extras', 'Cuaderno'],
+    ja: ['渡す', '取る', '使う', '開ける', '見る', '押す', '閉める', '話す', '引く', '歩く', 'なでる', '続ける', '続きから', '戻る', 'もう一度', '現在', '未来', '1776年', 'おまけ', 'ノート'],
+    zh: ['给', '拿', '使用', '打开', '查看', '推', '关闭', '交谈', '拉', '走到', '抚摸', '继续', '继续游戏', '返回', '再来一次', '现在', '未来', '1776年', '额外内容', '笔记本'],
+    ko: ['주기', '줍기', '사용', '열기', '보기', '밀기', '닫기', '말하기', '당기기', '걷기', '쓰다듬기', '계속', '이어하기', '뒤로', '다시', '현재', '미래', '1776년', '부가 기능', '노트'],
+  };
+  const o = {}; for (const id in zu) o[id] = new Map(de.map((w, i) => [w, zu[id][i]]));
+  return o;
+})();
+const VERBINDER = { en: { mit: 'with', an: 'to' }, fr: { mit: 'avec', an: 'à' }, es: { mit: 'con', an: 'a' }, ja: { mit: '＋', an: '→' }, zh: { mit: '＋', an: '→' }, ko: { mit: '＋', an: '→' } };
 const Lang = (() => {
   let cur = 'de', tr = null, state = 'off', progress = 0, busy = 0, saveT = 0, tagBg = false, bgCb = null;
   const bgWait = new Set();   // Schilder in Raum-Hintergründen: nach ihrer Übersetzung den Hintergrund neu malen
@@ -23,7 +39,8 @@ const Lang = (() => {
   const wanted = s => typeof s === 'string' && s.length > 1 && s.charCodeAt(0) !== 0x200b && /[a-zäöüß]/.test(s) && /[A-Za-zÄÖÜäöüß]{3}/.test(s);
   function load(id) {
     cache.clear(); outs.clear();
-    try { const o = JSON.parse(localStorage.getItem(KEY + id) || '{}'); for (const k in o) { cache.set(k, o[k]); outs.add(o[k]); } } catch (e) { /* leer */ }
+    for (const [k, v] of GLOSSAR[id] || []) { cache.set(k, v); outs.add(v); }
+    try { const o = JSON.parse(localStorage.getItem(KEY + id) || '{}'); for (const k in o) if (!cache.has(k)) { cache.set(k, o[k]); outs.add(o[k]); } } catch (e) { /* leer */ }
   }
   function persist() {
     clearTimeout(saveT);
@@ -108,6 +125,7 @@ const Lang = (() => {
     set, t, tAsync, prewarm, supported, bgTag(on) { tagBg = !!on; }, onBg(fn) { bgCb = fn; },
     has: s => cur === 'de' || cache.has(s) || outs.has(s),
     get cur() { return cur; }, get active() { return cur !== 'de' && !!tr; }, get state() { return state; }, get progress() { return progress; },
+    wort: w => (VERBINDER[cur] || {})[w] || w,
     get charWrap() { return cur === 'ja' || cur === 'zh'; },
   };
 })();
