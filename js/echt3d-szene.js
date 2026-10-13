@@ -608,6 +608,15 @@ const POSES = {   // Blender-Werte aus figur_frames.py
   schwindel0: { xR: -0.5, aR: 0.35, eR: 0.2, xL: 0.5, aL: -0.35, eL: 0.2, kR: 0.3, kL: 0.1, lean: 0.14, roll: 0.16 },
   schwindel1: { xR: -0.3, aR: 0.2, eR: 0.3, xL: 0.3, aL: -0.2, eL: 0.3, kR: 0.1, kL: 0.3, lean: -0.06, roll: -0.16 },
 };
+// Langeweile im Stand (nach 8 s ohne Eingabe, dann alle 14 s): Hoagie spielt Luftgitarre, Bernard schaut auf die Uhr
+// und schiebt die Brille hoch, Laverne streckt sich gähnend
+const IDLE_AB = 8000, IDLE_TAKT = 14000;
+const IDLE = {
+  hoagie: { dauer: 3400, laut: 'airguitar', pose: (rig, t) => pose(rig, { aL: 1.15, eL: 0.35, xL: 0.55, aR: -0.35, eR: 1.35 + 0.4 * Math.sin(t * 0.045), xR: -0.35, lean: -0.14, roll: 0.07 * Math.sin(t * 0.012),
+    tR: -0.15, tL: -0.15, kR: 0.3 + 0.2 * Math.sin(t * 0.024), kL: 0.3 + 0.2 * Math.sin(t * 0.024) }) },
+  bernard: { dauer: 2800, laut: 'tick', pose: (rig, t, k) => mix(pose(rig, { aL: 1.55, eL: 1.95, xL: 0.25, lean: 0.07 }), pose(rig, POSES.glasses), Math.max(0, Math.min(1, (k - 0.5) * 6))) },
+  laverne: { dauer: 3000, laut: 'yawn', pose: (rig, t) => pose(rig, Object.assign({}, POSES.yawn, { lean: -0.16, roll: 0.05 * Math.sin(t * 0.004) })) },
+};
 function mix(a, b, k) { const o = {}; for (const key in a) o[key] = typeof a[key] === 'number' ? a[key] + (b[key] - a[key]) * k : a[key]; return o; }
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
 function setRot(fig, name, x, y, z) {   // Blender-Euler XYZ im Blender-Raum -> Knoten im glTF-Raum
@@ -3061,6 +3070,7 @@ export function frame(t, actors, pxW, ctx) {
     }
     // steht man auf einer Stufe, Kiste oder Treppe im verbogenen Raum, verbiegt man sich mit – genau wie der Boden darunter
     if (R.krumm && f.holder.position.y > 0.001) f.holder.position.add(krummVersatz(R.krumm, f.holder.position.x, f.holder.position.y, f.holder.position.z, _kv));
+    if (ich && (a.walking || (a._vz3d || 0) !== 0 || a.talking || a.target || !a._ruheT3d || G.busy || G.dialog || G.speech || G.menu)) a._ruheT3d = now;   // seit wann steht man herum?
     if (ich) { staubPruefen(R, a, f, now); sprungSchatten(R, a, ctx.id); kruemelSammeln(R, a, ctx.id); R.ichPos = (R.ichPos || new THREE.Vector3()).copy(p); }
     if (ich) {
       if (R.innen && autoKamera) {   // Auto-Kamera hinter der Figur (Blickrichtung f.yaw: +x vorn, Kamera auf der Gegenseite)
@@ -3154,8 +3164,18 @@ export function frame(t, actors, pxW, ctx) {
       } else if (a.talking) p0 = mix(pose(f.rig, POSES.talk0), pose(f.rig, POSES.talk1), 0.5 + 0.5 * Math.sin(t * 0.007));
       else {
         p0.lean += 0.012 * Math.sin(t * 0.0021);   // Atmen
-        const z = (t + f.id.length * 997) % 7500;   // Ticks im Stand (Bernard: Brille hochschieben)
-        if (f.rig.zappel && z < 1100 && POSES[f.rig.zappel]) p0 = mix(p0, pose(f.rig, POSES[f.rig.zappel]), Math.sin(z / 1100 * Math.PI));
+        const ruhe = ich && !G.busy && !G.dialog ? now - (a._ruheT3d || now) : 0, idl = IDLE[f.id];
+        if (idl && ruhe > IDLE_AB) {   // lange nichts los: die Figur vertreibt sich die Zeit (Psychonauts-Langeweile)
+          const zyk = Math.floor((ruhe - IDLE_AB) / IDLE_TAKT), z = (ruhe - IDLE_AB) % IDLE_TAKT;
+          if (z < idl.dauer) {
+            const k = z / idl.dauer, env = Math.min(1, Math.sin(k * Math.PI) * 2.4);
+            p0 = mix(p0, idl.pose(f.rig, t, k), env);
+            if (a._idleZyk3d !== zyk) { a._idleZyk3d = zyk; if (typeof Sound !== 'undefined') Sound.sfx(idl.laut); }
+          }
+        } else {
+          const z = (t + f.id.length * 997) % 7500;   // Ticks im Stand (Bernard: Brille hochschieben)
+          if (f.rig.zappel && z < 1100 && POSES[f.rig.zappel]) p0 = mix(p0, pose(f.rig, POSES[f.rig.zappel]), Math.sin(z / 1100 * Math.PI));
+        }
       }
       if (mf && mf.m && !a.walking) {   // Geste zur Mimik, mit Aus- und Einschwingen (Einzelposen und pendelnde Paare wie ekel0/ekel1)
         const ein = POSES[mf.m.kind], p0p = POSES[mf.m.kind + '0'], p1p = POSES[mf.m.kind + '1'];
