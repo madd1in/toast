@@ -72,6 +72,7 @@ ROOM_FX.konferenz = { verb: [0.9, 0.14], light: [1, '#fff0d0', '#2a1a3a'], bloom
     };
     const [lx, ly] = D.points.linse, [scx, scy] = D.points.leinwand, [l0, t0, lw, lh] = A.Leinwand;
     ROOMS.konferenz.dyn = (c, t) => {
+      if (typeof drawSpielautomat === 'function') drawSpielautomat(c, t);   // Tentakelvania-Automat hinter dem Tisch (js/vania.js)
       if (c.isPix) return;
       // Lichtkegel des Diaprojektors auf der Leinwand, mit tanzendem Staub
       c.save(); c.globalAlpha = 0.09 + Math.sin(t * 0.003) * 0.015;

@@ -180,6 +180,11 @@ drawCritter = (c, room) => { if (!echt3dFrei()) drawCritterOhneKarte(c, room); }
     return clampOhne3D(poly ? { walk: poly } : room, x, y);
   };
 }
+// Nässe für die Pfützen: steigt beim Regen an, trocknet danach in etwa einer Dreiviertelminute ab
+function echt3dNass(room) {
+  if (typeof rainFx === 'undefined' || !(ROOM_FX[room.id] || {}).rain || !rainFx.t0 || rainFx.era !== room.era) return 0;
+  return rainFx.on ? Math.min(1, (G.t - rainFx.t0) / 9000) : Math.max(0, 1 - (G.t - rainFx.t0) / 45000);
+}
 // Raumbild: im 3D-Raum das Echtzeit-Bild, sonst wie bisher
 const drawBgOhne3D = drawBg;
 drawBg = function (room) {
@@ -187,7 +192,7 @@ drawBg = function (room) {
     echt3dLoad();
     if (echt3dOn(room)) {
       const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible && !echt3dBild(a));
-      const bild = ECHT3D.mod.frame(G.t, acts, echt3dBreite(Math.min(ECHT3D_XBOX ? 1280 : 1920, W * VS * DPR * SSK)), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room), regen: typeof rainActive === 'function' && rainActive() });
+      const bild = ECHT3D.mod.frame(G.t, acts, echt3dBreite(Math.min(ECHT3D_XBOX ? 1280 : 1920, W * VS * DPR * SSK)), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room), regen: typeof rainActive === 'function' && rainActive(), nass: echt3dNass(room) });
       if (bild) {
         // Die Dialog-Kamera zoomt die Szene jetzt echt in 3D (Dolly mit Parallax) – deshalb hier die flache
         // 2D-Skalierung des Bildes zurücknehmen; Figuren-Bilder und Effekte oben drüber zoomen weiter wie gehabt

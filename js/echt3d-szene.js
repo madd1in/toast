@@ -432,7 +432,7 @@ async function ladeRaum(id) {
     const achse = new THREE.Vector3(0, 0, -1).applyQuaternion(pq.invert()).normalize();
     sprites[k] = { o, q0: o.quaternion.clone(), s0: o.scale.clone(), achse };
   }
-  const extra = RAUM_EXTRAS[id] ? RAUM_EXTRAS[id](scene, H) : null;
+  const extra = RAUM_EXTRAS[id] ? RAUM_EXTRAS[id](scene, H, camera) : null;
   H.updateMatrixWorld(true);
   const req = reqGltf ? requisitenAufstellen(scene, camera, reqDef, reqGltf) : null;
   if (req) for (const r of Object.values(req)) kollisionsKisten({ children: [r.o], updateMatrixWorld() {} }, kisten);
@@ -442,7 +442,7 @@ async function ladeRaum(id) {
   if (DRAUSSEN.has(id)) baeumeVerbiegen(scene);
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
   const leben = draussenLeben(scene, id, camera) || (innen && POST.an ? schwebeStaub(scene, innen) : null);   // draußen Wolken und Vögel, drinnen Staub im Licht
-  return { scene, camera, data, leben, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
+  return { scene, camera, data, leben, himmel: [new THREE.Color(hor), new THREE.Color(top)], nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
 }
 
 async function ladeHafen() {
@@ -887,7 +887,10 @@ function kameraFahren(R, t, actors) {
         }
       }
       if (R.yawZiel != null && !gp && !kino && autoKamera) { o.yaw += (R.yawZiel - o.yaw) * Math.min(1, dtk / 700); if (Math.abs(R.yawZiel - o.yaw) < 0.02) R.yawZiel = null; }
-      if (R.armFrei && posD.distanceTo(zielD) > R.armFrei) posD.sub(zielD).setLength(R.armFrei).add(zielD);
+      const wunsch = posD.distanceTo(zielD);
+      if (R.armFrei && wunsch > R.armFrei) posD.sub(zielD).setLength(R.armFrei).add(zielD);
+      const eng = wunsch > 0.5 ? Math.max(0, 1 - posD.distanceTo(zielD) / wunsch) : 0;   // wie sehr die Wand die Kamera heranschiebt
+      R.engS = (R.engS || 0) + (eng - (R.engS || 0)) * Math.min(1, dtk / 400);
       if (!R.glatt) R.glatt = { p: posD.clone(), z: zielD.clone() };
       const k = Math.min(1, dtk / (kino ? 950 : gp ? 420 : 260));   // Vorspann: langsame, weiche Kinofahrten
       R.glatt.p.lerp(posD, k); R.glatt.z.lerp(zielD, k);
@@ -895,7 +898,7 @@ function kameraFahren(R, t, actors) {
       R.ziel.copy(R.zielHome).lerp(R.glatt.z, w);
     }
     cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, R.ziel, _yA));
-    const fovZiel = home.fov + ((kinoAktiv(R) ? 40 : WEITWINKEL) + fischPlus() - home.fov) * Math.min(1, o.w || 0);
+    const fovZiel = home.fov + ((kinoAktiv(R) ? 40 : WEITWINKEL) + fischPlus() + (R.engS || 0) * 18 - home.fov) * Math.min(1, o.w || 0);   // enge Ecke: weiter herauszoomen
     if (Math.abs(cam.fov - fovZiel) > 0.05) { cam.fov = fovZiel; cam.updateProjectionMatrix(); }
   } else if (cam.fov !== home.fov) { cam.fov = home.fov; cam.updateProjectionMatrix(); }
   R.kT = t;
@@ -2304,6 +2307,50 @@ function kruemelSammeln(R, a, id) {
     }
   });
 }
+// ---------- Pfützen nach dem Regen: spiegeln den Himmel (Fresnel), beim Regen tanzen Ringe darin; trocknen langsam ab ----------
+const PFUETZE_VS = 'varying vec3 vW; varying vec2 vUv; void main() { vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
+const PFUETZE_FS = `uniform vec3 hor; uniform vec3 oben; uniform vec3 kam; uniform float nass; uniform float zeit; uniform float regen; uniform float form;
+  varying vec3 vW; varying vec2 vUv;
+  void main() {
+    vec2 p = vUv * 2.0 - 1.0; float w = atan(p.y, p.x), r = length(p);
+    float rand = smoothstep(1.0, 0.82, r / (0.86 + 0.1 * sin(w * 3.0 + form) + 0.06 * sin(w * 7.0 + form * 2.0)));
+    float sichtbar = rand * clamp(nass * 1.6 - r * 0.6, 0.0, 1.0);   // trocknet vom Rand her ab
+    if (sichtbar <= 0.01) discard;
+    vec3 v = normalize(vW - kam), rf = reflect(v, vec3(0.0, 1.0, 0.0));
+    vec3 himmel = mix(hor, oben, pow(clamp(rf.y, 0.0, 1.0), 0.55));
+    float fres = 0.35 + 0.65 * pow(1.0 - clamp(-v.y, 0.0, 1.0), 2.5);
+    float ring = 0.0;
+    if (regen > 0.0) for (int i = 0; i < 4; i++) {
+      float fi = float(i), ph = fract(zeit * 1.1 + fi * 0.27), n = floor(zeit * 1.1 + fi * 0.27);
+      vec2 c = vec2(sin(fi * 12.9 + n * 7.1), cos(fi * 7.3 + n * 3.7)) * 0.55;
+      ring += smoothstep(0.035, 0.0, abs(length(p - c) - ph * 0.5)) * (1.0 - ph);
+    }
+    vec3 c = himmel * fres * 0.9 + vec3(0.06, 0.05, 0.09) * (1.0 - fres) + ring * 0.45 * regen;
+    gl_FragColor = vec4(c, sichtbar * 0.88);
+    #include <colorspace_fragment>
+  }`;
+function pfuetzenTick(R, nass, regen, camera, s) {
+  let P = R.pfuetzen;
+  if (nass <= 0.001) { if (P) P.gruppe.visible = false; return; }
+  if (!P) {
+    const gruppe = new THREE.Group(), liste = [], [hor, oben] = R.himmel || [new THREE.Color(0x8a9ab8), new THREE.Color(0x2a3a6a)];
+    let s0 = 13; for (const ch of R.id) s0 = (s0 * 31 + ch.charCodeAt(0)) % 9973;
+    for (let i = 0; i < 9; i++) {
+      const gx = 120 + ((s0 * (i + 3) * 37) % 720), gy = 368 + ((s0 * (i + 5) * 13) % 58);
+      const q = toWorld(R.home || R.camera, gx, gy, new THREE.Vector3());
+      if (R.kisten && kisteSperrt(R, q.x, -q.z, 0)) continue;
+      const mat = new THREE.ShaderMaterial({ uniforms: { hor: { value: hor }, oben: { value: oben }, kam: { value: new THREE.Vector3() }, nass: { value: 0 }, zeit: { value: 0 }, regen: { value: 0 }, form: { value: i * 1.7 } },
+        vertexShader: PFUETZE_VS, fragmentShader: PFUETZE_FS, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+      mat.userData.outlineParameters = { visible: false };
+      const g = 0.7 + ((s0 * (i + 1)) % 10) / 9;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2 * g, 1.5 * g), mat); m.rotation.x = -Math.PI / 2; m.rotation.z = i * 0.7; m.position.set(q.x, 0.012, q.z); m.renderOrder = 1;
+      gruppe.add(m); liste.push(mat);
+    }
+    R.scene.add(gruppe); P = R.pfuetzen = { gruppe, liste };
+  }
+  P.gruppe.visible = true;
+  for (const m of P.liste) { m.uniforms.nass.value = nass; m.uniforms.regen.value = regen ? 1 : 0; m.uniforms.zeit.value = s; m.uniforms.kam.value.copy(camera.position); }
+}
 // ---------- Goldene Toasts: einer pro Raum zum Einsammeln (wie die Sterne in Super Mario 64) ----------
 // js/echt3d.js sucht den Platz aus (begehbar, Möbel zum Hinaufspringen) und merkt sich, was schon gefunden ist
 export function goldtoastKandidaten(id) {   // Oberseiten von Möbeln, auf die man mit einem Sprung kommt (Blender-Meter)
@@ -2364,7 +2411,32 @@ export function spielVonWelt(id, p) {
   const v = bl(p[0], p[1], p[2] || 0).project(R.home);
   return [(v.x + 1) / 2 * GW, (1 - v.y) / 2 * GH];
 }
+// Konferenzsaal: der Tentakelvania-Spielautomat (js/vania.js) an der Rückwand hinter dem Tisch – Bildschirm zeigt die
+// Werbeschleife des Spiels, Marquee und Knöpfe leuchten
+function konferenzTeile(scene, H, cam) {
+  const ray = new THREE.Raycaster(), n = new THREE.Vector2(254 / GW * 2 - 1, 1 - 205 / GH * 2);
+  ray.setFromCamera(n, cam);
+  let wand = null; for (const h of ray.intersectObjects(scene.children, true)) { if (h.distance > 1) { wand = h.point; break; } }
+  if (!wand) return null;
+  const g = new THREE.Group(), lila = toonMat(0x3a1a5a), dunkel = toonMat(0x1a0a2a), rosa = leuchtMat(0xe88aea);
+  const teil = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  teil(new THREE.BoxGeometry(0.8, 1.75, 0.7), lila, 0, 0.875, 0);
+  teil(new THREE.BoxGeometry(0.84, 0.26, 0.36), rosa, 0, 1.88, 0.2);   // Marquee
+  teil(new THREE.BoxGeometry(0.86, 0.12, 0.42), lila, 0, 2.05, 0.12);
+  const panel = teil(new THREE.BoxGeometry(0.82, 0.12, 0.34), dunkel, 0, 1.02, 0.42); panel.rotation.x = 0.35;
+  for (const [x, c] of [[-0.2, 0xff5a7a], [0.12, 0xffd34a], [0.24, 0x7ad8ff]]) teil(new THREE.SphereGeometry(0.035, 10, 8), leuchtMat(c), x, 1.1, 0.45);
+  teil(new THREE.CylinderGeometry(0.012, 0.012, 0.12, 6), dunkel, -0.2, 1.14, 0.42);
+  const bildTex = new THREE.CanvasTexture(typeof vaVorschau === 'function' ? vaVorschau() : document.createElement('canvas'));
+  bildTex.magFilter = THREE.NearestFilter; bildTex.colorSpace = THREE.SRGBColorSpace;
+  const schirm = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.52), new THREE.MeshBasicMaterial({ map: bildTex }));
+  schirm.material.userData.outlineParameters = { visible: false };
+  schirm.position.set(0, 1.42, 0.36); schirm.rotation.x = -0.12; g.add(schirm);
+  g.position.set(wand.x, 0, wand.z + 0.45); g.rotation.z = 0.03; scene.add(g);
+  let letzt = 0;
+  return { tick(s) { if (s - letzt > 0.08 && typeof vaVorschau === 'function') { letzt = s; vaVorschau(); bildTex.needsUpdate = true; } } };
+}
 const RAUM_EXTRAS = {
+  konferenz: konferenzTeile,
   prolog: prologTeile,
   garten1776: gartenWelt,
   auffahrt: auffahrtTeile,
@@ -2713,7 +2785,7 @@ export function frame(t, actors, pxW, ctx) {
   if (R.goldtoast) goldtoastTick(R, s);
   if (R.kruemel) kruemelStellen(R, s);
   if (R.leben) R.leben.tick(s);
-  staubTick(R); regenTick(R, !!ctx.regen, dt); gewitterTick(R, t);
+  staubTick(R); regenTick(R, !!ctx.regen, dt); gewitterTick(R, t); pfuetzenTick(R, ctx.nass || 0, !!ctx.regen, camera, s);
   schilderTick(R);
   if (R.req) requisitenBewegen(R.req, s, ctx);
   if (R.home) kartenStellen(R, ctx.karten);

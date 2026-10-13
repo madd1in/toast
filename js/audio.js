@@ -164,6 +164,9 @@ const Sound = (() => {
       }
       if (lite && LITE_INST[name]) { LITE_INST[name](f, t, d, bus); continue; }
       switch (name) {
+        case 'chip': osc('square', f, t, Math.min(d * 0.9, 0.6), 0.042, bus, { attack: 0.003, release: 0.03 }); break;   // 8-Bit-Rechteck
+        case 'chip2': osc('square', f, t, Math.min(d * 0.8, 0.4), 0.02, bus, { attack: 0.003, release: 0.02, detune: 6 }); break;
+        case 'nesbass': osc('triangle', f, t, d * 0.9, 0.15, bus, { attack: 0.003, release: 0.02 }); break;   // Dreieck-Bass wie auf der Konsole
         case 'harp': osc('sawtooth', f, t, 0.5, 0.08, bus, { lp: 2800, decay: true, attack: 0.003 }); osc('square', f * 2, t, 0.25, 0.02, bus, { lp: 3500, decay: true, attack: 0.003 }); break;
         case 'bassoon': osc('square', f, t, d * 0.85, 0.06, bus, { lp: 1000, q: 2, attack: 0.02, release: 0.06 }); break;
         case 'pizz': osc('triangle', f, t, 0.3, 0.22, bus, { decay: true, attack: 0.004 }); break;
@@ -213,6 +216,25 @@ const Sound = (() => {
     }).join(' ');
   }
   const THEMES = {
+    // Tentakelvania (Spielautomat, eigene Komposition): treibendes d-Moll wie auf der alten Konsole – Rechteck-Melodie,
+    // Dreieck-Bass im Galopp, Rauschen als Schlagzeug
+    vania: { bpm: 158, tracks: [
+      { inst: 'chip', seq: 'D5:0.5 D5:0.25 D5:0.25 A5:0.5 D5:0.5 G5:0.5 F5:0.5 E5:0.5 D5:0.5 C5:0.5 D5:0.5 E5:0.5 F5:0.5 E5:1 A4:1 ' +
+        'D5:0.5 D5:0.25 D5:0.25 A5:0.5 D5:0.5 Bb5:0.5 A5:0.5 G5:0.5 F5:0.5 G5:0.5 A5:0.5 F5:0.5 D5:0.5 E5:1 C#5:1 ' +
+        'F5:0.5 G5:0.5 A5:1 A5:0.5 Bb5:0.5 A5:0.5 G5:0.5 F5:1 E5:0.5 F5:0.5 G5:1 E5:1 ' +
+        'D5:0.5 F5:0.5 A5:0.5 D6:0.5 C6:0.5 A5:0.5 F5:0.5 G5:0.5 A5:2 -:1 C#5:0.5 E5:0.5' },
+      { inst: 'chip2', lvl: 1, seq: '-:0.5 D5:0.5 D5:0.25 D5:0.25 A5:0.5 D5:0.5 G5:0.5 F5:0.5 E5:0.5 D5:0.5 C5:0.5 D5:0.5 E5:0.5 F5:0.5 E5:1 A4:1 -:23.5' },   // Echo
+      { inst: 'nesbass', seq: ['D', 'D', 'Bb', 'C', 'D', 'D', 'Bb', 'A', 'F', 'F', 'C', 'C', 'D', 'Bb', 'A', 'A'].map(n => { const o = ['Bb', 'A', 'C'].includes(n) ? 1 : 2; return `${n}${o}:0.5 ${n}${o + 1}:0.5 ${n}${o}:0.5 ${n}${o + 1}:0.5`; }).join(' ') },
+      { inst: 'drum', seq: Array(16).fill('K:0.5 H:0.5 S:0.5 H:0.5').join(' ') },
+    ] },
+    // Bosskampf gegen den Lila Tentakel: schneller, chromatisch drängend
+    vaniaBoss: { bpm: 176, tracks: [
+      { inst: 'chip', seq: 'A4:0.5 Bb4:0.5 A4:0.5 G#4:0.5 A4:0.5 D5:0.5 C5:0.5 Bb4:0.5 A4:0.5 Bb4:0.5 A4:0.5 G#4:0.5 A4:1 E5:1 ' +
+        'F5:0.5 E5:0.5 D5:0.5 C#5:0.5 D5:0.5 F5:0.5 A5:0.5 G#5:0.5 A5:2 E5:1 A4:1' },
+      { inst: 'nesbass', seq: Array(8).fill('A1:0.5 A2:0.5').join(' ') + ' ' + Array(4).fill('Bb1:0.5 Bb2:0.5').join(' ') + ' ' + Array(4).fill('A1:0.5 A2:0.5').join(' ') },
+      { inst: 'drum', seq: Array(16).fill('K:0.5 S:0.5').join(' ') },
+    ] },
+
     title: { bpm: 100, tracks: [
       { inst: 'tuba', seq: x2('E2:1 B2:1 E2:1 B2:1 E2:1 B2:1 E2:1 B2:1 C2:1 G2:1 C2:1 G2:1 B1:1 F#2:1 B1:1 F#2:1') },
       { inst: 'clar', seq: 'E4:0.5 F#4:0.5 G4:1 B4:1 -:1 A4:0.5 G4:0.5 F#4:1 E4:1 -:1 C5:1 B4:0.5 A4:0.5 G4:1 E4:1 F#4:1 D#4:1 B3:2 E4:0.5 F#4:0.5 G4:1 B4:1 E5:1 D5:0.5 C5:0.5 B4:1 A4:1 G4:1 C5:1 E5:1 D#5:1 B4:1 E5:2 -:2' },
@@ -649,6 +671,16 @@ const Sound = (() => {
     }])),
     // Sprung (Cartoon-Flöte nach oben) und Landung (weiches Plumps)
     hopp: t => { osc('sine', 330, t, 0.16, 0.05, sfxBus, { f2: 880, attack: 0.01 }); nz(t, 0.06, 0.03, sfxBus, { type: 'highpass', f: 2000 }); },
+    vsprung: t => osc('square', 220, t, 0.14, 0.04, sfxBus, { f2: 660 }),
+    vnudel: t => { nz(t, 0.12, 0.08, sfxBus, { type: 'bandpass', f: 900, f2: 2400, q: 1.5 }); osc('square', 180, t, 0.08, 0.025, sfxBus, { f2: 90 }); },
+    vwurf: t => { for (let i = 0; i < 3; i++) osc('square', 520 + i * 160, t + i * 0.04, 0.04, 0.03, sfxBus); },
+    vkerze: t => { nz(t, 0.1, 0.07, sfxBus, { type: 'highpass', f: 1800 }); osc('square', 1320, t, 0.06, 0.03, sfxBus, { decay: true }); },
+    vtreffer: t => osc('square', 300, t, 0.07, 0.05, sfxBus, { f2: 120 }),
+    vweg: t => { for (let i = 0; i < 4; i++) osc('square', 600 - i * 110, t + i * 0.035, 0.035, 0.035, sfxBus); nz(t, 0.15, 0.05, sfxBus, { type: 'lowpass', f: 1200 }); },
+    vschaden: t => { osc('square', 160, t, 0.18, 0.06, sfxBus, { f2: 70 }); osc('square', 110, t + 0.05, 0.15, 0.04, sfxBus); },
+    vauf: t => { osc('square', 988, t, 0.06, 0.035, sfxBus); osc('square', 1480, t + 0.06, 0.1, 0.035, sfxBus); },
+    vtot: t => { [523, 494, 466, 440, 415, 392, 370, 349].forEach((f, i) => osc('square', f, t + i * 0.11, 0.1, 0.04, sfxBus)); osc('triangle', 110, t + 0.9, 0.8, 0.12, sfxBus, { f2: 55 }); },
+    vsieg: t => { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => osc('square', f, t + i * 0.12, 0.14, 0.04, sfxBus)); osc('triangle', 262, t, 0.9, 0.12, sfxBus); },
     hopp2: t => { osc('sine', 392, t, 0.18, 0.05, sfxBus, { f2: 1175, attack: 0.01 }); nz(t, 0.06, 0.03, sfxBus, { type: 'highpass', f: 2200 }); },
     hopp3: t => { osc('sine', 440, t, 0.3, 0.055, sfxBus, { f2: 1568, attack: 0.01 }); osc('triangle', 1760, t + 0.18, 0.2, 0.025, sfxBus, { f2: 2637, decay: true }); nz(t, 0.25, 0.03, sfxBus, { type: 'bandpass', f: 1800, f2: 4000, q: 2 }); },   // Salto: mit Wusch
     plumps: t => { osc('sine', 150, t, 0.14, 0.09, sfxBus, { f2: 60, decay: true }); nz(t, 0.08, 0.05, sfxBus, { type: 'lowpass', f: 700 }); },
