@@ -2924,6 +2924,9 @@ function kartenStellen(R, liste) {
   for (const [key, k] of karten) if (!seen.has(key) || k.mesh.parent !== R.scene) k.mesh.visible = false;
 }
 
+// Nebenfiguren, die im gemalten Bild auf etwas Erhöhtem stehen oder sitzen (Spielposition = Fußpunkt auf dem Boden):
+// Höhe der Sitzfläche in Metern, sonst steckt die Figur bis zur Brust im Möbel
+const NPC_SITZ = { thron: { purple: 1.28 } };
 // ---------- Bild für einen Spiel-Frame ----------
 let lastT = 0;
 const _vis = new Map();
@@ -2984,6 +2987,7 @@ export function frame(t, actors, pxW, ctx) {
     const mf = typeof mimikForm === 'function' ? mimikForm(a, t) : null;
     f.holder.position.copy(p);
     if (mf && (mf.lift || mf.jx)) { const upm = unitsPerMeter(R.home, p); if (mf.lift) f.holder.position.y += mf.lift / upm; if (mf.jx) f.holder.position.x += mf.jx / upm; }   // Sprung und Zittern in Spiel-Pixeln
+    const sitz = NPC_SITZ[ctx.id] && NPC_SITZ[ctx.id][a.kind]; if (sitz && a.id !== curId()) f.holder.position.y += sitz;   // thront erhöht statt im Thron zu stecken
     const ich = !!f.rig && a.id === curId(), now = performance.now();
     if (ich) {
       sprungAbheben(a, now);
@@ -3201,6 +3205,11 @@ export function szeneKinder(id, i, an, pfad = []) {   // Fehlersuche: Teile der 
     return k + ' ' + (c.name || c.type) + (c.visible ? '' : ' (aus)') + (m ? ' #' + (m.color ? m.color.getHexString() : '?') + (m.side === THREE.DoubleSide ? ' 2s' : m.side === THREE.BackSide ? ' bs' : '') + (m.map ? ' tex' : '') : '') +
       (b ? ' [' + [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z].map(v => v.toFixed(1)).join(' ') + ']' : '');
   });
+}
+export function hoehenProbe(id, bx, by) {   // Fehlersuche: alle Flächen senkrecht unter einem Blender-Punkt (Höhe + Name)
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
+  const rc = new THREE.Raycaster(new THREE.Vector3(bx, 12, -by), new THREE.Vector3(0, -1, 0)); rc.camera = R.camera;   // Sprites brauchen eine Kamera
+  return rc.intersectObjects(R.scene.children, true).filter(h => !/Figur|Points/.test(h.object.name)).slice(0, 6).map(h => h.point.y.toFixed(2) + ' ' + (h.object.name || h.object.parent && h.object.parent.name));
 }
 export function gitterInfo(id) { const R = rooms[id || letzterRaum]; const g = R && R.blickGitter; return g ? { dreiecke: g.tris.length / 9, zellen: g.zellen.size, ms: g.ms } : g; }
 export function raumInfo(id) {   // Fehlersuche: Innenmaße und Kameralage
