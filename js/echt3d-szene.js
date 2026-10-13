@@ -415,6 +415,7 @@ async function ladeRaum(id) {
   if (RAUM_VORBAU[id]) RAUM_VORBAU[id](H);
   H.traverse(o => { if (o.isMesh && beweglich.has(nm(o))) o.castShadow = true; });
   const extraRe = EXTRA_BEWEGLICH[id];
+  windVorbereiten(H);
   const kisten = kollisionsKisten(H, [], extraRe);
   const schildListe = (await schilderP)[id] || null;   // Schrift-Meshes bleiben einzeln (für die Übersetzung)
   const stat = mergeStatic(H, n => beweglich.has(n) || !!(extraRe && extraRe.test(n)) || !!(schildListe && schildListe[n]));
@@ -439,7 +440,7 @@ async function ladeRaum(id) {
   for (const k of KISTEN_EXTRA[id] || []) kisten.push({ k, o: null });
   const innen = INNENRAUM.has(id) ? raumSchliessen(scene, camera, id) : null;
   if (innen) kisten.push(...innen.dekoKisten);   // Möbel an der Vorderwand (nur bei gedrehter Kamera da)
-  if (DRAUSSEN.has(id)) baeumeVerbiegen(scene);
+  if (DRAUSSEN.has(id)) { baeumeVerbiegen(scene); windAn(scene); }
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
   const leben = draussenLeben(scene, id, camera) || (innen && POST.an ? schwebeStaub(scene, innen) : null);   // draußen Wolken und Vögel, drinnen Staub im Licht
   return { scene, camera, data, leben, himmel: [new THREE.Color(hor), new THREE.Color(top)], nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
@@ -466,9 +467,11 @@ async function ladeHafen() {
   H.traverse(o => { if (o.isMesh) { const n = nm(o) || nm(o.parent); o.castShadow = /^(Fass|Kiste|Poller|Laterne|Lager|Dach|Kante|Seilrolle|Banane|Ananas|Mango|Wimpel)/.test(n); } });
   if (anim.ship) mergeUnder(anim.ship, c => /^S_Crew\d$|^S_Ausguck$/.test(nm(c)));
   for (const c of anim.crew) mergeUnder(c.o);
+  windVorbereiten(H);
   const stat = mergeStatic(H, n => n === 'Schiff' || n === 'Schlange' || n === 'Meer' || /^Wolke|^Welle/.test(n));
   scene.add(H); scene.add(stat);
   if (anim.sea) { anim.sea.material = anim.sea.material.clone(); anim.sea.receiveShadow = true; anim.seaBase = anim.sea.geometry.attributes.position.array.slice(); }
+  windAn(scene);   // Palmwedel im Seewind
   return { scene, camera, anim, nodes: new Map(), sprites: {}, data: {} };
 }
 function hafenAnim(anim, s) {   // Schiff schaukelt, Crew hüpft, Wolken ziehen, Wellen und Meer bewegen sich, die Anakonda pendelt
@@ -1367,6 +1370,52 @@ function entbiegen(k, p, out) {
   return out;
 }
 // Bäume draußen: jeder lehnt sich in seine eigene Richtung, krümmt sich S-förmig und verdreht die Krone (wie gezeichnet)
+// Wind in den Bäumen: Kronen und Palmwedel draußen wiegen sich – je höher über dem Boden, desto mehr, mit langsamen Böen. Der schwarze Tuscherand (OutlineEffect) bekommt dieselbe Verschiebung mit.
+const WIND = { value: 0 };
+const WIND_GLSL = `
+  vec4 wW = modelMatrix * vec4(transformed, 1.0);
+  float wH = clamp((wW.y - 1.6) / 3.2, 0.0, 1.3);
+  if (wH > 0.0) {
+    float wB = 0.65 + 0.35 * sin(uWind * 0.37 + wW.x * 0.045);
+    vec3 wO = vec3(sin(uWind * 1.25 + wW.x * 0.35 + wW.z * 0.22), 0.25 * sin(uWind * 1.9 + wW.z * 0.5), 0.6 * sin(uWind * 1.05 + wW.z * 0.31 + wW.x * 0.17)) * (0.11 * wH * wB);
+    transformed += wO / max(0.001, length(modelMatrix[0].xyz));
+  }`;
+function windHook(sh) {
+  sh.uniforms.uWind = WIND;
+  sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + WIND_GLSL);
+}
+// Baumteile (Kronen, Äste, Äpfel, Palmwedel, Nüsse) bekommen vor dem Zusammenfassen eigene Material-Kopien mit
+// Wind-Merker – so wiegen sich nur die Bäume samt ihren Früchten, nicht das Hausdach in derselben Farbe
+const WIND_TEILE = /[bB]aum\d*(Krone|Apfel|Ast)|P_Krone|Palme\d+_(Wedel|Nuss|Krone)/;   // nicht: Königskrone der Statue, Dachkrone
+function windVorbereiten(H) {
+  const kopien = new Map();
+  H.traverse(o => {
+    if (!o.isMesh || Array.isArray(o.material)) return;
+    let ja = false; for (let p = o, i = 0; p && i < 4 && !ja; p = p.parent, i++) ja = WIND_TEILE.test(p.name || '');
+    if (!ja) return;
+    const alt = o.material; let m = kopien.get(alt.uuid);
+    if (!m) {
+      m = alt.clone(); m.name = alt.name;
+      if (Object.prototype.hasOwnProperty.call(alt, 'onBeforeCompile')) { m.onBeforeCompile = alt.onBeforeCompile; m.customProgramCacheKey = alt.customProgramCacheKey; }
+      m.userData.windSoll = true; kopien.set(alt.uuid, m);
+    }
+    o.material = m;
+  });
+}
+function windAn(scene) {
+  const mats = new Set();
+  scene.traverse(o => { if (o.isMesh && !Array.isArray(o.material) && o.material.userData.windSoll) mats.add(o.material); });
+  for (const m of mats) {
+    if (m.userData.wind) continue;
+    m.userData.wind = true;
+    const alt = Object.prototype.hasOwnProperty.call(m, 'onBeforeCompile') ? m.onBeforeCompile : null, altKey = Object.prototype.hasOwnProperty.call(m, 'customProgramCacheKey') ? m.customProgramCacheKey : null;
+    m.onBeforeCompile = (sh, r) => { if (alt) alt(sh, r); windHook(sh); };
+    m.customProgramCacheKey = () => (altKey ? altKey() : '') + '|wind';
+    m.userData.outlineVertexHook = windHook;   // vendor/three/addons/effects/OutlineEffect.js übernimmt das für den Rand
+    m.needsUpdate = true;
+  }
+  return mats.size;
+}
 function baeumeVerbiegen(scene) {
   scene.updateMatrixWorld(true);
   const gruppen = new Map(), kronen = [];
@@ -2947,6 +2996,7 @@ export function frame(t, actors, pxW, ctx) {
   if (R.goldtoast) goldtoastTick(R, s);
   if (R.kruemel) kruemelStellen(R, s);
   if (R.leben) R.leben.tick(s);
+  WIND.value = s;
   staubTick(R); regenTick(R, !!ctx.regen, dt); gewitterTick(R, t); pfuetzenTick(R, ctx.nass || 0, !!ctx.regen, camera, s);
   schilderTick(R);
   if (R.req) requisitenBewegen(R.req, s, ctx);
@@ -3211,6 +3261,7 @@ export function hoehenProbe(id, bx, by) {   // Fehlersuche: alle Flächen senkre
   const rc = new THREE.Raycaster(new THREE.Vector3(bx, 12, -by), new THREE.Vector3(0, -1, 0)); rc.camera = R.camera;   // Sprites brauchen eine Kamera
   return rc.intersectObjects(R.scene.children, true).filter(h => !/Figur|Points/.test(h.object.name)).slice(0, 6).map(h => h.point.y.toFixed(2) + ' ' + (h.object.name || h.object.parent && h.object.parent.name));
 }
+export function windZahl(id) { const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null; const m = new Set(); R.scene.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.wind) m.add(o.material); }); return m.size; }
 export function gitterInfo(id) { const R = rooms[id || letzterRaum]; const g = R && R.blickGitter; return g ? { dreiecke: g.tris.length / 9, zellen: g.zellen.size, ms: g.ms } : g; }
 export function raumInfo(id) {   // Fehlersuche: Innenmaße und Kameralage
   const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;

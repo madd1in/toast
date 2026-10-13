@@ -202,6 +202,15 @@ class OutlineEffect {
 					count: 0
 				};
 
+				// Tentakel-Toast: Vertex-Verschiebung des Originals (z. B. Wind im Laub) auch auf den Umriss anwenden
+				const hook = originalMaterial.userData.outlineVertexHook;
+				if ( hook ) {
+
+					data.material.onBeforeCompile = hook;
+					data.material.customProgramCacheKey = () => 'outline-hook';
+
+				}
+
 				cache[ originalMaterial.uuid ] = data;
 
 			}
