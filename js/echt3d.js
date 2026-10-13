@@ -286,6 +286,31 @@ function echt3dNaechsterHotspot() {
 // Ausgänge im Echtzeit-3D: wer mit Stick/Tasten hineinläuft, geht hindurch (Türen, Treppen, Leitern, Wege).
 // Nach dem Betreten eines Raums erst ein Stück weg vom Ankunftsort, damit man nicht gleich wieder hinausfällt.
 let echt3dGehtDurch = false;
+// Tür- und Laufpunkt eines Ausgangs im 3D-Raum (Meter), robust: trifft der Strahl nichts (Ausgang am Bildrand, offener
+// Himmel), liegt die Tür ein Stück hinter dem Laufpunkt nach außen; steht der Laufpunkt in einem Möbel, gilt die nächste
+// freie Stelle davor
+const echt3dAusgangCache = new Map();
+function echt3dAusgangOrt(room, o) {
+  const m = ECHT3D.mod, key = room.id + ':' + o.id;
+  if (echt3dAusgangCache.has(key) && m.raumGeladen(room.id)) return echt3dAusgangCache.get(key);
+  const wp = (typeof o.walk === 'function' ? o.walk() : o.walk) || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10];
+  const [gx, gy] = clampWalk(room, wp[0], wp[1]);
+  let w = m.spielerLage({ x: gx, y: gy, room: room.id }, room.id); if (!w) return null;
+  if (m.bodenFrei && !m.bodenFrei(room.id, w[0], -w[1])) {
+    suche: for (let r = 0.3; r <= 1.8; r += 0.3) for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2, x = w[0] + Math.cos(a) * r, z = w[1] + Math.sin(a) * r;
+      if (m.bodenFrei(room.id, x, -z)) { w = [x, z]; break suche; }
+    }
+  }
+  let t = m.ausgangLage(room.id, o.id, o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] * 0.6);
+  if (!t) {
+    const c = m.spielerLage({ x: 480, y: 400, room: room.id }, room.id) || [0, 0], dx = w[0] - c[0], dz = w[1] - c[1], d = Math.hypot(dx, dz) || 1;
+    t = [w[0] + dx / d * 1.4, w[1] + dz / d * 1.4];
+  }
+  const lage = { t, w };
+  echt3dAusgangCache.set(key, lage);
+  return lage;
+}
 function echt3dAusgangPruefen(p) {
   if (echt3dGehtDurch || G.busy || !p || !echt3dParkourAktiv()) return;
   const room = ROOMS[p.room]; if (!room) return;
@@ -301,8 +326,8 @@ function echt3dAusgangPruefen(p) {
     const drueckt = p._gestossen3d && performance.now() - p._gestossen3d < 300;
     for (const o of room.objs) {
       if (!o.exit || !isVisible(o) || !o.rect || !ich || vl < 0.25) continue;
-      const t = ECHT3D.mod.ausgangLage(room.id, o.id, o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] * 0.6); if (!t) continue;
-      const wp = (typeof o.walk === 'function' ? o.walk() : o.walk) || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10], w = ECHT3D.mod.spielerLage({ x: wp[0], y: wp[1], room: room.id }, room.id);
+      const lage = echt3dAusgangOrt(room, o); if (!lage) continue;
+      const { t, w } = lage;
       const dx = t[0] - ich[0], dz = t[1] - ich[1], d = Math.hypot(dx, dz), drauf = (dx * v.x + dz * v.z) / ((d || 1) * vl);
       const dw = w ? Math.hypot(w[0] - ich[0], w[1] - ich[1]) : 99;
       // Leitern und Luken sind schmal: weiter Fangbereich, auch schräg darauf zu zählt
@@ -811,8 +836,11 @@ setInterval(() => {
   if (!m || !m.ready || !m.speicherInfo || m.speicherInfo().sparsam || G.screen !== 'game' || !G.state || G.busy || G.inIntro || G.settings.retro) return;
   const ich = me(); if (!ich || ich.walking || ich._gelenkt) return;
   const hier = viewRoomId(); if (!m.raumGeladen(hier)) return;
-  for (const id of PLAYERS) {
-    const r = ACT[id] && ACT[id].room;
+  // zuerst die Nachbarräume (wohin die Ausgänge hier führen – höchstens zwei), dann die Räume der anderen Helden;
+  // nie mehr als vier Räume zugleich, damit nichts Geladenes gleich wieder verdrängt wird
+  if (m.speicherInfo().raeume.length >= 4) return;
+  const nachbarn = [...new Set((ROOMS[hier] ? ROOMS[hier].objs : []).filter(o => o.exit && isVisible(o)).map(o => o.exit[0]))].slice(0, 2);
+  for (const r of [...nachbarn, ...PLAYERS.map(id => ACT[id] && ACT[id].room)]) {
     if (r && r !== hier && ECHT3D.rooms[r] && !m.raumGeladen(r) && !m.failed(r)) { m.hasRoom(r); break; }
   }
 }, 3000);

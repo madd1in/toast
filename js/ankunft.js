@@ -63,7 +63,7 @@ function ankunftTween(key, ziel, ms) {   // G.ankunft[key] weich auf ziel (Spiel
       if (!G.ankunft) return res();
       const k = Math.min(1, (G.t - t0) / ms); G.ankunft[key] = von + (ziel - von) * (1 - Math.pow(1 - k, 3));
       if (k >= 1 || G.skipAll) { G.ankunft[key] = ziel; return res(); }
-      requestAnimationFrame(schritt);
+      wait(16).then(schritt);   // auf der Spieluhr: Überspringen und Vorspulen wirken sofort
     };
     schritt();
   });
