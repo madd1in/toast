@@ -169,7 +169,7 @@ function neuStarten() {
   try {
     const alt = renderer;
     for (const id of Object.keys(rooms)) delete rooms[id];   // die Räume lagen im verlorenen Kontext – frisch laden
-    matCache.clear(); letzterRaum = null; letzterSchatten = null; fischRT = null; postRT = { 1: null, 2: null }; glanzA = glanzB = null;
+    matCache.clear(); letzterRaum = null; letzterSchatten = null; fischRT = null; postRT = { 1: null, 2: null }; glanzA = glanzB = farbA = farbB = null;
     rendererBauen();
     try { alt.dispose(); } catch (e) { /* schon weg */ }
     kontextWeg = false;
@@ -401,9 +401,11 @@ async function ladeRaum(id) {
   const suns = data.lichter.filter(l => l.typ === 'SUN').sort((a, b) => b.energie - a.energie);
   suns.forEach((l, i) => sonne(scene, bl(...l.richtung).normalize(), new THREE.Color(...l.farbe), Math.min(3.2, l.energie * 0.55), i === 0));
   if (!suns.length) sonne(scene, new THREE.Vector3(0.4, -0.8, -0.45).normalize(), 0xfff0e0, 1.6, true);
+  let kegel = 0;
   for (const l of data.lichter.filter(l => l.typ !== 'SUN').sort((a, b) => b.energie - a.energie).slice(0, 8)) {
     const p = new THREE.PointLight(new THREE.Color(...l.farbe), l.energie * 0.035, l.weite || 9, 2);
     p.position.copy(bl(...l.ort)); scene.add(p);
+    if (POST.an && kegel < 6 && p.position.y > 1.7 && p.position.y < 6) { lichtKegel(scene, p.position, new THREE.Color(...l.farbe)); kegel++; }
   }
   // Teile, die Zustände oder Bewegung haben, bleiben eigene Objekte; der Rest wird zusammengefasst
   const beweglich = new Set();
@@ -439,7 +441,7 @@ async function ladeRaum(id) {
   if (innen) kisten.push(...innen.dekoKisten);   // Möbel an der Vorderwand (nur bei gedrehter Kamera da)
   if (DRAUSSEN.has(id)) baeumeVerbiegen(scene);
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
-  const leben = draussenLeben(scene, id, camera);   // nach dem Verbiegen: Wolken und Vögel ziehen frei
+  const leben = draussenLeben(scene, id, camera) || (innen && POST.an ? schwebeStaub(scene, innen) : null);   // draußen Wolken und Vögel, drinnen Staub im Licht
   return { scene, camera, data, leben, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
 }
 
@@ -509,7 +511,7 @@ function randLicht(m) {
   m.userData.randLicht = true;
   m.onBeforeCompile = sh => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{ float fr = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
-      outgoingLight += vec3(1.0, 0.8, 0.6) * pow(fr, 2.6) * 0.42; }
+      outgoingLight += vec3(1.0, 0.8, 0.6) * pow(fr, 2.8) * 0.3; }
       #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => 'randlicht';
@@ -656,8 +658,8 @@ function fischBauen() {
 // ---------- Nachbearbeitung (Psychonauts-2-Look): Leuchten (Bloom), Farbgebung, Vignette – und die Fischaugen-Linse ----------
 // Szene ins Zwischenbild (mit 4× Kantenglättung, mit Linse 1,35× feiner); helle Stellen (Lampen, Fenster, Goldtoast,
 // Glibber) werden auf Viertelgröße herausgezogen und weichgezeichnet, dann alles in einem Schritt zusammengesetzt.
-const POST = { an: !SPARSAM, bloom: 0.75, schwelle: 0.55, saett: 1.14, waerme: [1.035, 1.0, 0.965], schattenLila: [0.014, 0.005, 0.024], vignette: 0.32 };
-let postRT = { 1: null, 2: null }, glanzA = null, glanzB = null, hellMat = null, weichMat = null, postMat = null, postSzene = null, postKam = null, postQuad = null;
+const POST = { an: !SPARSAM, bloom: 0.6, schwelle: 0.8, saett: 1.14, waerme: [1.035, 1.0, 0.965], schattenLila: [0.014, 0.005, 0.024], vignette: 0.32 };
+let farbA = null, farbB = null, postRT = { 1: null, 2: null }, glanzA = null, glanzB = null, hellMat = null, weichMat = null, postMat = null, postSzene = null, postKam = null, postQuad = null;
 const POST_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 function postBauen() {
   postKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -665,7 +667,7 @@ function postBauen() {
   postSzene = new THREE.Scene(); postSzene.add(postQuad);
   const shader = (uniforms, fs) => new THREE.ShaderMaterial({ uniforms, vertexShader: POST_VS, fragmentShader: fs, depthTest: false, depthWrite: false });
   hellMat = shader({ tex: { value: null }, schwelle: { value: POST.schwelle } }, `uniform sampler2D tex; uniform float schwelle; varying vec2 vUv;
-    void main() { vec3 c = texture2D(tex, vUv).rgb; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); gl_FragColor = vec4(c * smoothstep(schwelle, schwelle + 0.4, l), 1.0); }`);
+    void main() { vec3 c = texture2D(tex, vUv).rgb; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); gl_FragColor = vec4(c * smoothstep(schwelle, schwelle + 0.18, l), 1.0); }`);
   weichMat = shader({ tex: { value: null }, schritt: { value: new THREE.Vector2() } }, `uniform sampler2D tex; uniform vec2 schritt; varying vec2 vUv;
     void main() {
       vec3 c = texture2D(tex, vUv).rgb * 0.227027;
@@ -673,14 +675,20 @@ function postBauen() {
       c += (texture2D(tex, vUv + schritt * 3.2308).rgb + texture2D(tex, vUv - schritt * 3.2308).rgb) * 0.070270;
       gl_FragColor = vec4(c, 1.0);
     }`);
-  postMat = shader({ tex: { value: null }, glanz: { value: null }, k: { value: 0 }, z: { value: 1 }, asp: { value: ASP }, bloom: { value: POST.bloom }, saett: { value: POST.saett },
+  postMat = shader({ tiefe: { value: null }, unscharf: { value: null }, dof: { value: 0 }, fokus: { value: 8 }, nah: { value: 0.1 }, fern: { value: 500 }, tex: { value: null }, glanz: { value: null }, k: { value: 0 }, z: { value: 1 }, asp: { value: ASP }, bloom: { value: POST.bloom }, saett: { value: POST.saett },
     waerme: { value: new THREE.Vector3(...POST.waerme) }, lila: { value: new THREE.Vector3(...POST.schattenLila) }, vignette: { value: POST.vignette } },
-  `uniform sampler2D tex; uniform sampler2D glanz; uniform float k; uniform float z; uniform float asp; uniform float bloom; uniform float saett;
+  `uniform sampler2D tex; uniform sampler2D glanz; uniform sampler2D tiefe; uniform sampler2D unscharf; uniform float dof; uniform float fokus; uniform float nah; uniform float fern;
+    uniform float k; uniform float z; uniform float asp; uniform float bloom; uniform float saett;
     uniform vec3 waerme; uniform vec3 lila; uniform float vignette; varying vec2 vUv;
     void main() {
       vec2 p = vUv * 2.0 - 1.0, a = vec2(p.x * asp, p.y);
       vec2 uv = p * (1.0 + k * dot(a, a)) * z * 0.5 + 0.5;   // Fischauge (k = 0: unverzerrt)
-      vec3 c = texture2D(tex, uv).rgb + texture2D(glanz, uv).rgb * bloom;
+      vec3 c = texture2D(tex, uv).rgb;
+      if (dof > 0.0) {   // Kamerafahrt: was weit hinter dem Tentakel liegt, wird weich (Kino-Tiefenunschärfe)
+        float zn = texture2D(tiefe, uv).x * 2.0 - 1.0, d = 2.0 * nah * fern / (fern + nah - zn * (fern - nah));
+        c = mix(c, texture2D(unscharf, uv).rgb, smoothstep(fokus + 4.0, fokus + 26.0, d) * dof);
+      }
+      c += texture2D(glanz, uv).rgb * bloom;
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(l), c, saett);                       // satter
       c = c * waerme + lila * (1.0 - clamp(l * 2.0, 0.0, 1.0));   // Lichter warm, Schatten ins Lila
@@ -696,11 +704,17 @@ function postRender(R, camera, w, h) {
   if (!postMat) postBauen();
   const fein = fischS > 0.01, art = fein ? 2 : 1, rw = fein ? Math.min(2560, Math.round(w * FISCH.ss)) : w, rh = Math.round(h * rw / w);
   let rt = postRT[art];
-  if (!rt || rt.width !== rw || rt.height !== rh) { if (rt) rt.dispose(); rt = postRT[art] = new THREE.WebGLRenderTarget(rw, rh, { samples: fein ? 0 : 4, colorSpace: THREE.SRGBColorSpace }); }
+  if (!rt || rt.width !== rw || rt.height !== rh) {
+    if (rt) rt.dispose();
+    rt = postRT[art] = new THREE.WebGLRenderTarget(rw, rh, { samples: fein ? 0 : 4, colorSpace: THREE.SRGBColorSpace });
+    if (fein) rt.depthTexture = new THREE.DepthTexture(rw, rh);   // für die Tiefenunschärfe in Kamerafahrten
+  }
   const qw = Math.max(64, Math.round(w / 4)), qh = Math.max(32, Math.round(h / 4));
   if (!glanzA || glanzA.width !== qw || glanzA.height !== qh) {
     if (glanzA) { glanzA.dispose(); glanzB.dispose(); }
     glanzA = new THREE.WebGLRenderTarget(qw, qh, { type: THREE.HalfFloatType }); glanzB = new THREE.WebGLRenderTarget(qw, qh, { type: THREE.HalfFloatType });
+    if (farbA) { farbA.dispose(); farbB.dispose(); }
+    farbA = new THREE.WebGLRenderTarget(qw, qh, { type: THREE.HalfFloatType }); farbB = new THREE.WebGLRenderTarget(qw, qh, { type: THREE.HalfFloatType });
   }
   renderer.setRenderTarget(rt); effect.render(R.scene, camera);
   hellMat.uniforms.tex.value = rt.texture; postPass(hellMat, glanzA);
@@ -708,6 +722,17 @@ function postRender(R, camera, w, h) {
     weichMat.uniforms.tex.value = glanzA.texture; weichMat.uniforms.schritt.value.set(weit / qw, 0); postPass(weichMat, glanzB);
     weichMat.uniforms.tex.value = glanzB.texture; weichMat.uniforms.schritt.value.set(0, weit / qh); postPass(weichMat, glanzA);
   }
+  const kino = !!(R.flug && fein && rt.depthTexture);
+  if (kino) {   // unscharfe Farbfassung (Viertelgröße) für den Hintergrund
+    weichMat.uniforms.tex.value = rt.texture; weichMat.uniforms.schritt.value.set(1 / qw, 0); postPass(weichMat, farbB);
+    weichMat.uniforms.tex.value = farbB.texture; weichMat.uniforms.schritt.value.set(0, 1 / qh); postPass(weichMat, farbA);
+    weichMat.uniforms.tex.value = farbA.texture; weichMat.uniforms.schritt.value.set(1.8 / qw, 0); postPass(weichMat, farbB);
+    weichMat.uniforms.tex.value = farbB.texture; weichMat.uniforms.schritt.value.set(0, 1.8 / qh); postPass(weichMat, farbA);
+    const ziel = R.flugKT || R.flugBlick || R.ziel || camera.position;
+    postMat.uniforms.nah.value = camera.near; postMat.uniforms.fern.value = camera.far;
+    postMat.uniforms.fokus.value = camera.position.distanceTo(ziel); postMat.uniforms.tiefe.value = rt.depthTexture; postMat.uniforms.unscharf.value = farbA.texture;
+  }
+  postMat.uniforms.dof.value = kino ? 0.85 : 0;
   const k = FISCH.k * fischS;
   postMat.uniforms.tex.value = rt.texture; postMat.uniforms.glanz.value = glanzA.texture; postMat.uniforms.k.value = k; postMat.uniforms.z.value = fein ? fischZ(k) : 1;
   postPass(postMat, null);
@@ -1979,6 +2004,7 @@ function flugKamera(R, t) {
   _fp.x += Math.sin(t * 0.0021) * 0.06; _fp.y += Math.sin(t * 0.0017) * 0.05;   // Handkamera-Wackeln
   cam.position.copy(_fp);
   if (cam.fov !== F.fov + fischPlus()) { cam.fov = F.fov + fischPlus(); cam.updateProjectionMatrix(); }
+  R.flugBlick = (R.flugBlick || new THREE.Vector3()).copy(_fz);   // dorthin scharf stellen (Tiefenunschärfe)
   cam.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, _fz, _yA));
   return true;
 }
@@ -2109,6 +2135,30 @@ function draussenLeben(scene, id, cam) {
       }
     },
   };
+}
+// ---------- Atmosphäre: Lichtkegel unter Lampen, Staub im Licht (Innenräume) ----------
+const KEGEL_VS = `varying vec3 vN; varying vec3 vV; varying float vH;
+  void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vH = uv.y; gl_Position = projectionMatrix * mv; }`;
+const KEGEL_FS = `uniform vec3 farbe; varying vec3 vN; varying vec3 vV; varying float vH;
+  void main() { float rand = pow(abs(dot(vN, vV)), 1.6); float a = rand * (0.25 + 0.75 * vH) * 0.12; gl_FragColor = vec4(farbe * a, 1.0); }`;
+function lichtKegel(scene, pos, farbe) {   // weicher Lichtschein von der Lampe zum Boden (additiv, zu den Rändern hin unsichtbar)
+  const h = pos.y, geo = new THREE.ConeGeometry(Math.min(1.6, 0.45 + h * 0.32), h, 24, 1, true);
+  const mat = new THREE.ShaderMaterial({ uniforms: { farbe: { value: farbe.clone().lerp(new THREE.Color(0xffe2b0), 0.4) } }, vertexShader: KEGEL_VS, fragmentShader: KEGEL_FS,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  mat.userData.outlineParameters = { visible: false };
+  const m = new THREE.Mesh(geo, mat); m.position.set(pos.x, h / 2, pos.z); m.userData.keinKrumm = true; m.renderOrder = 3; scene.add(m);
+}
+function schwebeStaub(scene, innen) {   // feiner Staub, der im Licht schwebt
+  const n = 70, pos = new Float32Array(n * 3), basis = [];
+  for (let i = 0; i < n; i++) basis.push([innen.x0 + Math.random() * (innen.x1 - innen.x0), 0.4 + Math.random() * Math.min(3.2, innen.y1 - 0.5), innen.z0 + Math.random() * (innen.z1 - innen.z0), Math.random() * 6.28]);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  if (!goldGlanz) goldtoastModell();
+  const pm = new THREE.PointsMaterial({ size: 0.07, map: goldGlanz, color: 0xffe8c0, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true });
+  const pts = new THREE.Points(geo, pm); pts.frustumCulled = false; scene.add(pts);
+  return { tick(s) {
+    basis.forEach(([x, y, z, ph], i) => pos.set([x + Math.sin(s * 0.13 + ph) * 0.5, y + Math.sin(s * 0.21 + ph * 1.7) * 0.25, z + Math.cos(s * 0.11 + ph) * 0.5], i * 3));
+    geo.attributes.position.needsUpdate = true;
+  } };
 }
 // ---------- Staubwölkchen (Rennen, Absprung, Landung) und der runde Schatten unter der Figur (wie in Super Mario 64) ----------
 let weichTex = null;
