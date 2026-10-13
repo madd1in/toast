@@ -478,6 +478,42 @@ function echt3dGoldtoastPruefen(p) {
     save();
   }
 }
+// ---------- Krümel: Spuren zum Einsammeln, eine führt zum goldenen Toast ----------
+const echt3dKruemel = {};
+const bitZahl = m => { let n = 0; m >>>= 0; while (m) { n += m & 1; m >>>= 1; } return n; };
+const kruemelZahl = () => G.state ? GOLDTOAST_RAEUME.reduce((n, id) => n + bitZahl(G.state.flags['kr_' + id] || 0), 0) : 0;
+function kruemelPlanen(id) {
+  const m = ECHT3D.mod, room = ROOMS[id], liste = [];
+  const boden = (gx, gy) => { const [x, y] = clampWalk(room, gx, gy); const w = m.weltVonSpiel(id, x, y); return w && m.bodenFrei(id, w[0], w[1]) ? w : null; };
+  const nahGenug = w => liste.every(q => Math.hypot(q[0] - w[0], q[1] - w[1]) > 0.5);
+  const dazu = w => { if (w && liste.length < 30 && nahGenug(w)) liste.push([w[0], w[1], 0]); };
+  const start = boden(480, 410), ziel = echt3dGold[id];
+  if (start && ziel) for (let i = 1; i <= 10; i++) {   // Spur zum goldenen Toast (endet vor dem Möbel)
+    const u = i / 11, x = start[0] + (ziel[0] - start[0]) * u, y = start[1] + (ziel[1] - start[1]) * u;
+    if (m.bodenFrei(id, x, y)) dazu([x, y, 0]);
+  }
+  for (let i = 0; i < 10; i++) dazu(boden(130 + i * 78, 392 + Math.sin(i * 0.9) * 18));   // Bogen vorn
+  const [, oben] = clampWalk(room, 480, 0);
+  for (let i = 0; i < 8; i++) dazu(boden(250 + i * 66, oben + 18 + Math.cos(i * 0.8) * 10));   // Bogen hinten
+  return liste;
+}
+function echt3dKruemelPruefen(p) {
+  const id = p.room, m = ECHT3D.mod;
+  if (!m || !m.kruemelSetzen || !GOLDTOAST_RAEUME.includes(id) || !m.raumGeladen(id) || !(id in echt3dGold)) return;
+  if (!echt3dKruemel[id]) echt3dKruemel[id] = kruemelPlanen(id);
+  if (!m.kruemelDa(id)) m.kruemelSetzen(id, echt3dKruemel[id], G.state.flags['kr_' + id] || 0);
+}
+let kruemelSerie = 0, kruemelLetzt = 0, kruemelSpeichern = 0;
+function kruemelGefunden(id, weg) {   // aus js/echt3d-szene.js
+  if (!G.state) return;
+  G.state.flags['kr_' + id] = weg >>> 0;
+  kruemelSerie = performance.now() - kruemelLetzt < 900 ? kruemelSerie + 1 : 0; kruemelLetzt = performance.now();
+  Sound.sfx('kruemel' + Math.min(7, kruemelSerie));
+  G.kruemelT = G.t;
+  const liste = echt3dKruemel[id];
+  if (liste && bitZahl(weg) >= liste.length) { note('Alle Krümel in diesem Raum!'); Sound.sfx('coin'); }
+  clearTimeout(kruemelSpeichern); kruemelSpeichern = setTimeout(() => save(), 1500);
+}
 function drawGoldtoastZaehler() {
   if (!echt3dParkourAktiv() || cx.isPix || G.photoMode || !G.state || G.inIntro) return;
   const n = goldtoastZahl(), alle = GOLDTOAST_RAEUME.length, hier = GOLDTOAST_RAEUME.includes(viewRoomId()) && !goldtoastHat(viewRoomId());
@@ -487,6 +523,9 @@ function drawGoldtoastZaehler() {
   R(cx, -15, -13, 30, 26, '#ffd23a', 2, 8, '#8a5a10'); R(cx, -10, -8, 20, 16, '#ffe680', 0, 5);   // kleiner Goldtoast
   cx.restore();
   txt(cx, `${n}/${alle}`, x + 22, y + 6, '800 17px "Baloo 2", sans-serif', hier ? '#ffe066' : '#d7c6ff', 'left', 4, '#1b1020');
+  const kz = kruemelZahl(), kk = G.kruemelT && G.t - G.kruemelT < 400 ? 1.25 - (G.t - G.kruemelT) / 1600 : 1;   // Krümel daneben
+  cx.save(); cx.translate(x + 84, y); cx.scale(kk, kk); cx.rotate(0.5); R(cx, -7, -7, 14, 14, '#f2b448', 2, 3, '#6a3a00'); cx.restore();
+  txt(cx, String(kz), x + 98, y + 6, '800 17px "Baloo 2", sans-serif', '#f2d29a', 'left', 4, '#1b1020');
 }
 function drawEcht3dParkour() {
   drawEcht3dFokus();
@@ -745,6 +784,7 @@ function drawEcht3dParkour() {
     if (!drei || !echt3dSteuerungErlaubt()) { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; }
     if (!drei || !p || p.room !== raum) return;
     echt3dGoldtoastPruefen(p);
+    echt3dKruemelPruefen(p);
     echt3dAusgangPruefen(p);
   }, 90);
   // Tasten und Touch-Stick jedes Bild (vor der Bewegung) – nicht im 90-ms-Takt, sonst ruckelt es

@@ -2107,6 +2107,19 @@ function draussenLeben(scene, id, cam) {
     v.userData = { seiten, a: i * 1.3, r: 16 + i * 5, h: 13 + (i % 3) * 3, w: (i % 2 ? 1 : -1) * (0.22 + (i % 3) * 0.05), ph: i * 0.9 };
     scene.add(v); voegel.push(v);
   }
+  if (L.nacht) {   // Vollmond mit Hof und ein Sternenhimmel (die Nachbearbeitung lässt den Mond leuchten)
+    if (!goldGlanz) goldtoastModell();
+    const mondMat = new THREE.SpriteMaterial({ map: goldGlanz, color: 0xc8d8ff, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    mondMat.userData.outlineParameters = { visible: false };
+    const hof = new THREE.Sprite(mondMat); hof.scale.set(30, 30, 1); hof.position.set(C.x - 40, 62, C.z - 105); scene.add(hof);
+    const scheibe = new THREE.Mesh(new THREE.CircleGeometry(6, 40), leuchtMat(0xf4f6ff)); scheibe.material.userData.outlineParameters = { visible: false };
+    scheibe.position.copy(hof.position); scheibe.lookAt(C.x, 1.5, C.z); scene.add(scheibe);
+    const n = 260, sp = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, h = 0.25 + Math.random() * 0.75, r = 115; sp.set([C.x + Math.cos(a) * r * Math.sqrt(1 - h * h), 10 + h * r * 0.8, C.z + Math.sin(a) * r * Math.sqrt(1 - h * h)], i * 3); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+    const sterne = new THREE.Points(sg, new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, color: 0xfff8e8, transparent: true, opacity: 0.85, depthWrite: false }));
+    sterne.frustumCulled = false; scene.add(sterne);
+  }
   let punkte = null, basis = null;
   if (L.gluehen) {
     const n = L.gluehen, pos = new Float32Array(n * 3), col = new Float32Array(n * 3); basis = [];
@@ -2249,6 +2262,47 @@ function gewitterTick(R, t) {
   }
   const x = (t - W.t0) / 1000, blitz = x < 0.6 ? Math.exp(-x * 7) * (0.7 + 0.3 * Math.sin(x * 55)) : 0;
   if (W.licht) W.licht.intensity = W.basis * (1 + 2.6 * Math.max(0, blitz));
+}
+// ---------- Krümel: kleine Sammeldinger in Spuren durch den Raum (wie die Figments in Psychonauts) ----------
+// js/echt3d.js plant die Orte (begehbar, eine Spur führt zum goldenen Toast) und merkt sich die gefundenen (Bitmaske)
+let kruemelGeo = null, kruemelMat = null;
+export function kruemelDa(id) { const R = rooms[id]; return !!(R && R.ready && R.kruemel); }
+export function bodenFrei(id, x, y) { const R = rooms[id]; return !!(R && R.ready && (!R.kisten || !kisteSperrt(R, x, y, 0))); }
+export function kruemelSetzen(id, liste, weg) {
+  const R = rooms[id]; if (!R || !R.ready || !liste.length) return false;
+  if (R.kruemel) R.scene.remove(R.kruemel.mesh);
+  if (!kruemelGeo) {
+    kruemelGeo = new THREE.IcosahedronGeometry(0.08, 0);
+    kruemelMat = new THREE.MeshToonMaterial({ color: 0xf2b448, emissive: 0x6a3a00, gradientMap: GRAD });
+    kruemelMat.userData.outlineParameters = { thickness: 0.006, color: INK, alpha: 1, visible: true };
+  }
+  const mesh = new THREE.InstancedMesh(kruemelGeo, kruemelMat, liste.length); mesh.frustumCulled = false;
+  const punkte = liste.map(([x, y, h]) => { const p = bl(x, y, h + 0.32); if (R.krumm && h > 0.001) p.add(krummVersatz(R.krumm, p.x, p.y, p.z, new THREE.Vector3())); return p; });
+  R.kruemel = { mesh, punkte, liste, weg: weg >>> 0, anim: new Map() };
+  R.scene.add(mesh);
+  return true;
+}
+const _km = new THREE.Matrix4(), _kq = new THREE.Quaternion(), _ksk = new THREE.Vector3(), _ke = new THREE.Euler(), _kp = new THREE.Vector3();
+function kruemelStellen(R, s) {
+  const K = R.kruemel, now = performance.now();
+  K.punkte.forEach((p, i) => {
+    let sc = (K.weg >>> i) & 1 ? 0 : 1, y = p.y + Math.sin(s * 2.4 + i * 0.7) * 0.05;
+    const a = K.anim.get(i);
+    if (a != null) { const q = (now - a) / 360; if (q >= 1) K.anim.delete(i); else { sc = (1 + q * 1.2) * (1 - q); y += q * 0.7; } }
+    _ke.set(s * 1.5 + i, s * 2.1 + i * 0.5, 0); _kq.setFromEuler(_ke); _ksk.setScalar(Math.max(0.0001, sc));
+    K.mesh.setMatrixAt(i, _km.compose(_kp.set(p.x, y, p.z), _kq, _ksk));
+  });
+  K.mesh.instanceMatrix.needsUpdate = true;
+}
+function kruemelSammeln(R, a, id) {
+  const K = R.kruemel, q = a._pos3d; if (!K || !q) return;
+  K.liste.forEach(([x, y, h], i) => {
+    if ((K.weg >>> i) & 1) return;
+    if (Math.hypot(q[0] - x, q[1] - y) < 0.55 && Math.abs((a._z3d || 0) - h) < 0.9) {
+      K.weg = (K.weg | (1 << i)) >>> 0; K.anim.set(i, performance.now());
+      if (typeof kruemelGefunden === 'function') kruemelGefunden(id, K.weg);
+    }
+  });
 }
 // ---------- Goldene Toasts: einer pro Raum zum Einsammeln (wie die Sterne in Super Mario 64) ----------
 // js/echt3d.js sucht den Platz aus (begehbar, Möbel zum Hinaufspringen) und merkt sich, was schon gefunden ist
@@ -2520,6 +2574,7 @@ export function sprungLos(a) { if (a && (a._vz3d || 0) > 2.4) a._vz3d *= 0.55; }
 function sprungAbheben(a, now) {
   if (!a._vorT3d || now - a._vorT3d < HOCKE_MS) return;
   a._vorT3d = null; a._vz3d = SPRUNG_V0; a._jumpT3d = now;
+  if (typeof Sound !== 'undefined') Sound.sfx('hopp');
   a._z3d = Math.max(a._z3d || 0, 0.0002);   // in der Luft: ab jetzt rechnet die Schwerkraft
 }
 export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py = Blender-Weltposition der Figur
@@ -2535,7 +2590,7 @@ export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py 
   z += vz * sek;
   const boden = plattformHoehe(id, px, py, z);
   if (z <= boden && vz <= 0) {
-    if (vz < -2.2) { a._landT3d = performance.now(); a._landV3d = Math.min(1, -vz / 9); }   // Platsch: Squash bei der Landung
+    if (vz < -2.2) { a._landT3d = performance.now(); a._landV3d = Math.min(1, -vz / 9); if (typeof Sound !== 'undefined') Sound.sfx('plumps'); }   // Platsch: Squash bei der Landung
     z = boden; a._vz3d = 0; a._bodenT3d = performance.now();
     if (z > 0.02) a._checkpoint3d = [a.x, a.y, z];
     if (a._sprungWunsch3d && performance.now() - a._sprungWunsch3d < 180) { a._sprungWunsch3d = 0; a._vorT3d = performance.now() - HOCKE_MS + 25; }   // vorgemerkter Sprung
@@ -2651,6 +2706,7 @@ export function frame(t, actors, pxW, ctx) {
   uhrS = s;
   if (R.extra) R.extra.tick(s, ctx);
   if (R.goldtoast) goldtoastTick(R, s);
+  if (R.kruemel) kruemelStellen(R, s);
   if (R.leben) R.leben.tick(s);
   staubTick(R); regenTick(R, !!ctx.regen, dt); gewitterTick(R, t);
   schilderTick(R);
@@ -2715,7 +2771,7 @@ export function frame(t, actors, pxW, ctx) {
     }
     // steht man auf einer Stufe, Kiste oder Treppe im verbogenen Raum, verbiegt man sich mit – genau wie der Boden darunter
     if (R.krumm && f.holder.position.y > 0.001) f.holder.position.add(krummVersatz(R.krumm, f.holder.position.x, f.holder.position.y, f.holder.position.z, _kv));
-    if (ich) { staubPruefen(R, a, f, now); sprungSchatten(R, a, ctx.id); }
+    if (ich) { staubPruefen(R, a, f, now); sprungSchatten(R, a, ctx.id); kruemelSammeln(R, a, ctx.id); R.ichPos = (R.ichPos || new THREE.Vector3()).copy(p); }
     if (ich) {
       if (R.innen && autoKamera) {   // Auto-Kamera hinter der Figur (Blickrichtung f.yaw: +x vorn, Kamera auf der Gegenseite)
         // wie Super Mario 64: die Kamera bleibt auf der vorderen Raumhälfte (höchstens ~70° seitlich) und schwenkt beim
@@ -2780,6 +2836,10 @@ export function frame(t, actors, pxW, ctx) {
       const dx = q.x - p.x, dz = q.z - p.z;
       if (dx * dx + dz * dz > 0.01) want = Math.atan2(-dz, dx);   // Blender-Gierwinkel: +x vorn, −y zur Kamera
     } else if (a.walking && a._blick3d != null) want = a._blick3d;   // direkt gesteuert: in Laufrichtung
+    else if (!ich && !a.walking && R.ichPos && a.id !== curId()) {   // andere Figuren drehen sich zu dir, wenn du nah vorbeikommst
+      const dx = R.ichPos.x - p.x, dz = R.ichPos.z - p.z, d2 = dx * dx + dz * dz;
+      if (d2 < 20 && d2 > 0.05) want = Math.atan2(-dz, dx);
+    }
     let dy = want - f.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     f.yaw += dy * Math.min(1, dt / 120);
     const dreh = a._schub3d ? (now - a._schub3d.t0) * 0.03 : 0;   // getroffen: Figur wirbelt um sich selbst

@@ -642,6 +642,14 @@ const Sound = (() => {
       ['G4', 'C5', 'E5', 'G5'].forEach((n, i) => osc('square', freq(n), t + i * 0.09, 0.12, 0.05, sfxBus, { lp: 2600, decay: true }));
       ['C5', 'E5', 'G5', 'C6'].forEach(n => osc('triangle', freq(n), t + 0.38, 0.9, 0.05, sfxBus, { decay: true }));
     },
+    // Krümel: helle Plinks, bei schnellem Einsammeln Ton für Ton die Pentatonik hinauf
+    ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map(i => ['kruemel' + i, t => {
+      const f = 1047 * Math.pow(2, [0, 2, 4, 7, 9, 12, 14, 16][i] / 12);
+      osc('triangle', f, t, 0.12, 0.05, sfxBus, { decay: true }); osc('sine', f * 2, t, 0.09, 0.018, sfxBus, { decay: true });
+    }])),
+    // Sprung (Cartoon-Flöte nach oben) und Landung (weiches Plumps)
+    hopp: t => { osc('sine', 330, t, 0.16, 0.05, sfxBus, { f2: 880, attack: 0.01 }); nz(t, 0.06, 0.03, sfxBus, { type: 'highpass', f: 2000 }); },
+    plumps: t => { osc('sine', 150, t, 0.14, 0.09, sfxBus, { f2: 60, decay: true }); nz(t, 0.08, 0.05, sfxBus, { type: 'lowpass', f: 700 }); },
     // ein goldener Toast in der Nähe: zwei feine Glitzertöne
     funkeln: t => { const f = 2600 + Math.random() * 900; osc('triangle', f, t, 0.09, 0.012, sfxBus, { decay: true }); osc('sine', f * 1.5, t + 0.06, 0.12, 0.008, sfxBus, { decay: true }); },
     // Goldener Toast eingesammelt: eigene kleine Fanfare (Arpeggio nach oben), Funkeln, ein satter Bauch-Ton
