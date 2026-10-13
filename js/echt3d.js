@@ -490,6 +490,7 @@ function echt3dGoldtoastPruefen(p) {
     }
     if (!ort) { const [x, y] = clampWalk(room, 220 + (s % 520), 0); ort = m.weltVonSpiel(id, x, y + 6); }
     echt3dGold[id] = ort;
+    if (ort && !G.inIntro && goldtoastZahl() < 3) setTimeout(() => { if (viewRoomId() === id && !goldtoastHat(id)) note('✨ Hier glänzt irgendwo ein goldener Toast – folg den Krümeln!'); }, 2500);   // die ersten Male als Wegweiser
   }
   const ort = echt3dGold[id]; if (!ort) return;
   if (!m.goldtoastDa(id)) m.goldtoastSetzen(id, ort);   // (wieder) aufstellen – der Raum kann neu geladen worden sein

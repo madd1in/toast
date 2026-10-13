@@ -9,7 +9,10 @@ const VA = {
   w: 256, h: 224, cv: null, g: null, phase: 'titel', acc: 0, f: 0, kam: 0, sektion: 0,
   p: null, gegner: [], schuesse: [], dinge: [], fx: [], kerzen: [], spawn: [], boss: null,
   punkte: 0, rekord: 0, leben: 3, herzen: 5, tasten: {}, pad: {}, touch: {}, bossKampf: false, ende: 0,
+  halt: 0, wackeln: 0, karte: null,   // Trefferstopp (Bilder), Bildschirmwackeln, Einblendung („STUFE 1 – DER GARTEN“)
 };
+const VA_ABSCHNITTE = ['DER GARTEN', 'DIE HALLE', 'DAS LABOR', 'DER LILA TENTAKEL!'];
+function vaKarte(text, unter, dauer = 130) { VA.karte = { text, unter, t: 0, dauer }; }
 const VA_KEY = 'tt_vania_rekord';
 const T16 = 16, VA_BREITE = 168;   // Level in Kacheln
 
@@ -110,6 +113,7 @@ function vaLevelStart() {
   VA.spawn = VA_LEVEL.gegner.map(([x, art]) => ({ x: x * T16, art, da: false }));
   VA.p = { x: VA.checkpunkt, y: 12 * T16, vx: 0, vy: 0, blick: 1, boden: true, hieb: 0, unverwundbar: 60, hp: 16, tot: 0, lauf: 0 };
   VA.kam = Math.max(0, VA.p.x - 100);
+  vaKarte(T('STUFE 1'), T(VA_ABSCHNITTE[vaSektion(VA.p.x)]));
   Sound.play(null); Sound.play('vania');
 }
 function endVania() {
@@ -201,7 +205,7 @@ function vaKollision(o, w, h) {   // o.x = Mitte, o.y = Füße; schiebt aus fest
 const vaUeber = (a, b) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.y - b.y) * 2 < a.h + b.h;
 function vaSchaden(n, von) {
   const p = VA.p; if (p.unverwundbar || p.tot) return;
-  p.hp -= n; p.unverwundbar = 70; p.vy = -2.4; p.vx = (von < p.x ? 1 : -1) * 1.4; p.hieb = 0; p.getroffen = 22; Sound.sfx('vschaden');
+  p.hp -= n; p.unverwundbar = 70; p.vy = -2.4; p.vx = (von < p.x ? 1 : -1) * 1.4; p.hieb = 0; p.getroffen = 22; Sound.sfx('vschaden'); VA.halt = 4; VA.wackeln = 8;
   if (p.hp <= 0) vaTot();
 }
 function vaTot() {
@@ -213,6 +217,9 @@ function vaSchritt() {
   VA.f++;
   vaPadLesen();
   if (VA.phase !== 'spiel') return;
+  if (VA.karte && ++VA.karte.t > VA.karte.dauer) VA.karte = null;
+  if (VA.wackeln) VA.wackeln--;
+  if (VA.halt > 0) { VA.halt--; return; }   // Trefferstopp: ein paar Bilder Standbild – macht Treffer spürbar
   const p = VA.p, L = VA_LEVEL;
   // Tod und Neustart
   if (p.tot) {
@@ -249,9 +256,9 @@ function vaSchritt() {
   if (VA.boss && VA.boss.treffer) VA.boss.treffer--;
   // Kamera, Kontrollpunkte, Bosszimmer
   const sek = vaSektion(p.x);
-  if (sek !== VA.sektion) { VA.sektion = sek; if (sek < 3) VA.checkpunkt = [2, 45, 113][sek] * T16; }
+  if (sek !== VA.sektion) { if (sek > VA.sektion && sek < 3) vaKarte(T(VA_ABSCHNITTE[sek]), null, 100); VA.sektion = sek; if (sek < 3) VA.checkpunkt = [2, 45, 113][sek] * T16; }
   const kamMax = VA_BREITE * T16 - VA.w;
-  if (!VA.bossKampf && p.x > L.bossX * T16 + 40) { VA.bossKampf = true; VA.boss = { x: (L.bossX + 12) * T16, y: 12 * T16, w: 22, h: 40, vx: 0, vy: 0, hp: 14, treffer: 0, t: 0, boden: true, blick: -1 }; Sound.play(null); Sound.play('vaniaBoss'); }
+  if (!VA.bossKampf && p.x > L.bossX * T16 + 40) { VA.bossKampf = true; VA.boss = { x: (L.bossX + 12) * T16, y: 12 * T16 - 120, w: 22, h: 40, vx: 0, vy: 0, hp: 14, treffer: 0, t: -60, boden: false, blick: -1 }; Sound.play(null); Sound.play('vaniaBoss'); vaKarte(T('DER LILA TENTAKEL!'), T('Mit Armen. Und schlechter Laune.'), 120); }
   VA.kam = VA.bossKampf ? kamMax : Math.max(0, Math.min(kamMax, VA.kam + ((p.x - 112) - VA.kam) * 0.2));
   if (VA.bossKampf && p.x < L.bossX * T16 + 8) { p.x = L.bossX * T16 + 8; }
   // Gegner auftauchen lassen
@@ -279,9 +286,11 @@ function vaSchritt() {
   const B = VA.boss;
   if (B && B.hp > 0) {
     B.t++; B.blick = p.x < B.x ? -1 : 1;
-    if (B.boden && B.t % 120 === 40) { B.vy = -4.2; B.vx = B.blick * 1.3; Sound.sfx('vsprung'); }
+    if (B.boden && !B.gelandet) { B.gelandet = true; VA.wackeln = 24; Sound.sfx('plumps'); }   // Auftritt: plumpst von oben herein
+    if (B.boden && B.t > 0 && B.t % 120 === 40) { B.vy = -4.2; B.vx = B.blick * 1.3; Sound.sfx('vsprung'); }
+    if (B.boden && B.vyAlt > 3) VA.wackeln = Math.max(VA.wackeln, 8); B.vyAlt = B.vy;
     if (B.boden) B.vx *= 0.8;
-    if (B.t % 150 === 100) for (let i = 0; i < 3; i++) VA.schuesse.push({ glibber: true, x: B.x + B.blick * 10, y: B.y - 34, vx: B.blick * (1.0 + i * 0.6), vy: -2.6 + i * 0.5, w: 8, h: 8 });
+    if (B.t > 0 && B.t % 150 === 100) for (let i = 0; i < 3; i++) VA.schuesse.push({ glibber: true, x: B.x + B.blick * 10, y: B.y - 34, vx: B.blick * (1.0 + i * 0.6), vy: -2.6 + i * 0.5, w: 8, h: 8 });
     vaKollision(B, 22, 40);
     B.x = Math.max(L.bossX * T16 + 20, Math.min(VA_BREITE * T16 - 20, B.x));
     if (vaUeber({ x: p.x, y: p.y - 14, w: 10, h: 26 }, { x: B.x, y: B.y - 20, w: 22, h: 40 })) vaSchaden(3, B.x);
@@ -313,6 +322,8 @@ function vaSchritt() {
 }
 function vaTreffer(e) {
   e.hp--; e.treffer = 18; Sound.sfx('vtreffer');
+  VA.halt = e === VA.boss ? 5 : 3; if (e === VA.boss) VA.wackeln = 10;
+  if (e.vx !== undefined && e.art === 'tentakel') { e.x += (e.x > VA.p.x ? 1 : -1) * 6; e.vy = -1.2; }   // kleiner Rückstoß
   if (e.hp <= 0) { vaPuff(e.x, e.y - (e.h || 10) / 2, '#9a34c8', 8); Sound.sfx('vweg'); VA.punkte += e.art === 'kopf' ? 200 : e === VA.boss ? 0 : 100; if (e !== VA.boss && Math.random() < 0.25) VA.dinge.push({ art: 'herz', x: e.x, y: e.y - 8, vy: -1.2, w: 8, h: 8, zeit: 400 }); }
 }
 
@@ -377,6 +388,7 @@ function vaZeichnen() {
   g.fillStyle = '#000000'; g.fillRect(0, 0, VA.w, VA.h);
   if (VA.phase === 'titel') { vaTitel(g); return; }
   const p = VA.p, kam = VA.kam;
+  g.save(); if (VA.wackeln) g.translate(Math.round((Math.random() - 0.5) * VA.wackeln * 0.5), Math.round((Math.random() - 0.5) * VA.wackeln * 0.4));
   vaHintergrund(g); vaKacheln(g);
   for (const k of VA.kerzen) if (k.an) {   // Kerzen an der Wand (Hiebziel)
     const x = k.x - kam, y = k.y; if (x < -10 || x > VA.w + 10) continue;
@@ -418,6 +430,12 @@ function vaZeichnen() {
     g.restore();
   }
   for (const f of VA.fx) { g.fillStyle = f.farbe; g.fillRect(Math.round(f.x - kam), Math.round(f.y), 2, 2); }
+  g.restore();
+  if (VA.karte) {   // Einblendung: Stufe, Abschnitt, Boss
+    const k = VA.karte, a = Math.min(1, k.t / 15, (k.dauer - k.t) / 15);
+    g.save(); g.globalAlpha = a; g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 92, VA.w, k.unter ? 40 : 26);
+    vaText(g, k.text, 128, 98, '#ffd34a', 'center', k.unter ? 14 : 12); if (k.unter) vaText(g, k.unter, 128, 118, '#e88aea', 'center'); g.restore();
+  }
   // Anzeige oben
   g.fillStyle = '#000000'; g.fillRect(0, 0, VA.w, 32);
   vaText(g, `PUNKTE ${String(VA.punkte).padStart(6, '0')}`, 6, 3); vaText(g, `STUFE 01`, 140, 3);
