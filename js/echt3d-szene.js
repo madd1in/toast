@@ -2351,6 +2351,7 @@ function pfuetzenTick(R, nass, regen, camera, s) {
   P.gruppe.visible = true;
   for (const m of P.liste) { m.uniforms.nass.value = nass; m.uniforms.regen.value = regen ? 1 : 0; m.uniforms.zeit.value = s; m.uniforms.kam.value.copy(camera.position); }
 }
+let konfBallons = [];
 // ---------- Goldene Toasts: einer pro Raum zum Einsammeln (wie die Sterne in Super Mario 64) ----------
 // js/echt3d.js sucht den Platz aus (begehbar, Möbel zum Hinaufspringen) und merkt sich, was schon gefunden ist
 export function goldtoastKandidaten(id) {   // Oberseiten von Möbeln, auf die man mit einem Sprung kommt (Blender-Meter)
@@ -2508,6 +2509,36 @@ const RAUM_EXTRAS = {
       const gruppe = new THREE.Group(); gruppe.position.set((bb.min.x + bb.max.x) / 2, 0, bb.max.z); scene.add(gruppe);
       for (const o of konf) gruppe.attach(o);
       gruppe.position.x += 0.12; gruppe.scale.set(1.3, 1.35, 1);   // so groß wie die Bürotür, ein Stück weg von der Standuhr
+      gruppe.updateMatrixWorld(true);
+      const tb = new THREE.Box3().setFromObject(gruppe), cxT = (tb.min.x + tb.max.x) / 2, w = tb.max.x - tb.min.x, h = tb.max.y, z = tb.max.z + 0.04;
+      const holz = toonMat(0x5a3418), gold = toonMat(0xd8a83a), deko = new THREE.Group(); deko.name = 'KonfDeko';
+      const box = (bw, bh, bd, mat, x, y, zz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat); m.position.set(x, y, zz); deko.add(m); return m; };
+      box(0.14, h + 0.1, 0.1, holz, tb.min.x - 0.05, (h + 0.1) / 2, z); box(0.14, h + 0.1, 0.1, holz, tb.max.x + 0.05, (h + 0.1) / 2, z);
+      box(w + 0.38, 0.16, 0.12, holz, cxT, h + 0.1, z); box(w + 0.46, 0.05, 0.14, gold, cxT, h + 0.2, z + 0.01);
+      const bogen = new THREE.Mesh(new THREE.CircleGeometry(w * 0.46, 28, 0, Math.PI), leuchtMat(0xffd890)); bogen.position.set(cxT, h + 0.22, z - 0.01); deko.add(bogen);   // Oberlicht
+      for (let i = 0; i < 3; i++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, w * 0.46, 0.03).translate(0, w * 0.23, 0), holz); sp.position.set(cxT, h + 0.22, z + 0.01); sp.rotation.z = (i - 1) * 0.62; deko.add(sp); }   // Sprossen
+      const rund = new THREE.Mesh(new THREE.TorusGeometry(w * 0.46, 0.035, 6, 28, Math.PI), gold); rund.position.set(cxT, h + 0.22, z); deko.add(rund);
+      const farben = [0xff4a5a, 0xffd23a, 0x4a9aff, 0x5ad86a, 0xff8adf];   // Wimpelkette der Messe
+      for (let i = 0; i < 11; i++) {
+        const u = i / 10, x = cxT - w * 0.95 + u * w * 1.9, yy = h + 0.62 - Math.sin(u * Math.PI) * 0.22;
+        const wimpel = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.18, 3), toonMat(farben[i % 5])); wimpel.rotation.x = Math.PI; wimpel.rotation.y = Math.PI / 6;
+        wimpel.position.set(x, yy - 0.09, z + 0.03); deko.add(wimpel);
+      }
+      for (const sx of [-1, 1]) {   // Wandlampen
+        const lx = cxT + sx * (w / 2 + 0.38);
+        box(0.08, 0.2, 0.06, gold, lx, h * 0.62, z - 0.02);
+        const glas = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), leuchtMat(0xffe0a0)); glas.position.set(lx, h * 0.62 + 0.16, z + 0.05); deko.add(glas);
+        const licht = new THREE.PointLight(0xffc878, 1.2, 2.6, 2); licht.position.copy(glas.position); licht.position.z += 0.2; deko.add(licht);
+      }
+      const ballons = [];
+      for (const [i, farbe] of [[0, 0xff4a6a], [1, 0xffd84a]]) {
+        const bx = cxT + w / 2 + 0.2 + i * 0.22, ball = new THREE.Group();
+        const kugel = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), toonMat(farbe)); kugel.scale.y = 1.2; kugel.position.y = 0.0; ball.add(kugel);
+        const schnur = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.9, 4), toonMat(0xf0f0f0)); schnur.position.y = -0.62; ball.add(schnur);
+        ball.position.set(bx, h * 0.55 + 0.75 + i * 0.12, z + 0.12); deko.add(ball); ballons.push({ o: ball, y0: ball.position.y, ph: i * 1.7 });
+      }
+      scene.add(deko);
+      konfBallons = ballons;
     }
     // das Gemälde darüber: hinauf bis unter das Gesims und auf 80 % (um seine Oberkante), damit es die Tür nicht berührt
     const bild = []; H.traverse(o => { if (/^(Schild_)?L_(Bilderrahmen|Leinwand|Rahmenrosette|Plakett)/.test(nm(o)) && o.parent === H) bild.push(o); });
@@ -2555,6 +2586,7 @@ const RAUM_EXTRAS = {
     scene.add(treppe);
     return {
       tick(s, ctx) {
+        for (const b of konfBallons) { b.o.position.y = b.y0 + Math.sin(s * 1.6 + b.ph) * 0.04; b.o.rotation.z = Math.sin(s * 1.1 + b.ph) * 0.12; }   // Ballons an der Konferenztür wippen
         if (!teile.angel) return;
         const st = ctx.sprites && ctx.sprites.uhrtuer ? ctx.sprites.uhrtuer() : { offen: 0, seit: 1e9 };
         const k = st.offen ? Math.min(1, st.seit / 700) : 0;

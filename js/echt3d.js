@@ -332,7 +332,8 @@ function echt3dAusgangPruefen(p) {
       const dw = w ? Math.hypot(w[0] - ich[0], w[1] - ich[1]) : 99;
       // Leitern und Luken sind schmal: weiter Fangbereich, auch schräg darauf zu zählt
       const nm = typeof o.name === 'function' ? '' : o.name || '', leiter = /Leiter|Luke/i.test(nm + ' ' + o.id), f = leiter ? 1.45 : 1, rw = leiter ? 0.15 : 0;
-      if ((d < 1.35 * f && drauf > 0.3 - rw) || (dw < 1.1 * f && drauf > 0.4 - rw) || (drueckt && Math.min(d, dw + 0.4) < 1.9 * f && drauf > 0.15 - rw / 2)) { ziel = o; break; }
+      const streng = G.pointer === 'touch' ? 0.25 : 0;   // Touch-Stick: deutlicher auf die Tür zu
+      if ((d < 1.35 * f && drauf > 0.3 - rw + streng) || (dw < 1.1 * f && drauf > 0.4 - rw + streng) || (drueckt && Math.min(d, dw + 0.4) < 1.9 * f && drauf > 0.15 - rw / 2 + streng)) { ziel = o; break; }
     }
   } else if (p._gelenkt && p._ankunft.weg && p.walking) {
     // Rückfall ohne 3D-Lage: in Spiel-Koordinaten
@@ -351,7 +352,7 @@ function echt3dAusgangPruefen(p) {
     const jetzt = performance.now();
     if (ziel) {
       if (!p._ausgangDruck || p._ausgangDruck.id !== ziel.id) { p._ausgangDruck = { id: ziel.id, seit: jetzt }; ziel = null; }
-      else if (jetzt - p._ausgangDruck.seit < 180) ziel = null;
+      else if (jetzt - p._ausgangDruck.seit < (G.pointer === 'touch' ? 450 : 220)) ziel = null;   // erst nach einem Moment zielstrebigen Drückens
     } else p._ausgangDruck = null;
   }
   p._ausgang3d = null;
@@ -372,7 +373,7 @@ async function echt3dDurchgehen(o) {   // wie „Gehe zu“, nur ohne Anlauf: di
 let echt3dTastenT = 0;   // zuletzt mit WASD/Pfeilen gelaufen (dann zeigt das Fokus-Schild „E“ statt „X“)
 function drawEcht3dFokus() {
   const tasten = performance.now() - echt3dTastenT < 6000;
-  if (!echt3dParkourAktiv() || ((G.pointer === 'mouse' || G.pointer === 'touch') && !tasten) || G.busy || G.photoMode || cx.isPix) return;
+  if (!echt3dParkourAktiv() || (G.pointer === 'mouse' && !tasten) || G.busy || G.photoMode || cx.isPix) return;
   const h = echt3dNaechsterHotspot(); if (!h) return;
   const room = ROOMS[viewRoomId()];
   let pos = null, name = '', verb = 'look';
@@ -574,7 +575,22 @@ function drawEcht3dParkour() {
   cx.globalAlpha = 1; cx.fillStyle = '#fff0b5'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
   cx.font = '800 13px "Baloo 2", sans-serif'; cx.fillText('LAUFEN', x, y + 66); cx.font = '400 25px "Titan One", sans-serif'; cx.fillText('A', jx, y - 3); cx.font = '800 13px "Baloo 2", sans-serif'; cx.fillText('SPRINGEN', jx, y + 66);
   cx.restore();
+  // Aktionsknopf: zeigt, was in Reichweite ist, und benutzt es beim Antippen
+  const h = !G.busy && !G.dialog ? echt3dNaechsterHotspot() : null;
+  echt3dAktionsKnopf = null;
+  if (h) {
+    const o = h.npc ? null : OBJ[h.id], tuer = !!(o && o.exit), name = h.npc ? (h.npc.name || h.npc.id) : (typeof o.name === 'function' ? o.name() : o.name);
+    const bx = W - 92, by = y - 118, br = 40, puls = 1 + Math.sin(G.t * 0.006) * 0.04;
+    echt3dAktionsKnopf = { x: bx, y: by, r: br };
+    cx.save(); cx.translate(bx, by); cx.scale(puls, puls);
+    cx.globalAlpha = 0.8; cx.fillStyle = tuer ? '#1e4a2a' : '#2a1640'; cx.strokeStyle = tuer ? '#8aff9a' : '#ffe066'; cx.lineWidth = 3;
+    cx.beginPath(); cx.arc(0, 0, br, 0, Math.PI * 2); cx.fill(); cx.stroke(); cx.globalAlpha = 1;
+    txt(cx, tuer ? '➜' : h.npc ? '💬' : '✋', 0, 10, '800 28px "Baloo 2", sans-serif', '#ffffff');
+    cx.restore();
+    txt(cx, T(name), bx, by + br + 16, '800 13px "Baloo 2", sans-serif', tuer ? '#b8ffc4' : '#ffe9a0', 'center', 4, '#120a1c');
+  }
 }
+let echt3dAktionsKnopf = null;
 {
   const cv = document.getElementById('game');
   let dreh = null, geste = null;
@@ -602,6 +618,7 @@ function drawEcht3dParkour() {
     const y = SH - 66, r = 54;
     if (Math.hypot(p.x - 92, p.y - y) <= r) return 'laufen';
     if (Math.hypot(p.x - (W - 92), p.y - y) <= r) return 'springen';
+    if (echt3dAktionsKnopf && Math.hypot(p.x - echt3dAktionsKnopf.x, p.y - echt3dAktionsKnopf.y) <= echt3dAktionsKnopf.r + 8) return 'benutzen';
     return null;
   };
   const parkourStickSetzen = (f, p) => {
@@ -634,6 +651,7 @@ function drawEcht3dParkour() {
         const f = { kind: knopf, sx: p.x, sy: p.y, x: 0, y: 0 };
         parkourFinger.set(e.pointerId, f);
         if (knopf === 'springen') echt3dPadSpringen();
+        else if (knopf === 'benutzen') { if (!G.busy) echt3dBenutzen(); }
         else parkourStickSetzen(f, p);
         return;
       }
@@ -727,7 +745,7 @@ function drawEcht3dParkour() {
       geste = null;
       const p = toLogical(e);
       G.mouse.x = p.x; G.mouse.y = p.y;
-      if (!g.moved && g.free) { if (!raumKlickAt(p, true)) onClick(p.x, p.y, false); }
+      if (!g.moved && g.free) { if (!raumKlickAt(p, false)) onClick(p.x, p.y, false); }
       else if (!g.moved && !g.long) onClick(p.x, p.y, false);
       return;
     }

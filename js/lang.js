@@ -66,15 +66,19 @@ const Lang = (() => {
     if (id === 'de') { state = 'off'; return true; }
     state = 'loading'; progress = 0;
     if (supported()) {   // eingebauter Übersetzer: offline auf dem Gerät, in Chrome ab 138
-      try {
-        const t = await Translator.create({ sourceLanguage: 'de', targetLanguage: id, monitor(m) { m.addEventListener('downloadprogress', e => { progress = e.loaded || 0; }); } });
-        if (cur !== id) return false;
-        tr = t; state = 'ready'; pump(); return true;
-      } catch (e) {
-        if (cur !== id) return false;
-        if (/not.?allowed|activation|gesture/i.test(String(e && e.message))) { state = 'tap'; return false; }   // Sprachpaket braucht einen Klick
-        // sonst weiter mit dem Online-Fallback (z. B. Sprachpaar fehlt im Gerät)
-      }
+      // Das Sprachpaket kann Minuten zum Herunterladen brauchen – so lange übersetzt der Online-Weg, danach
+      // übernimmt der eingebaute Übersetzer (ohne Internet bleibt es bis dahin beim Deutschen)
+      let nativFertig = false;
+      const nativ = Translator.create({ sourceLanguage: 'de', targetLanguage: id, monitor(m) { m.addEventListener('downloadprogress', e => { progress = e.loaded || 0; }); } })
+        .then(t => { nativFertig = true; if (cur !== id) return false; tr = t; state = 'ready'; pump(); return true; },
+          e => { nativFertig = true; if (cur === id && !tr && /not.?allowed|activation|gesture/i.test(String(e && e.message))) state = 'tap'; return false; });   // Sprachpaket braucht einen Klick
+      const web = webTranslator();
+      const netz = web.translate('Ja').then(() => { if (cur !== id) return false; if (!tr && !nativFertig) { tr = web; state = 'ready'; pump(); } return true; }, () => false);
+      const ok = await new Promise(res => { let n = 0; const eins = v => { if (v) res(true); else if (++n === 2) res(false); }; nativ.then(eins); netz.then(eins); });
+      if (cur !== id) return false;
+      if (ok || tr) return true;
+      if (state === 'tap') return false;
+      state = 'error'; return false;
     }
     // Online-Fallback (Edge, Firefox, Safari – oder wenn der eingebaute Übersetzer versagt):
     // eine Zeile als Probe übersetzen; ohne Internet bleibt es beim Deutschen
