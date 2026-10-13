@@ -284,6 +284,7 @@ function updateRain(dt) {
   for (let i = rainFx.splashes.length - 1; i >= 0; i--) if (G.t - rainFx.splashes[i].t > 240) rainFx.splashes.splice(i, 1);
 }
 function drawRain() {
+  if (typeof echt3dOn === 'function' && G.state && G.screen === 'game' && echt3dOn(ROOMS[viewRoomId()])) return;   // im Echtzeit-3D regnet es in der Szene
   if (!rainFx.drops.length) return;
   // vor dem hellen Sommerhimmel von 1776 dunklere, längere Striche, sonst sieht man den Regen kaum
   const past = rainFx.era === 'past', len = past ? 14 : 9;
@@ -660,18 +661,38 @@ function photoCanvas() {
 function albumAdd(src) {
   try {
     const c = document.createElement('canvas'); c.width = 384; c.height = 240;
-    c.getContext('2d').drawImage(src || cv, 0, 0, c.width, c.height);
+    const g = c.getContext('2d'), q = src || cv, k = Math.min(c.width / q.width, c.height / q.height), bw = q.width * k, bh = q.height * k;
+    g.fillStyle = '#1c1028'; g.fillRect(0, 0, c.width, c.height); g.drawImage(q, (c.width - bw) / 2, (c.height - bh) / 2, bw, bh);
     const list = albumList(); list.unshift({ src: c.toDataURL('image/jpeg', 0.72), at: Date.now(), room: G.state ? viewRoomId() : G.screen });
     while (list.length > ALBUM_MAX) list.pop();
     localStorage.setItem(ALBUM_KEY, JSON.stringify(list)); albumImgs.length = 0;
   } catch (e) { /* Speicher voll oder gesperrt */ }
 }
 function albumImage(i, src) { let im = albumImgs[i]; if (!im) { im = albumImgs[i] = new Image(); im.src = src; } return im; }
+// Das Foto als schiefes Polaroid vom Kamera-Tentakel: weißer Rand, Klebestreifen, Bildunterschrift von Hand
+function polaroid(src) {
+  const w = src.width, h = src.height, rand = Math.round(w * 0.045), unten = Math.round(h * 0.2), pw = w + rand * 2, ph = h + rand + unten;
+  const kipp = (Math.random() - 0.5) * 0.06, c = document.createElement('canvas'), pad = Math.round(pw * 0.06);
+  c.width = pw + pad * 2; c.height = ph + pad * 2; const g = c.getContext('2d');
+  g.fillStyle = '#1c1028'; g.fillRect(0, 0, c.width, c.height);
+  g.translate(c.width / 2, c.height / 2); g.rotate(kipp); g.translate(-pw / 2, -ph / 2);
+  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(pw * 0.012, ph * 0.02, pw, ph);   // Schatten
+  g.fillStyle = '#fbf6ea'; g.beginPath(); schiefKasten(g, 0, 0, pw, ph, 6); g.fill();
+  g.drawImage(src, rand, rand, w, h);
+  g.fillStyle = 'rgba(255,240,170,0.55)'; g.save(); g.translate(pw / 2, 0); g.rotate(-0.08); g.fillRect(-pw * 0.09, -rand * 0.6, pw * 0.18, rand * 1.4); g.restore();   // Klebestreifen
+  const s = w / W, raum = G.state && G.screen === 'game' ? ROOMS[viewRoomId()] : null, wer = G.state ? me().name : '';
+  g.save(); g.translate(rand, h + rand); g.scale(s, s);
+  const text = raum ? `${T(raum.name)}${wer ? ' · ' + wer : ''}` : 'Tentakel-Toast';
+  txt(g, text, 12, unten / s * 0.62, '700 34px "Baloo 2", sans-serif', '#2a1a40', 'left');
+  txt(g, '📷 Kamera-Tentakel', (w / s) - 12, unten / s * 0.62, '600 20px "Baloo 2", sans-serif', '#7a5aa0', 'right');
+  g.restore();
+  return c;
+}
 function takePhoto() {
   if (!cv.toBlob) return;
   Sound.sfx('photo');
   G.photoMode = true; try { render(); } finally { G.photoMode = false; }   // sauberes Bild ohne Bedienleiste und Zeiger
-  const pc = photoCanvas(); G.photoFlash = G.t;
+  const pc = polaroid(photoCanvas()); G.photoFlash = G.t;
   albumAdd(pc);
   pc.toBlob(b => {
     if (!b) return;
@@ -1440,6 +1461,8 @@ function pollPad(dt) {
     if (down(0) || down(9)) { G.saved = null; G.hasSaves = anySave(); G.screen = 'title'; music(); }
   } else if (G.screen === 'game') {
     if (down(0) && !(typeof echt3dPadSpringen === 'function' && echt3dPadSpringen())) onClick(G.mouse.x, G.mouse.y, false);
+    if (!now[0] && PAD.aWar && typeof ECHT3D !== 'undefined' && ECHT3D.mod && ECHT3D.mod.sprungLos) ECHT3D.mod.sprungLos(me());
+    PAD.aWar = !!now[0];
     if (down(2)) { if (typeof echt3dParkourAktiv === 'function' && echt3dParkourAktiv() && !hitScene(G.mouse.x, G.mouse.y)) echt3dBenutzen(); else onClick(G.mouse.x, G.mouse.y, true); }   // X: im 3D das Nächste benutzen
     if (down(1)) onBack();
     if (down(3) && !G.busy && !G.menu) showHint();

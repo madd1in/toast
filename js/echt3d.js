@@ -187,7 +187,7 @@ drawBg = function (room) {
     echt3dLoad();
     if (echt3dOn(room)) {
       const acts = Object.values(ACT).filter(a => a.room === room.id && a.visible && !echt3dBild(a));
-      const bild = ECHT3D.mod.frame(G.t, acts, echt3dBreite(Math.min(ECHT3D_XBOX ? 1280 : 1920, W * VS * DPR * SSK)), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room) });
+      const bild = ECHT3D.mod.frame(G.t, acts, echt3dBreite(Math.min(ECHT3D_XBOX ? 1280 : 1920, W * VS * DPR * SSK)), { id: room.id, zustand: room.zustand3d || {}, sprites: ECHT3D_TEILE, karten: echt3dKarten(room), regen: typeof rainActive === 'function' && rainActive() });
       if (bild) {
         // Die Dialog-Kamera zoomt die Szene jetzt echt in 3D (Dolly mit Parallax) – deshalb hier die flache
         // 2D-Skalierung des Bildes zurücknehmen; Figuren-Bilder und Effekte oben drüber zoomen weiter wie gehabt
@@ -300,7 +300,9 @@ function echt3dAusgangPruefen(p) {
       const wp = (typeof o.walk === 'function' ? o.walk() : o.walk) || [o.rect[0] + o.rect[2] / 2, o.rect[1] + o.rect[3] + 10], w = ECHT3D.mod.spielerLage({ x: wp[0], y: wp[1], room: room.id }, room.id);
       const dx = t[0] - ich[0], dz = t[1] - ich[1], d = Math.hypot(dx, dz), drauf = (dx * v.x + dz * v.z) / ((d || 1) * vl);
       const dw = w ? Math.hypot(w[0] - ich[0], w[1] - ich[1]) : 99;
-      if ((d < 1.35 && drauf > 0.3) || (dw < 1.1 && drauf > 0.4) || (drueckt && Math.min(d, dw + 0.4) < 1.9 && drauf > 0.15)) { ziel = o; break; }
+      // Leitern und Luken sind schmal: weiter Fangbereich, auch schräg darauf zu zählt
+      const nm = typeof o.name === 'function' ? '' : o.name || '', leiter = /Leiter|Luke/i.test(nm + ' ' + o.id), f = leiter ? 1.45 : 1, rw = leiter ? 0.15 : 0;
+      if ((d < 1.35 * f && drauf > 0.3 - rw) || (dw < 1.1 * f && drauf > 0.4 - rw) || (drueckt && Math.min(d, dw + 0.4) < 1.9 * f && drauf > 0.15 - rw / 2)) { ziel = o; break; }
     }
   } else if (p._gelenkt && p._ankunft.weg && p.walking) {
     // Rückfall ohne 3D-Lage: in Spiel-Koordinaten
@@ -458,11 +460,14 @@ function echt3dGoldtoastPruefen(p) {
   if (!m.goldtoastDa(id)) m.goldtoastSetzen(id, ort);   // (wieder) aufstellen – der Raum kann neu geladen worden sein
   const q = p._pos3d; if (!q) return;
   const abst = Math.hypot(q[0] - ort[0], q[1] - ort[1]);
+  const basis = typeof progress === 'function' && typeof MILESTONES !== 'undefined' ? progress() / MILESTONES.length : 0;
+  Sound.setIntensity(abst < 6 ? Math.max(basis, 0.7) : basis);   // in der Nähe: die Musik legt ihre Zusatzspuren auf
   if (abst < 5.5 && G.t - (G.goldFunkelT || 0) > 350 + abst * 260) {   // in der Nähe funkelt es leise – je näher, desto schneller
     G.goldFunkelT = G.t; const g = m.spielVonWelt(id, [ort[0], ort[1], 0]); Sound.sfx('funkeln', g ? panX(g[0]) : 0);
   }
   if (abst < 0.7 && q[2] > ort[2] - 0.35) {
     G.state.flags['goldtoast_' + id] = 1;
+    if (typeof progress === 'function' && typeof MILESTONES !== 'undefined') Sound.setIntensity(progress() / MILESTONES.length);
     m.goldtoastWeg(id); Sound.sfx('goldtoast'); rumble(180, 0.4, 0.6);
     if (Sound.duck) { Sound.duck(true); setTimeout(() => { if (!G.speech) Sound.duck(false); }, 1400); }   // Musik kurz leiser: die Fanfare gehört dem Toast
     if (typeof mimikStart === 'function') mimikStart(p, 'freude');
@@ -699,7 +704,10 @@ function drawEcht3dParkour() {
     }
     if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { tasten.add(k); e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
-  window.addEventListener('keyup', e => tasten.delete(e.key.toLowerCase()));
+  window.addEventListener('keyup', e => {
+    tasten.delete(e.key.toLowerCase());
+    if (e.key === ' ' && aktiv() && ECHT3D.mod && ECHT3D.mod.sprungLos) ECHT3D.mod.sprungLos(me());
+  });
   window.addEventListener('blur', () => { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; });
   const KURS = {
     stockwerk: 'Sprungpassage: über die Buttertoast-Stufen durch die Treppenlücke. Fehltritte setzen dich aufs letzte Brett zurück.',

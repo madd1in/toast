@@ -169,7 +169,7 @@ function neuStarten() {
   try {
     const alt = renderer;
     for (const id of Object.keys(rooms)) delete rooms[id];   // die Räume lagen im verlorenen Kontext – frisch laden
-    matCache.clear(); letzterRaum = null; letzterSchatten = null; fischRT = null;
+    matCache.clear(); letzterRaum = null; letzterSchatten = null; fischRT = null; postRT = { 1: null, 2: null }; glanzA = glanzB = null;
     rendererBauen();
     try { alt.dispose(); } catch (e) { /* schon weg */ }
     kontextWeg = false;
@@ -500,7 +500,20 @@ function addFig(id, root, rig) {
   root.traverse(o => { if (!o.userData.merged) nodes[nm(o)] = o; });
   const base = {}; for (const [k, o] of Object.entries(nodes)) base[k] = { q: o.quaternion.clone(), p: o.position.clone(), s: o.scale.clone() };
   figurVerbiegen(id, holder);
+  holder.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) randLicht(m); });
   figs[id] = { id, holder, root, top, nodes, base, rig, yaw: -0.56, walkPh: 0, last: null, blinkT: 2000 + Math.random() * 3000 };
+}
+// Randlicht wie in Psychonauts 2: die Silhouette der Figuren leuchtet warm (Fresnel), hebt sie vom Raum ab
+function randLicht(m) {
+  if (!m || m.userData.randLicht || !m.isMeshToonMaterial) return;
+  m.userData.randLicht = true;
+  m.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{ float fr = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
+      outgoingLight += vec3(1.0, 0.8, 0.6) * pow(fr, 2.6) * 0.42; }
+      #include <opaque_fragment>`);
+  };
+  m.customProgramCacheKey = () => 'randlicht';
+  m.needsUpdate = true;
 }
 // Figuren wie gezeichnet – jede auf ihre Art schief: lehnt sich zur Seite, steht im S, dreht die Schultern gegen die
 // Hüfte, wird oben breiter oder schmaler und streckt sich. In der Grundhaltung einmal in die Form gebacken (in
@@ -638,6 +651,66 @@ function fischBauen() {
   });
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), fischMat); quad.frustumCulled = false;
   fischSzene = new THREE.Scene(); fischSzene.add(quad);
+}
+
+// ---------- Nachbearbeitung (Psychonauts-2-Look): Leuchten (Bloom), Farbgebung, Vignette – und die Fischaugen-Linse ----------
+// Szene ins Zwischenbild (mit 4× Kantenglättung, mit Linse 1,35× feiner); helle Stellen (Lampen, Fenster, Goldtoast,
+// Glibber) werden auf Viertelgröße herausgezogen und weichgezeichnet, dann alles in einem Schritt zusammengesetzt.
+const POST = { an: !SPARSAM, bloom: 0.75, schwelle: 0.55, saett: 1.14, waerme: [1.035, 1.0, 0.965], schattenLila: [0.014, 0.005, 0.024], vignette: 0.32 };
+let postRT = { 1: null, 2: null }, glanzA = null, glanzB = null, hellMat = null, weichMat = null, postMat = null, postSzene = null, postKam = null, postQuad = null;
+const POST_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+function postBauen() {
+  postKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); postQuad.frustumCulled = false;
+  postSzene = new THREE.Scene(); postSzene.add(postQuad);
+  const shader = (uniforms, fs) => new THREE.ShaderMaterial({ uniforms, vertexShader: POST_VS, fragmentShader: fs, depthTest: false, depthWrite: false });
+  hellMat = shader({ tex: { value: null }, schwelle: { value: POST.schwelle } }, `uniform sampler2D tex; uniform float schwelle; varying vec2 vUv;
+    void main() { vec3 c = texture2D(tex, vUv).rgb; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); gl_FragColor = vec4(c * smoothstep(schwelle, schwelle + 0.4, l), 1.0); }`);
+  weichMat = shader({ tex: { value: null }, schritt: { value: new THREE.Vector2() } }, `uniform sampler2D tex; uniform vec2 schritt; varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tex, vUv).rgb * 0.227027;
+      c += (texture2D(tex, vUv + schritt * 1.3846).rgb + texture2D(tex, vUv - schritt * 1.3846).rgb) * 0.316216;
+      c += (texture2D(tex, vUv + schritt * 3.2308).rgb + texture2D(tex, vUv - schritt * 3.2308).rgb) * 0.070270;
+      gl_FragColor = vec4(c, 1.0);
+    }`);
+  postMat = shader({ tex: { value: null }, glanz: { value: null }, k: { value: 0 }, z: { value: 1 }, asp: { value: ASP }, bloom: { value: POST.bloom }, saett: { value: POST.saett },
+    waerme: { value: new THREE.Vector3(...POST.waerme) }, lila: { value: new THREE.Vector3(...POST.schattenLila) }, vignette: { value: POST.vignette } },
+  `uniform sampler2D tex; uniform sampler2D glanz; uniform float k; uniform float z; uniform float asp; uniform float bloom; uniform float saett;
+    uniform vec3 waerme; uniform vec3 lila; uniform float vignette; varying vec2 vUv;
+    void main() {
+      vec2 p = vUv * 2.0 - 1.0, a = vec2(p.x * asp, p.y);
+      vec2 uv = p * (1.0 + k * dot(a, a)) * z * 0.5 + 0.5;   // Fischauge (k = 0: unverzerrt)
+      vec3 c = texture2D(tex, uv).rgb + texture2D(glanz, uv).rgb * bloom;
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = mix(vec3(l), c, saett);                       // satter
+      c = c * waerme + lila * (1.0 - clamp(l * 2.0, 0.0, 1.0));   // Lichter warm, Schatten ins Lila
+      c *= 1.0 - vignette * smoothstep(0.55, 1.45, length(p * vec2(0.92, 1.0)));
+      c *= 1.0 - 2.4 * k * smoothstep(0.75, 1.5, length(p));
+      gl_FragColor = vec4(c, 1.0);
+      #include <colorspace_fragment>
+    }`);
+}
+export function nachbearbeitung(an) { if (an != null) POST.an = !!an && !SPARSAM; return POST.an; }   // Schalter (Einstellungen, Messen)
+function postPass(mat, ziel) { postQuad.material = mat; renderer.setRenderTarget(ziel); renderer.render(postSzene, postKam); }
+function postRender(R, camera, w, h) {
+  if (!postMat) postBauen();
+  const fein = fischS > 0.01, art = fein ? 2 : 1, rw = fein ? Math.min(2560, Math.round(w * FISCH.ss)) : w, rh = Math.round(h * rw / w);
+  let rt = postRT[art];
+  if (!rt || rt.width !== rw || rt.height !== rh) { if (rt) rt.dispose(); rt = postRT[art] = new THREE.WebGLRenderTarget(rw, rh, { samples: fein ? 0 : 4, colorSpace: THREE.SRGBColorSpace }); }
+  const qw = Math.max(64, Math.round(w / 4)), qh = Math.max(32, Math.round(h / 4));
+  if (!glanzA || glanzA.width !== qw || glanzA.height !== qh) {
+    if (glanzA) { glanzA.dispose(); glanzB.dispose(); }
+    glanzA = new THREE.WebGLRenderTarget(qw, qh, { type: THREE.HalfFloatType }); glanzB = new THREE.WebGLRenderTarget(qw, qh, { type: THREE.HalfFloatType });
+  }
+  renderer.setRenderTarget(rt); effect.render(R.scene, camera);
+  hellMat.uniforms.tex.value = rt.texture; postPass(hellMat, glanzA);
+  for (const weit of [1, 2.2]) {   // zweimal weichzeichnen, beim zweiten Mal weiter: ein breiter, weicher Schein
+    weichMat.uniforms.tex.value = glanzA.texture; weichMat.uniforms.schritt.value.set(weit / qw, 0); postPass(weichMat, glanzB);
+    weichMat.uniforms.tex.value = glanzB.texture; weichMat.uniforms.schritt.value.set(0, weit / qh); postPass(weichMat, glanzA);
+  }
+  const k = FISCH.k * fischS;
+  postMat.uniforms.tex.value = rt.texture; postMat.uniforms.glanz.value = glanzA.texture; postMat.uniforms.k.value = k; postMat.uniforms.z.value = fein ? fischZ(k) : 1;
+  postPass(postMat, null);
 }
 
 // ---------- Spiel-Koordinaten <-> Welt ----------
@@ -2037,6 +2110,96 @@ function draussenLeben(scene, id, cam) {
     },
   };
 }
+// ---------- Staubwölkchen (Rennen, Absprung, Landung) und der runde Schatten unter der Figur (wie in Super Mario 64) ----------
+let weichTex = null;
+function weichTextur() {   // weiche runde Wolke (für Staub)
+  if (weichTex) return weichTex;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), rg = g.createRadialGradient(32, 32, 4, 32, 32, 31);
+  rg.addColorStop(0, 'rgba(255,255,255,0.95)'); rg.addColorStop(0.55, 'rgba(255,255,255,0.5)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, 64, 64); weichTex = new THREE.CanvasTexture(c); return weichTex;
+}
+function staubWolke(R, pos, winkel, kraft) {
+  const P = R.staub; let s = P.liste.find(x => !x.an);
+  if (!s) {
+    if (P.liste.length >= 30) return;
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: weichTextur(), color: R.innen ? 0xe0d2bc : 0xd8dcc8, transparent: true, depthWrite: false }));
+    m.material.userData.outlineParameters = { visible: false }; R.scene.add(m); s = { m }; P.liste.push(s);
+  }
+  const w = winkel == null ? Math.random() * Math.PI * 2 : winkel;
+  Object.assign(s, { an: true, t0: performance.now(), x: pos.x, y: pos.y + 0.06, z: pos.z, vx: Math.cos(w) * kraft * 0.55, vz: Math.sin(w) * kraft * 0.55, life: 480 + Math.random() * 220 });
+  s.m.visible = true;
+}
+function staubPruefen(R, a, f, now) {
+  const P = R.staub || (R.staub = { liste: [], letzt: 0, land: 0, sprung: 0 }), fuss = f.holder.position;
+  if (a._landT3d && a._landT3d !== P.land) { P.land = a._landT3d; for (let i = 0; i < 7; i++) staubWolke(R, fuss, i / 7 * Math.PI * 2, 1.2 + (a._landV3d || 0) * 2.2); }
+  if (a._jumpT3d && a._jumpT3d !== P.sprung) { P.sprung = a._jumpT3d; for (let i = 0; i < 4; i++) staubWolke(R, fuss, i / 4 * Math.PI * 2 + 0.4, 0.9); }
+  if (a.run && a.walking && (a._vz3d || 0) === 0 && now - P.letzt > 105) { P.letzt = now; staubWolke(R, fuss, null, 0.5); }
+}
+function staubTick(R) {
+  const P = R.staub; if (!P) return; const now = performance.now();
+  for (const s of P.liste) {
+    if (!s.an) continue;
+    const q = (now - s.t0) / s.life;
+    if (q >= 1) { s.an = false; s.m.visible = false; continue; }
+    const e = 1 - (1 - q) * (1 - q), g = 0.22 + 0.8 * e;
+    s.m.position.set(s.x + s.vx * e, s.y + 0.32 * e, s.z + s.vz * e); s.m.scale.set(g, g, 1); s.m.material.opacity = 0.6 * (1 - q);
+  }
+}
+const _ss = new THREE.Vector3();
+function sprungSchatten(R, a, id) {   // runder Schatten auf dem, was unter der gesteuerten Figur liegt – zum Zielen beim Springen
+  let S = R.sprungSchatten;
+  if (!S) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x140a20, transparent: true, opacity: 0.34, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    mat.userData.outlineParameters = { visible: false };
+    S = R.sprungSchatten = new THREE.Mesh(new THREE.CircleGeometry(0.33, 24), mat); S.rotation.x = -Math.PI / 2; S.renderOrder = 2; R.scene.add(S);
+  }
+  const q = a._pos3d; if (!q) { S.visible = false; return; }
+  const boden = Math.max(0, plattformHoehe(id, q[0], q[1], (a._z3d || 0) + 0.01)), ueber = Math.max(0, (a._z3d || 0) - boden);
+  _ss.copy(bl(q[0], q[1], boden + 0.015));
+  if (R.krumm && boden > 0.001) _ss.add(krummVersatz(R.krumm, _ss.x, _ss.y, _ss.z, _kv));
+  S.position.copy(_ss); const k = 1 / (1 + ueber * 0.45); S.scale.set(k, k, 1); S.material.opacity = 0.34 * Math.max(0.35, k); S.visible = true;
+}
+// ---------- Wetter im Echtzeit-3D: Regenstriche rund um die Kamera, Spritzer am Boden; an der Villa ein fernes Gewitter ----------
+function regenTick(R, an, dt) {
+  let W = R.regen;
+  if (!an) { if (W) W.linien.visible = false; return; }
+  if (!W) {
+    const n = 700, pos = new Float32Array(n * 6), geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.LineBasicMaterial({ color: 0xcfe4ff, transparent: true, opacity: 0.5, depthWrite: false });
+    const linien = new THREE.LineSegments(geo, mat); linien.frustumCulled = false; R.scene.add(linien);
+    const tropfen = Array.from({ length: n }, () => ({ x: 0, y: -99, z: 0, v: 13 + Math.random() * 5 }));
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xdcecff, transparent: true, opacity: 0.6, depthWrite: false }); ringMat.userData.outlineParameters = { visible: false };
+    const ringGeo = new THREE.RingGeometry(0.06, 0.1, 14); ringGeo.rotateX(-Math.PI / 2);
+    const ringe = Array.from({ length: 40 }, () => { const m = new THREE.Mesh(ringGeo, ringMat); m.visible = false; R.scene.add(m); return { m, t0: 0 }; });
+    W = R.regen = { linien, tropfen, ringe, ri: 0 };
+  }
+  W.linien.visible = true;
+  const cam = R.camera.position, ziel = R.ziel || cam, cxm = (cam.x + ziel.x) / 2, czm = (cam.z + ziel.z) / 2, sek = Math.min(0.05, dt / 1000), now = performance.now();
+  const pos = W.linien.geometry.attributes.position;
+  W.tropfen.forEach((d, i) => {
+    d.y -= d.v * sek; d.x += 1.2 * sek;
+    if (d.y < 0) {
+      if (d.y > -90 && Math.random() < 0.25) { const r = W.ringe[W.ri++ % W.ringe.length]; r.m.position.set(d.x, 0.02, d.z); r.t0 = now; r.m.visible = true; }
+      d.x = cxm + (Math.random() - 0.5) * 22; d.z = czm + (Math.random() - 0.5) * 22; d.y = 6 + Math.random() * 6;
+    }
+    pos.setXYZ(i * 2, d.x, d.y, d.z); pos.setXYZ(i * 2 + 1, d.x - 0.06, d.y + 0.5, d.z);
+  });
+  pos.needsUpdate = true;
+  for (const r of W.ringe) if (r.m.visible) { const q = (now - r.t0) / 260; if (q >= 1) r.m.visible = false; else r.m.scale.setScalar(0.6 + q * 2.2); }
+}
+const GEWITTER = new Set(['auffahrt']);
+function gewitterTick(R, t) {
+  if (!GEWITTER.has(R.id)) return;
+  const W = R.gewitter || (R.gewitter = { naechster: t + 6000 + Math.random() * 8000, t0: -1e9, licht: null, basis: 1 });
+  if (!W.licht) R.scene.traverse(o => { if (!W.licht && o.isHemisphereLight) { W.licht = o; W.basis = o.intensity; } });
+  if (t > W.naechster) {
+    W.t0 = t; W.naechster = t + 14000 + Math.random() * 18000;
+    const ms = 500 + Math.random() * 1300;   // Donner kommt etwas später (fern)
+    if (typeof Sound !== 'undefined') setTimeout(() => Sound.sfx('thunder'), ms);
+  }
+  const x = (t - W.t0) / 1000, blitz = x < 0.6 ? Math.exp(-x * 7) * (0.7 + 0.3 * Math.sin(x * 55)) : 0;
+  if (W.licht) W.licht.intensity = W.basis * (1 + 2.6 * Math.max(0, blitz));
+}
 // ---------- Goldene Toasts: einer pro Raum zum Einsammeln (wie die Sterne in Super Mario 64) ----------
 // js/echt3d.js sucht den Platz aus (begehbar, Möbel zum Hinaufspringen) und merkt sich, was schon gefunden ist
 export function goldtoastKandidaten(id) {   // Oberseiten von Möbeln, auf die man mit einem Sprung kommt (Blender-Meter)
@@ -2290,13 +2453,22 @@ function plattformHoehe(id, x, y, z) {
   if (R && R.kisten) for (const { k, o } of R.kisten) if (k[4] > h && k[4] <= z + STUFE + 0.01 && x > k[0] - r && x < k[1] + r && y > k[2] - r && y < k[3] + r && (!o || sichtbar(o))) h = k[4];
   return h;
 }
-export function huepfen(a) {   // Sprung zünden – nur, wenn die Figur steht; Tom-&-Jerry-Anlauf: erst 90 ms in die Hocke
-  if ((a._vz3d || 0) !== 0 || a._vorT3d || a._schub3d) return false;
-  a._vorT3d = performance.now();
+// Sprung zünden – Tom-&-Jerry-Anlauf: kurz in die Hocke. Verzeihend wie in Super Mario 64: kurz nach dem Herunterlaufen
+// von einer Kante zählt der Knopf noch, und wer kurz vor der Landung drückt, springt gleich wieder ab
+const HOCKE_MS = 55;
+export function huepfen(a) {
+  const now = performance.now();
+  if (a._vorT3d || a._schub3d) return false;
+  if ((a._vz3d || 0) !== 0) {
+    if (a._vz3d < 0 && now - (a._bodenT3d || 0) < 150 && now - (a._jumpT3d || 0) > 350) { a._vz3d = SPRUNG_V0; a._jumpT3d = now; return true; }
+    a._sprungWunsch3d = now; return false;
+  }
+  a._vorT3d = now;
   return true;
 }
+export function sprungLos(a) { if (a && (a._vz3d || 0) > 2.4) a._vz3d *= 0.55; }   // Knopf früh losgelassen: kleinerer Hüpfer
 function sprungAbheben(a, now) {
-  if (!a._vorT3d || now - a._vorT3d < 90) return;
+  if (!a._vorT3d || now - a._vorT3d < HOCKE_MS) return;
   a._vorT3d = null; a._vz3d = SPRUNG_V0; a._jumpT3d = now;
   a._z3d = Math.max(a._z3d || 0, 0.0002);   // in der Luft: ab jetzt rechnet die Schwerkraft
 }
@@ -2307,15 +2479,16 @@ export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py 
     const stufe = plattformHoehe(id, px, py, z);
     if (stufe > z + 0.001 && stufe <= z + STUFE) { a._z3d = stufe; if (stufe > 0.02) a._checkpoint3d = [a.x, a.y, stufe]; return stufe; }
   }
-  if (z <= 0.0001 && vz === 0 && !loch) return z;
+  if (z <= 0.0001 && vz === 0 && !loch) { a._bodenT3d = performance.now(); return z; }
   if (loch && z <= 0.0001 && vz === 0) vz = -0.35;
   vz -= G3D * sek;
   z += vz * sek;
   const boden = plattformHoehe(id, px, py, z);
   if (z <= boden && vz <= 0) {
     if (vz < -2.2) { a._landT3d = performance.now(); a._landV3d = Math.min(1, -vz / 9); }   // Platsch: Squash bei der Landung
-    z = boden; a._vz3d = 0;
+    z = boden; a._vz3d = 0; a._bodenT3d = performance.now();
     if (z > 0.02) a._checkpoint3d = [a.x, a.y, z];
+    if (a._sprungWunsch3d && performance.now() - a._sprungWunsch3d < 180) { a._sprungWunsch3d = 0; a._vorT3d = performance.now() - HOCKE_MS + 25; }   // vorgemerkter Sprung
   } else a._vz3d = vz;
   a._z3d = z;
   if (z < -2.4 && a._checkpoint3d) {
@@ -2429,6 +2602,7 @@ export function frame(t, actors, pxW, ctx) {
   if (R.extra) R.extra.tick(s, ctx);
   if (R.goldtoast) goldtoastTick(R, s);
   if (R.leben) R.leben.tick(s);
+  staubTick(R); regenTick(R, !!ctx.regen, dt); gewitterTick(R, t);
   schilderTick(R);
   if (R.req) requisitenBewegen(R.req, s, ctx);
   if (R.home) kartenStellen(R, ctx.karten);
@@ -2491,6 +2665,7 @@ export function frame(t, actors, pxW, ctx) {
     }
     // steht man auf einer Stufe, Kiste oder Treppe im verbogenen Raum, verbiegt man sich mit – genau wie der Boden darunter
     if (R.krumm && f.holder.position.y > 0.001) f.holder.position.add(krummVersatz(R.krumm, f.holder.position.x, f.holder.position.y, f.holder.position.z, _kv));
+    if (ich) { staubPruefen(R, a, f, now); sprungSchatten(R, a, ctx.id); }
     if (ich) {
       if (R.innen && autoKamera) {   // Auto-Kamera hinter der Figur (Blickrichtung f.yaw: +x vorn, Kamera auf der Gegenseite)
         // wie Super Mario 64: die Kamera bleibt auf der vorderen Raumhälfte (höchstens ~70° seitlich) und schwenkt beim
@@ -2610,7 +2785,8 @@ export function frame(t, actors, pxW, ctx) {
   schattenN = (schattenN + 1) % 2;
   if (renderer.shadowMap.enabled && (schattenN === 0 || R !== letzterSchatten)) { renderer.shadowMap.needsUpdate = true; letzterSchatten = R; }
   fischS = fischZiel(R);
-  if (fischS > 0.01) {
+  if (POST.an) postRender(R, camera, w, h);
+  else if (fischS > 0.01) {
     if (!fischMat) fischBauen();
     const rw = Math.min(2560, Math.round(w * FISCH.ss)), rh = Math.round(h * rw / w);
     if (!fischRT || fischRT.width !== rw || fischRT.height !== rh) {
