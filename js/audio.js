@@ -642,6 +642,14 @@ const Sound = (() => {
       ['G4', 'C5', 'E5', 'G5'].forEach((n, i) => osc('square', freq(n), t + i * 0.09, 0.12, 0.05, sfxBus, { lp: 2600, decay: true }));
       ['C5', 'E5', 'G5', 'C6'].forEach(n => osc('triangle', freq(n), t + 0.38, 0.9, 0.05, sfxBus, { decay: true }));
     },
+    // ein goldener Toast in der Nähe: zwei feine Glitzertöne
+    funkeln: t => { const f = 2600 + Math.random() * 900; osc('triangle', f, t, 0.09, 0.012, sfxBus, { decay: true }); osc('sine', f * 1.5, t + 0.06, 0.12, 0.008, sfxBus, { decay: true }); },
+    // Goldener Toast eingesammelt: eigene kleine Fanfare (Arpeggio nach oben), Funkeln, ein satter Bauch-Ton
+    goldtoast: t => {
+      [1047, 1319, 1568, 2093, 2637].forEach((f, i) => { osc('square', f, t + i * 0.065, 0.16, 0.03, sfxBus, { decay: true, lp: 4200 }); osc('sine', f * 2, t + i * 0.065, 0.22, 0.018, sfxBus, { decay: true }); });
+      osc('sine', 523, t, 0.45, 0.06, sfxBus, { f2: 1046, decay: true });
+      for (let i = 0; i < 9; i++) osc('triangle', 2800 + i * 240, t + 0.36 + i * 0.035, 0.1, 0.014, sfxBus, { decay: true });
+    },
     achieve: t => { osc('sine', 1318, t, 0.3, 0.1, sfxBus, { decay: true }); osc('sine', 1976, t + 0.12, 0.6, 0.1, sfxBus, { decay: true }); for (let i = 0; i < 5; i++) osc('triangle', 2637 + i * 300, t + 0.25 + i * 0.05, 0.12, 0.03, sfxBus, { decay: true }); },
     warp: t => { osc('sawtooth', 1400, t, 0.55, 0.05, sfxBus, { f2: 90, lp: 2400, vib: 40 }); nz(t, 0.6, 0.12, sfxBus, { type: 'bandpass', f: 3000, f2: 300, q: 3 }); osc('sine', 80, t + 0.35, 0.4, 0.12, sfxBus, { f2: 900, decay: true }); },
     reveal: t => [0, 1, 2].forEach(i => osc('sine', 1568 * Math.pow(1.26, i), t + i * 0.05, 0.25, 0.04, sfxBus, { decay: true })),

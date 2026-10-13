@@ -430,8 +430,62 @@ function echt3dPadSpringen() {
   return true;
 }
 let echt3dVirtualStick = { x: 0, y: 0, aktiv: false };
+// ---------- Goldene Toasts (nur Echtzeit-3D): in jedem Raum glänzt einer, oft oben auf einem Möbel – hinaufspringen! ----------
+const GOLDTOAST_RAEUME = Object.keys(ECHT3D.rooms).filter(id => id !== 'prolog');
+const echt3dGold = {};   // Raum -> gewählter Ort [x, y, Höhe] in Blender-Metern
+const goldtoastHat = id => !!(G.state && G.state.flags && G.state.flags['goldtoast_' + id]);
+const goldtoastZahl = () => GOLDTOAST_RAEUME.filter(goldtoastHat).length;
+if (typeof ACH !== 'undefined') ACH.push({ id: 'goldtoasts', name: 'Goldene Krümel', desc: 'Alle goldenen Toasts in der Villa und drumherum gefunden (Echtzeit-3D).' });
+function echt3dGoldtoastPruefen(p) {
+  const id = p.room, m = ECHT3D.mod;
+  if (!m || !m.goldtoastSetzen || !GOLDTOAST_RAEUME.includes(id) || !m.raumGeladen(id) || goldtoastHat(id)) return;
+  if (!(id in echt3dGold)) {   // Platz aussuchen: ein Möbel, dessen Fuß auf der Lauffläche steht – sonst hinten auf dem Boden
+    const room = ROOMS[id]; let s = 7; for (const ch of id) s = (s * 31 + ch.charCodeAt(0)) % 9973;
+    // Möbel im Bild der Bühnenkamera zuerst (dort sieht man ihn glänzen), sonst irgendwo im begehbaren 3D-Raum;
+    // Möbel an der Wand zählen mit (man springt von vorn hinauf)
+    const kand = m.goldtoastKandidaten(id).map((k, i) => { const g = m.spielVonWelt(id, [k[0], k[1], 0]), imBild = g && g[0] > 60 && g[0] < 900 && g[1] > 40 && g[1] < 430; return [k, g, (imBild ? 0 : 1000) + (i * 7919 + s) % 997]; })
+      .sort((a, b) => a[2] - b[2]);
+    let ort = null;
+    for (const [k, g] of kand) {
+      if (!g) continue;
+      const [x, y] = clampWalk(room, g[0], g[1]);
+      if (Math.hypot(x - g[0], y - g[1]) < 50) { ort = k; break; }
+    }
+    if (!ort) { const [x, y] = clampWalk(room, 220 + (s % 520), 0); ort = m.weltVonSpiel(id, x, y + 6); }
+    echt3dGold[id] = ort;
+  }
+  const ort = echt3dGold[id]; if (!ort) return;
+  if (!m.goldtoastDa(id)) m.goldtoastSetzen(id, ort);   // (wieder) aufstellen – der Raum kann neu geladen worden sein
+  const q = p._pos3d; if (!q) return;
+  const abst = Math.hypot(q[0] - ort[0], q[1] - ort[1]);
+  if (abst < 5.5 && G.t - (G.goldFunkelT || 0) > 350 + abst * 260) {   // in der Nähe funkelt es leise – je näher, desto schneller
+    G.goldFunkelT = G.t; const g = m.spielVonWelt(id, [ort[0], ort[1], 0]); Sound.sfx('funkeln', g ? panX(g[0]) : 0);
+  }
+  if (abst < 0.7 && q[2] > ort[2] - 0.35) {
+    G.state.flags['goldtoast_' + id] = 1;
+    m.goldtoastWeg(id); Sound.sfx('goldtoast'); rumble(180, 0.4, 0.6);
+    if (Sound.duck) { Sound.duck(true); setTimeout(() => { if (!G.speech) Sound.duck(false); }, 1400); }   // Musik kurz leiser: die Fanfare gehört dem Toast
+    if (typeof mimikStart === 'function') mimikStart(p, 'freude');
+    const n = goldtoastZahl(), alle = GOLDTOAST_RAEUME.length;
+    note(n >= alle ? `Alle ${alle} goldenen Toasts! Dr. Fred wäre stolz. Oder hungrig.` : `Goldener Toast! ${n} von ${alle}.`);
+    G.goldtoastT = G.t;
+    if (n >= alle) unlock('goldtoasts');
+    save();
+  }
+}
+function drawGoldtoastZaehler() {
+  if (!echt3dParkourAktiv() || cx.isPix || G.photoMode || !G.state || G.inIntro) return;
+  const n = goldtoastZahl(), alle = GOLDTOAST_RAEUME.length, hier = GOLDTOAST_RAEUME.includes(viewRoomId()) && !goldtoastHat(viewRoomId());
+  const frisch = G.goldtoastT && G.t - G.goldtoastT < 2500, k = frisch ? 1 + Math.sin((G.t - G.goldtoastT) * 0.02) * 0.12 * (1 - (G.t - G.goldtoastT) / 2500) : 1;
+  const x = 30, y = 96;
+  cx.save(); cx.translate(x, y); cx.scale(k, k); cx.rotate(-0.08);
+  R(cx, -15, -13, 30, 26, '#ffd23a', 2, 8, '#8a5a10'); R(cx, -10, -8, 20, 16, '#ffe680', 0, 5);   // kleiner Goldtoast
+  cx.restore();
+  txt(cx, `${n}/${alle}`, x + 22, y + 6, '800 17px "Baloo 2", sans-serif', hier ? '#ffe066' : '#d7c6ff', 'left', 4, '#1b1020');
+}
 function drawEcht3dParkour() {
   drawEcht3dFokus();
+  drawGoldtoastZaehler();
   if (!echt3dParkourAktiv() || (!COARSE && G.pointer !== 'touch') || cx.isPix || G.photoMode) return;
   const y = SH - 66, x = 92, jx = W - 92, r = 45;
   cx.save(); cx.globalAlpha = 0.62;
@@ -682,6 +736,7 @@ function drawEcht3dParkour() {
     if (p && !p.walking) standSeit = standSeit || performance.now(); else standSeit = 0;
     if (!drei || !echt3dSteuerungErlaubt()) { tasten.clear(); echt3dVirtualStick = { x: 0, y: 0, aktiv: false }; }
     if (!drei || !p || p.room !== raum) return;
+    echt3dGoldtoastPruefen(p);
     echt3dAusgangPruefen(p);
   }, 90);
   // Tasten und Touch-Stick jedes Bild (vor der Bewegung) – nicht im 90-ms-Takt, sonst ruckelt es

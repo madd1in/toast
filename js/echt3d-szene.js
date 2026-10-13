@@ -439,7 +439,8 @@ async function ladeRaum(id) {
   if (innen) kisten.push(...innen.dekoKisten);   // Möbel an der Vorderwand (nur bei gedrehter Kamera da)
   if (DRAUSSEN.has(id)) baeumeVerbiegen(scene);
   if (KRUMM[id]) krummBiegen(scene, KRUMM[id]);
-  return { scene, camera, data, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
+  const leben = draussenLeben(scene, id, camera);   // nach dem Verbiegen: Wolken und Vögel ziehen frei
+  return { scene, camera, data, leben, nodes, sprites, extra, req, krumm: KRUMM[id] || null, innen, kisten, schilder };
 }
 
 async function ladeHafen() {
@@ -1644,6 +1645,10 @@ function fassadeVerbiegen(H) {
     }
   }
 }
+// Prolog-Landschaft: Wellen im Boden und Schlängeln des Flusses (Blender-Meter); am Ufer der Tentakel bleibt alles flach
+const prologFall = (x, y) => Math.max(0, Math.min(1, (Math.hypot(x - 20, y - 46) - 7) / 14));
+const prologHoch = (x, y) => 0.9 * prologFall(x, y) * (Math.sin(x * 0.13 + y * 0.07) + 0.6 * Math.sin(y * 0.21 - x * 0.05));
+const prologQuer = (x, y) => { const f = prologFall(x, y); return [f * (1.6 * Math.sin(y * 0.25) + 0.7 * Math.sin(x * 0.4)), f * 1.2 * Math.sin(x * 0.22 + 0.8)]; };
 // Himmel für Szenen ohne eigene Angabe in Blender (Horizont, oben)
 const HIMMEL_EXTRA = { prolog: ['#cfeeff', '#3f8ee0'] };
 // Vor dem Zusammenfassen der festen Teile (danach gibt es die einzelnen Fenster nicht mehr)
@@ -1652,9 +1657,7 @@ const RAUM_VORBAU = {
   // wandern mit; dort, wo die Tentakel stehen (und Rohr und Fleck sind), bleibt alles, wie es war
   prolog(H) {
     H.updateMatrixWorld(true);
-    const fall = (x, y) => Math.max(0, Math.min(1, (Math.hypot(x - 20, y - 46) - 7) / 14));   // Blender-Meter
-    const hoch = (x, y) => 0.9 * fall(x, y) * (Math.sin(x * 0.13 + y * 0.07) + 0.6 * Math.sin(y * 0.21 - x * 0.05));
-    const quer = (x, y) => { const f = fall(x, y); return [f * (1.6 * Math.sin(y * 0.25) + 0.7 * Math.sin(x * 0.4)), f * 1.2 * Math.sin(x * 0.22 + 0.8)]; };
+    const hoch = prologHoch, quer = prologQuer;
     const v = new THREE.Vector3(), mm = new THREE.Matrix4(), mi = new THREE.Matrix4(), c = new THREE.Vector3(), bb = new THREE.Box3();
     const flussig = /^P_(Fluss|Ufer|Stein|Brett|Gelaender|Pfosten)/;
     const teile = []; H.traverse(o => { if (o.isMesh) teile.push(o); });
@@ -1945,8 +1948,24 @@ function prologTeile(scene, H) {
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xff9ae8, transparent: true }); ringMat.userData.outlineParameters = { visible: false };
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.07, 8, 40), ringMat); ring.rotation.x = Math.PI / 2; ring.position.copy(bl(P.lila[0], P.lila[1], 0.9)); ring.visible = false; scene.add(ring);
   const proSegment = 8 * 6;
+  // Glitzer treiben den Fluss hinunter (vom Haus zur Wiese), auf der geschlängelten Bahn wie Wasser und Ufer
+  const lauf = [[46, 66], [32, 59], [21, 51], [11, 41], [3, 33], [-5, 27], [-13, 21], [-23, 17], [-40, 14]].map(([x, y]) => { const [qx, qy] = prologQuer(x, y); return [x + qx, y + qy]; });
+  const bahn = new THREE.CatmullRomCurve3(lauf.map(([x, y]) => bl(x, y, 0)));
+  const glMat = new THREE.MeshBasicMaterial({ color: 0xeaffff, transparent: true, opacity: 0.75, depthWrite: false }); glMat.userData.outlineParameters = { visible: false };
+  const glGeo = new THREE.CircleGeometry(0.32, 10); glGeo.rotateX(-Math.PI / 2);
+  const glitzer = Array.from({ length: 80 }, (_, i) => { const m = new THREE.Mesh(glGeo, glMat); m.userData = { u: i / 80, quer: Math.sin(i * 2.7) * 1.4, v: 0.012 + (i % 5) * 0.002, l: 0.9 + (i % 3) * 0.5 }; scene.add(m); return m; });
+  const _t = new THREE.Vector3(), _p = new THREE.Vector3();
   return {
     tick(s) {
+      for (const m of glitzer) {
+        const d = m.userData, u = (d.u + s * d.v) % 1;
+        bahn.getPointAt(u, _p); bahn.getTangentAt(u, _t);
+        const bx = _p.x, by = -_p.z;
+        m.position.set(_p.x - _t.z * d.quer, 0.07 + prologHoch(bx, by), _p.z + _t.x * d.quer);
+        const f = Math.sin(u * Math.PI), blink = 0.5 + 0.5 * Math.sin(s * 3 + d.quer * 4);
+        m.scale.set(d.l * f * (0.7 + blink * 0.8), 1, 0.4 * f);
+        m.rotation.y = Math.atan2(_t.x, _t.z);
+      }
       const pr = typeof G !== 'undefined' && G.prolog, t = typeof G !== 'undefined' ? G.t : 0;
       const k = pr && pr.sludgeT ? Math.min(1, (t - pr.sludgeT) / 600) : 0, wachs = pr && pr.sludgeT ? Math.min(1, (t - pr.sludgeT) / 4000) : (pr ? 0 : 1);
       strahl.visible = k > 0; strahlGeo.setDrawRange(0, Math.max(1, Math.floor(40 * k)) * proSegment);
@@ -1960,6 +1979,116 @@ function prologTeile(scene, H) {
       if (ring.visible) { const q = arme / 1300; ring.scale.setScalar(0.4 + q * 3.2); ringMat.opacity = 1 - q; }
     },
   };
+}
+// ---------- Leben draußen: ziehende Toon-Wolken, kreisende Vögel (abends Fledermäuse), Glühwürmchen ----------
+const DRAUSSEN_LEBEN = {
+  auffahrt: { wolken: 7, voegel: 5, gluehen: 50, nacht: true }, prolog: { wolken: 9, voegel: 6, gluehen: 0 },
+  garten1776: { wolken: 8, voegel: 6, gluehen: 18 }, fgarten: { wolken: 6, voegel: 0, gluehen: 34, nacht: true },
+};
+function draussenLeben(scene, id, cam) {
+  const L = DRAUSSEN_LEBEN[id]; if (!L) return null;
+  const C = toWorld(cam, 480, 330, new THREE.Vector3());   // Mitte der Bühne am Boden
+  const hell = toonMat(L.nacht ? 0xd8c8f0 : 0xffffff), schatten = toonMat(L.nacht ? 0xa898c8 : 0xe4ecf8);
+  const kugel = new THREE.SphereGeometry(1, 12, 8), wolken = [], voegel = [];
+  for (let i = 0; i < L.wolken; i++) {
+    const w = new THREE.Group(), n = 4 + (i % 3);
+    for (let j = 0; j < n; j++) {
+      const b = new THREE.Mesh(kugel, j % 2 ? hell : schatten);
+      b.position.set((j - n / 2) * 2.4 + Math.sin(i * 3 + j) * 0.8, Math.sin(j * 1.7 + i) * 0.9, Math.cos(j * 2.3 + i) * 1.1);
+      const g = 2.2 + ((i + j) % 3) * 0.8; b.scale.set(g, g * 0.68, g); w.add(b);
+    }
+    w.userData = { a: i / L.wolken * Math.PI * 2 + 0.3, r: 75 + (i * 37 % 55), h: 24 + (i * 13 % 16), v: 0.006 + (i % 3) * 0.003 };
+    scene.add(w); wolken.push(w);
+  }
+  const fl = new THREE.BoxGeometry(0.8, 0.04, 0.26), kp = new THREE.SphereGeometry(0.16, 8, 6), vm = toonMat(L.nacht ? 0x241834 : 0x3a2a44);
+  for (let i = 0; i < L.voegel; i++) {
+    const v = new THREE.Group(), seiten = [-1, 1].map(sx => { const piv = new THREE.Group(), m = new THREE.Mesh(fl, vm); m.position.x = sx * 0.4; piv.add(m); v.add(piv); return piv; });
+    const k = new THREE.Mesh(kp, vm); k.scale.set(0.8, 0.7, 1.6); v.add(k);
+    if (L.nacht) v.scale.setScalar(0.75);   // Fledermäuse: kleiner, hektischer
+    v.userData = { seiten, a: i * 1.3, r: 16 + i * 5, h: 13 + (i % 3) * 3, w: (i % 2 ? 1 : -1) * (0.22 + (i % 3) * 0.05), ph: i * 0.9 };
+    scene.add(v); voegel.push(v);
+  }
+  let punkte = null, basis = null;
+  if (L.gluehen) {
+    const n = L.gluehen, pos = new Float32Array(n * 3), col = new Float32Array(n * 3); basis = [];
+    for (let i = 0; i < n; i++) { const a = i * 2.39996, r = 2 + (i * 7 % 13); basis.push([C.x + Math.cos(a) * r, 0.4 + (i * 0.37 % 2.4), C.z + Math.sin(a) * r * 0.7, i * 1.7]); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    if (!goldGlanz) goldtoastModell();   // gleiche weiche Leuchttextur
+    const pm = new THREE.PointsMaterial({ size: 0.42, map: goldGlanz, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true });
+    punkte = new THREE.Points(geo, pm); punkte.frustumCulled = false; scene.add(punkte);
+  }
+  return {
+    tick(s) {
+      for (const w of wolken) { const d = w.userData, a = d.a + s * d.v; w.position.set(C.x + Math.cos(a) * d.r, d.h, C.z + Math.sin(a) * d.r * 0.8 - 20); }
+      for (const v of voegel) {
+        const d = v.userData, a = d.a + s * d.w, flap = Math.sin(s * (13 + d.ph) + d.ph) * (d.w > 0 ? 0.7 : 0.6);
+        v.position.set(C.x + Math.cos(a) * d.r, d.h + Math.sin(s * 0.7 + d.ph) * 1.2, C.z - 8 + Math.sin(a) * d.r * 0.6);
+        v.rotation.y = Math.atan2(-Math.sin(a) * Math.sign(d.w), Math.cos(a) * 0.6 * Math.sign(d.w));
+        d.seiten[0].rotation.z = flap; d.seiten[1].rotation.z = -flap;
+      }
+      if (punkte) {
+        const pos = punkte.geometry.attributes.position, col = punkte.geometry.attributes.color;
+        basis.forEach(([x, y, z, ph], i) => {
+          pos.setXYZ(i, x + Math.sin(s * 0.5 + ph) * 0.9, y + Math.sin(s * 0.8 + ph * 1.3) * 0.35, z + Math.cos(s * 0.42 + ph) * 0.9);
+          const b = Math.max(0, Math.sin(s * 1.6 + ph * 2.1)) ** 3; col.setXYZ(i, 0.75 * b, 1.0 * b, 0.35 * b);
+        });
+        pos.needsUpdate = true; col.needsUpdate = true;
+      }
+    },
+  };
+}
+// ---------- Goldene Toasts: einer pro Raum zum Einsammeln (wie die Sterne in Super Mario 64) ----------
+// js/echt3d.js sucht den Platz aus (begehbar, Möbel zum Hinaufspringen) und merkt sich, was schon gefunden ist
+export function goldtoastKandidaten(id) {   // Oberseiten von Möbeln, auf die man mit einem Sprung kommt (Blender-Meter)
+  const R = rooms[id]; if (!R || !R.ready || !R.kisten) return [];
+  return R.kisten.filter(({ k }) => k[4] >= 0.45 && k[4] <= 1.1 && k[1] - k[0] >= 0.45 && k[3] - k[2] >= 0.45).map(({ k }) => [(k[0] + k[1]) / 2, (k[2] + k[3]) / 2, k[4]]);
+}
+export function weltVonSpiel(id, gx, gy) { const R = rooms[id]; if (!R || !R.ready || !R.camera) return null; if (!R.home) kameraLoesen(R); const p = toWorld(R.home, gx, gy, new THREE.Vector3()); return [p.x, -p.z, 0]; }
+export function goldtoastDa(id) { const R = rooms[id]; return !!(R && R.ready && R.goldtoast); }
+export function goldtoastSetzen(id, ort) {
+  const R = rooms[id]; if (!R || !R.ready) return false;
+  if (R.goldtoast) R.scene.remove(R.goldtoast.g);
+  const g = goldtoastModell(), p = bl(ort[0], ort[1], ort[2] + 0.5);
+  if (R.krumm) p.add(krummVersatz(R.krumm, p.x, p.y, p.z, new THREE.Vector3()));   // sitzt auf dem verbogenen Möbel
+  g.position.copy(p); R.scene.add(g);
+  R.goldtoast = { g, y0: p.y, weg: 0 };
+  return true;
+}
+export function goldtoastWeg(id) { const R = rooms[id]; if (R && R.goldtoast && !R.goldtoast.weg) R.goldtoast.weg = performance.now(); }
+let goldGlanz = null;
+function goldtoastModell() {
+  const w = 0.42, h = 0.4, sh = new THREE.Shape();   // Toastscheibe: unten gerade, oben der gewölbte Brotrand
+  sh.moveTo(-w / 2, -h / 2); sh.lineTo(w / 2, -h / 2); sh.lineTo(w / 2, h * 0.16);
+  sh.bezierCurveTo(w / 2 + 0.08, h * 0.5, w * 0.26, h * 0.64, 0, h * 0.56);
+  sh.bezierCurveTo(-w * 0.26, h * 0.64, -w / 2 - 0.08, h * 0.5, -w / 2, h * 0.16);
+  sh.lineTo(-w / 2, -h / 2);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3, curveSegments: 10 });
+  geo.center();
+  const gold = new THREE.MeshToonMaterial({ color: 0xffd23a, emissive: 0x7a5200, gradientMap: GRAD }), kruste = new THREE.MeshToonMaterial({ color: 0xe0901c, emissive: 0x4a2a00, gradientMap: GRAD });
+  for (const m of [gold, kruste]) m.userData.outlineParameters = { thickness: 0.005, color: INK, alpha: 1, visible: true };
+  const toast = new THREE.Mesh(geo, [gold, kruste]);   // Vorder- und Rückseite gold, der Rand wie Kruste
+  if (!goldGlanz) {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g2 = c.getContext('2d'), rg = g2.createRadialGradient(32, 32, 2, 32, 32, 32);
+    rg.addColorStop(0, 'rgba(255,240,170,1)'); rg.addColorStop(0.35, 'rgba(255,200,80,0.55)'); rg.addColorStop(1, 'rgba(255,180,40,0)');
+    g2.fillStyle = rg; g2.fillRect(0, 0, 64, 64); goldGlanz = new THREE.CanvasTexture(c);
+  }
+  const sm = new THREE.SpriteMaterial({ map: goldGlanz, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  sm.userData.outlineParameters = { visible: false };
+  const glanz = new THREE.Sprite(sm); glanz.scale.set(1.5, 1.5, 1);
+  const licht = new THREE.PointLight(0xffc040, 2.2, 3.2, 2);
+  const g = new THREE.Group(); g.name = 'Goldtoast'; g.add(glanz, toast, licht); g.userData.keinKrumm = true; g.userData.toast = toast;
+  return g;
+}
+function goldtoastTick(R, s) {
+  const T = R.goldtoast, g = T.g, toast = g.userData.toast;
+  toast.rotation.y = s * 2.4; toast.rotation.z = Math.sin(s * 1.7) * 0.12;
+  g.position.y = T.y0 + Math.sin(s * 2.1) * 0.08;
+  if (T.weg) {   // eingesammelt: hochschnellen, aufblähen, verschwinden
+    const q = (performance.now() - T.weg) / 750;
+    if (q >= 1) { R.scene.remove(g); R.goldtoast = null; return; }
+    g.position.y = T.y0 + q * 1.6; toast.rotation.y = s * 2.4 + q * 14;
+    g.scale.setScalar(q < 0.5 ? 1 + q * 0.8 : 1.4 * (1 - (q - 0.5) / 0.5));
+  }
 }
 // Spiel-Punkt (Bühnenkamera) zu einem Ort in Blender-Metern – wo Figuren stehen sollen, die im Raum frei platziert sind
 export function spielVonWelt(id, p) {
@@ -2298,6 +2427,8 @@ export function frame(t, actors, pxW, ctx) {
   if (R.anim) hafenAnim(R.anim, s);
   uhrS = s;
   if (R.extra) R.extra.tick(s, ctx);
+  if (R.goldtoast) goldtoastTick(R, s);
+  if (R.leben) R.leben.tick(s);
   schilderTick(R);
   if (R.req) requisitenBewegen(R.req, s, ctx);
   if (R.home) kartenStellen(R, ctx.karten);
