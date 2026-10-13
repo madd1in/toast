@@ -227,6 +227,15 @@ function glyphW(c, ch) {   // Breiten je Schrift und Zeichen merken – sonst mi
   if (w === undefined) { if (_glyphW.size > 8000) _glyphW.clear(); w = c.measureText(ch).width; _glyphW.set(key, w); }
   return w;
 }
+// Breite einer Zeile so, wie txt() sie krumm zeichnet (mit Buchstabenluft und breiteren Wortlücken) – measureText allein
+// ist bis zu 10 % zu knapp, dann ragen Buchstaben aus Kästen und Blasen
+function krummBreite(c, s) {
+  s = String(s);
+  if (c.isPix || !s || s.length > 90) return c.measureText(s).width;
+  const px = +((/(\d+)px/.exec(c.font) || [0, 14])[1]), lauf = px * 0.035;
+  let w = -lauf; for (const ch of s) w += (ch === ' ' ? glyphW(c, ch) * 1.7 : glyphW(c, ch)) + lauf;
+  return w;
+}
 // Verzerrte Schrift: jeder Buchstabe für sich geschert, gestreckt, gekippt und aus der Zeile gehüpft – immer gleich
 // für denselben Text (kein Flackern); wabbel > 0 lässt die Buchstaben zusätzlich schwabbeln (Sprechtext beim Reden)
 function krummText(c, s, align, px, col, stroke, strokeCol, schatten, wabbel) {

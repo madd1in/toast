@@ -748,7 +748,7 @@ function drawBark(scr) {
   const room = ROOMS[viewRoomId()], a = b.a; if (a.room !== room.id) return;
   const sc = roomScale(room, a.y) * (a.scaleMul || 1);
   const bsz = uf(17); cx.font = `700 ${bsz}px "Baloo 2", system-ui, sans-serif`;
-  const lines = wrap(b.text, 300 * Math.min(UIS, 1.25)), lh = bsz + 2, maxW = Math.max(...lines.map(l => cx.measureText(l).width));
+  const lines = wrap(b.text, 300 * Math.min(UIS, 1.25)), lh = bsz + 2, maxW = Math.max(...lines.map(l => krummBreite(cx, l)));
   let [ax, ay] = [a.x, a.y - a.h * sc - 10]; if (scr) [ax, ay] = scrPt(ax, ay);
   const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, ax)), y = Math.max(lines.length * lh + 4, ay);
   cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, (b.until - G.t) / 300, (G.t - b.start) / 200)) * 0.92;
@@ -1854,7 +1854,7 @@ function stageText(t) { return t.replace(/\*([^*]+)\*/g, '($1)'); }
 function wrap(text, maxW) {
   text = stageText(T(text));
   const cw = Lang.charWrap, sep = cw ? '' : ' ', words = cw ? Array.from(text) : text.split(' '), lines = []; let line = '';
-  for (const w of words) { const t = line ? line + sep + w : w; if (cx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; }
+  for (const w of words) { const t = line ? line + sep + w : w; if (krummBreite(cx, t) > maxW && line) { lines.push(line); line = w; } else line = t; }
   if (line) lines.push(line);
   return lines;
 }
@@ -1873,7 +1873,7 @@ function drawSpeech(scr) {
       if (scr) [x, y] = scrPt(x, y);
     }
   }
-  const maxW = Math.max(...lines.map(l => cx.measureText(l).width));
+  const maxW = Math.max(...lines.map(l => krummBreite(cx, l)));
   x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, x));
   y = Math.max(lines.length * lh + 4, y);
   cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round';
@@ -2080,10 +2080,13 @@ function drawVorspulZeichen(tp) {   // ⏩ in der Ecke, solange schneller läuft
 function drawToasts() {
   drawKloFunk();
   if (G.note && G.t < G.note.until) {
+    // nicht unter die Knöpfe oben rechts: möglichst mittig, sonst nach links gerückt, zu lang -> zwei Zeilen
     const nz = uf(15), nf = `700 ${nz}px "Baloo 2", sans-serif`; cx.font = nf;
-    const w = Math.min(W - 20, cx.measureText(T(G.note.text)).width + 30), nh = nz * 2;
-    R(cx, W / 2 - w / 2, 10, w, nh, 'rgba(20,10,32,0.88)', 2, nh / 2, '#7dff7a');
-    txt(cx, G.note.text, W / 2, 10 + nh * 0.68, nf, '#d8ffd2');
+    const rechts = modernUI() && G.screen === 'game' && HUD.btns.length ? HUD.btns[0].x - 12 : W - 10, frei = rechts - 10;
+    const zeilen = wrap(G.note.text, frei - 30), w = Math.min(frei, Math.max(...zeilen.map(z => krummBreite(cx, z))) + 34);
+    const nh = nz * (0.8 + 1.2 * zeilen.length), mx = Math.max(10 + w / 2, Math.min(W / 2, rechts - w / 2));
+    R(cx, mx - w / 2, 10, w, nh, 'rgba(20,10,32,0.88)', 2, Math.min(nh / 2, nz), '#7dff7a');
+    zeilen.forEach((z, i) => txt(cx, z, mx, 10 + nz * 1.36 + i * nz * 1.2, nf, '#d8ffd2'));
   }
   if (G.achToast && G.t < G.achToast.until) {
     const k = Math.min(1, (G.achToast.until - G.t) / 300, (G.t - (G.achToast.until - 4200)) / 300), x = W - 344 + (1 - k) * 60, y = 48;
@@ -2758,7 +2761,7 @@ function titleEgg(x, y) {
 function drawTitleBark() {
   const b = G.titleBark; if (!b || G.t > b.until) return;
   cx.font = '700 17px "Baloo 2", system-ui, sans-serif';
-  const lines = wrap(b.text, 260), lh = 19, maxW = Math.max(...lines.map(l => cx.measureText(l).width));
+  const lines = wrap(b.text, 260), lh = 19, maxW = Math.max(...lines.map(l => krummBreite(cx, l)));
   const x = Math.max(maxW / 2 + 12, Math.min(W - maxW / 2 - 12, b.x));
   cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, (b.until - G.t) / 300, (G.t - b.start) / 150));
   cx.textAlign = 'center'; cx.lineJoin = 'round';
@@ -3833,7 +3836,7 @@ function drawKloFunk() {
   const f = G.funk; if (!f || G.screen !== 'game') return;
   const k = (G.t - f.t0) / 6500, a = Math.min(1, k * 8, (1 - k) * 6); if (a <= 0) return;
   const fz = uf(14); cx.font = `700 ${fz}px "Baloo 2", sans-serif`;
-  const lines = wrap(T(f.text), 300 * Math.min(UIS, 1.3)), lh = fz + 3, w = Math.max(...lines.map(l => cx.measureText(l).width)) + 84, h = 34 + lines.length * lh;
+  const lines = wrap(T(f.text), 300 * Math.min(UIS, 1.3)), lh = fz + 3, w = Math.max(...lines.map(l => krummBreite(cx, l))) + 84, h = 34 + lines.length * lh;
   const x = 14 - (1 - Math.min(1, k * 6)) * 60, y = 96;
   cx.save(); cx.globalAlpha = a;
   R(cx, x, y, w, h, 'rgba(20,10,32,0.9)', 2.5, 12, ERA[HOME_ERA[f.from]].col);
