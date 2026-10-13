@@ -158,10 +158,13 @@ function vaPadLesen() {
   }
   VA.pad = neu; VA.padAlt = neu;
 }
-// Touch: Knöpfe unten im Automatengehäuse
+// Handy: kurz vibrieren bei Treffern (nur wo es das gibt, nur beim Spielen mit dem Finger)
+function vaBrumm(muster) { if (G.pointer === 'touch' && navigator.vibrate) try { navigator.vibrate(muster); } catch (e) { /* egal */ } }
+// Touch: Knöpfe unten neben dem Automatengehäuse – Steuerkreuz links (Finger darf zwischen ◀ und ▶ gleiten),
+// rechts A springen, B Poolnudel, darüber der Wurf-Toast
 function vaKnoepfe() {
   return { links: { x: 30, y: H - 120, w: 90, h: 90 }, rechts: { x: 130, y: H - 120, w: 90, h: 90 }, sprung: { x: W - 120, y: H - 120, w: 90, h: 90 },
-    nudel: { x: W - 220, y: H - 120, w: 90, h: 90 }, raus: { x: W - 70, y: 14, w: 52, h: 40 } };
+    nudel: { x: W - 220, y: H - 120, w: 90, h: 90 }, wurf: { x: W - 205, y: H - 205, w: 70, h: 70 }, raus: { x: W - 70, y: 14, w: 52, h: 40 } };
 }
 {
   const finger = new Map();
@@ -174,8 +177,15 @@ function vaKnoepfe() {
     if (n === 'raus') { endVania(); return; }
     if (VA.phase !== 'spiel') { vaStartKnopf(); return; }
     finger.set(e.pointerId, n);
-    if (n === 'sprung') vaSpringen(); else if (n === 'nudel') vaHauen();
+    if (n === 'sprung') vaSpringen(); else if (n === 'nudel') vaHauen(); else if (n === 'wurf') vaWerfen();
     neuBerechnen();
+  }, true);
+  window.addEventListener('pointermove', e => {   // übers Steuerkreuz gleiten, ohne abzusetzen
+    if (G.screen !== 'vania' || !finger.has(e.pointerId)) return;
+    const alt = finger.get(e.pointerId); if (alt && alt !== 'links' && alt !== 'rechts') return;
+    const p = typeof toLogical === 'function' ? toLogical(e) : { x: e.clientX, y: e.clientY }, n = knopfBei(p.x, p.y);
+    if ((n === 'links' || n === 'rechts') && n !== alt) { finger.set(e.pointerId, n); neuBerechnen(); }
+    e.preventDefault(); e.stopImmediatePropagation();
   }, true);
   const los = e => { if (G.screen !== 'vania' || !finger.has(e.pointerId)) return; finger.delete(e.pointerId); neuBerechnen(); e.stopImmediatePropagation(); };
   window.addEventListener('pointerup', los, true); window.addEventListener('pointercancel', los, true);
@@ -205,12 +215,12 @@ function vaKollision(o, w, h) {   // o.x = Mitte, o.y = Füße; schiebt aus fest
 const vaUeber = (a, b) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.y - b.y) * 2 < a.h + b.h;
 function vaSchaden(n, von) {
   const p = VA.p; if (p.unverwundbar || p.tot) return;
-  p.hp -= n; p.unverwundbar = 70; p.vy = -2.4; p.vx = (von < p.x ? 1 : -1) * 1.4; p.hieb = 0; p.getroffen = 22; Sound.sfx('vschaden'); VA.halt = 4; VA.wackeln = 8;
+  p.hp -= n; p.unverwundbar = 70; p.vy = -2.4; p.vx = (von < p.x ? 1 : -1) * 1.4; p.hieb = 0; p.getroffen = 22; Sound.sfx('vschaden'); VA.halt = 4; VA.wackeln = 8; vaBrumm(40);
   if (p.hp <= 0) vaTot();
 }
 function vaTot() {
   const p = VA.p; if (p.tot) return;
-  p.tot = 1; p.hp = 0; Sound.play(null); Sound.sfx('vtot');
+  p.tot = 1; p.hp = 0; Sound.play(null); Sound.sfx('vtot'); vaBrumm([60, 40, 120]);
 }
 function vaPuff(x, y, farbe, n = 6) { for (let i = 0; i < n; i++) { const w = Math.random() * Math.PI * 2, v = 0.6 + Math.random() * 1.6; VA.fx.push({ x, y, vx: Math.cos(w) * v, vy: Math.sin(w) * v - 0.6, t: 0, farbe }); } }
 function vaSchritt() {
@@ -474,7 +484,8 @@ function vaVorschau() { vaSprites(); if (!VA.cv) { VA.cv = document.createElemen
 
 // ---------- Automatengehäuse auf dem Bildschirm ----------
 function drawVania() {
-  const g0 = cx, s = Math.min((W - 120) / VA.w, (H - 124) / VA.h), w = VA.w * s, h = VA.h * s, x = (W - w) / 2, y = (H - h) / 2 + 20;
+  const touch = G.pointer === 'touch' || (typeof COARSE !== 'undefined' && COARSE);   // mit Fingern: Platz für die Knöpfe daneben
+  const g0 = cx, s = Math.min((W - (touch ? 500 : 120)) / VA.w, (H - 124) / VA.h), w = VA.w * s, h = VA.h * s, x = (W - w) / 2, y = (H - h) / 2 + 20;
   g0.fillStyle = grad(g0, 0, 0, 0, H, [[0, '#1a0a2a'], [1, '#0a0410']]); g0.fillRect(0, 0, W, H);
   R(g0, x - 26, y - 26, w + 52, h + 52, '#2a1440', 4, 22, '#6a3a9a');   // Gehäuse (krumm wie alles)
   vaZeichnen();
@@ -485,11 +496,15 @@ function drawVania() {
     g0.fillStyle = vg; g0.fillRect(x, y, w, h);
     g0.save(); g0.globalAlpha = 0.07; g0.fillStyle = '#ffffff'; g0.beginPath(); g0.ellipse(x + w * 0.3, y + h * 0.18, w * 0.25, h * 0.08, -0.2, 0, Math.PI * 2); g0.fill(); g0.restore();
   }
-  txt(g0, 'TENTAKELVANIA', W / 2, y - 30, '400 24px "Titan One", sans-serif', '#e88aea', 'center', 6, '#1b0a2a');
-  const K = vaKnoepfe(), touch = G.pointer === 'touch' || (typeof COARSE !== 'undefined' && COARSE);
+  txt(g0, 'TENTAKELVANIA', W / 2, y - 38, '400 24px "Titan One", sans-serif', '#e88aea', 'center', 6, '#1b0a2a');
+  const K = vaKnoepfe();
   if (touch) for (const [n, r] of Object.entries(K)) {
+    g0.save(); if (n === 'wurf' && VA.herzen <= 0) g0.globalAlpha = 0.35;
     R(g0, r.x, r.y, r.w, r.h, VA.touch[n] ? 'rgba(232,138,234,0.5)' : 'rgba(40,20,60,0.55)', 2, 14, '#e88aea');
-    txt(g0, { links: '◀', rechts: '▶', sprung: 'A', nudel: 'B', raus: '✕' }[n], r.x + r.w / 2, r.y + r.h / 2 + 10, '800 28px "Baloo 2", sans-serif', '#ffffff');
+    if (n === 'wurf') {   // derselbe Pixel-Toast wie in der Anzeige oben
+      const m = r.x + r.w / 2, k = r.y + r.h / 2; g0.fillStyle = '#e0901c'; g0.fillRect(m - 15, k - 15, 30, 30); g0.fillStyle = '#f8d890'; g0.fillRect(m - 10, k - 10, 20, 20);
+    } else txt(g0, { links: '◀', rechts: '▶', sprung: 'A', nudel: 'B', raus: '✕' }[n], r.x + r.w / 2, r.y + r.h / 2 + 10, '800 28px "Baloo 2", sans-serif', '#ffffff');
+    g0.restore();
   } else txt(g0, T('Pfeile/WASD laufen · Leertaste springen · J/Z Poolnudel · ↑+J Toast werfen · Esc beenden'), W / 2, H - 14, '600 13px "Baloo 2", sans-serif', '#b8a4e8');
 }
 
