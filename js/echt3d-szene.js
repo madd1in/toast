@@ -505,6 +505,27 @@ function addFig(id, root, rig) {
   holder.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) randLicht(m); });
   figs[id] = { id, holder, root, top, nodes, base, rig, yaw: -0.56, walkPh: 0, last: null, blinkT: 2000 + Math.random() * 3000 };
 }
+// Durchsichtigkeit einer Figur: beim ersten Mal bekommt sie eigene Materialien (Figuren teilen sich manche), samt Randlicht-Shader
+function figurAlpha(f, a) {
+  if (f.alpha === a || (f.alpha == null && a === 1)) return;
+  f.alpha = a;
+  if (!f.mats) {
+    f.mats = [];
+    f.holder.traverse(o => {
+      if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+      const alt = o.material, m = alt.clone();
+      if (alt.onBeforeCompile) { m.onBeforeCompile = alt.onBeforeCompile; m.customProgramCacheKey = alt.customProgramCacheKey; }
+      m.userData.outlineParameters = Object.assign({}, alt.userData.outlineParameters || {});
+      o.material = m;
+      f.mats.push({ m, t: alt.transparent, o: alt.opacity, dw: alt.depthWrite, ov: m.userData.outlineParameters.visible });
+    });
+  }
+  const durch = a < 1;
+  for (const e of f.mats) {
+    e.m.transparent = durch || e.t; e.m.opacity = e.o * a; e.m.depthWrite = durch ? false : e.dw;
+    e.m.userData.outlineParameters.visible = durch ? false : e.ov;   // der schwarze Rand bliebe sonst stehen
+  }
+}
 // Randlicht wie in Psychonauts 2: die Silhouette der Figuren leuchtet warm (Fresnel), hebt sie vom Raum ab
 function randLicht(m) {
   if (!m || m.userData.randLicht || !m.isMeshToonMaterial) return;
@@ -973,7 +994,56 @@ function armFrei(R, von, bis) {   // freie Länge des Kameraarms von der Figur z
     if (_armBox.containsPoint(von)) continue;
     if (_armRay.intersectBox(_armBox, _armHit)) { const d = _armHit.distanceTo(von); if (d < frei) frei = d; }
   }
-  return frei < lang ? Math.max(1.6, frei - 0.3) : lang;
+  let ende = frei < lang ? Math.max(1.6, frei - 0.3) : lang;
+  // dazu die Raumgeometrie selbst (Zwischenwände, Säulen, Treppen, Erker): die Kisten kennen nur Möbel. Dort darf die
+  // Kamera auch ganz nah heran – lieber dicht hinter der Figur als hinter einer Wand
+  if (R.blickGitter === undefined) R.blickGitter = blickGitterBauen(R);
+  if (R.blickGitter) { const g = gitterStrahl(R.blickGitter, _armRay, Math.min(lang, ende + 0.4)); if (g < lang) ende = Math.min(ende, Math.max(0.7, g - 0.35)); }
+  return ende;
+}
+// Grobes Gitter (60 cm) über die festen Dreiecke des Raums (die zusammengefasste, schon krumm gebogene Geometrie):
+// ein Strahl prüft nur die Dreiecke in den Zellen entlang seines Wegs. Winzige Teile (Griffe, Schrauben) fehlen mit Absicht.
+const GZ = 0.6, _ga = new THREE.Vector3(), _gb = new THREE.Vector3(), _gc = new THREE.Vector3(), _gp = new THREE.Vector3(), _gh = new THREE.Vector3();
+const gKey = (x, y, z) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512);
+function blickGitterBauen(R) {
+  const stat = R.scene.getObjectByName('Statisch'); if (!stat) return null;
+  const t0 = performance.now(), tris = [], zellen = new Map(), I = R.innen, rand = 1.5;
+  stat.updateMatrixWorld(true);
+  const kreuz = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+  stat.traverse(m => {
+    if (!m.isMesh || !m.visible || (m.material && m.material.transparent && m.material.opacity < 0.6)) return;
+    const pos = m.geometry.attributes.position, idx = m.geometry.index, n = idx ? idx.count : pos.count;
+    for (let i = 0; i + 2 < n; i += 3) {
+      _ga.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
+      _gb.fromBufferAttribute(pos, idx ? idx.getX(i + 1) : i + 1).applyMatrix4(m.matrixWorld);
+      _gc.fromBufferAttribute(pos, idx ? idx.getX(i + 2) : i + 2).applyMatrix4(m.matrixWorld);
+      if (kreuz.crossVectors(e1.subVectors(_gb, _ga), e2.subVectors(_gc, _ga)).lengthSq() < 0.0036) continue;   // kleiner als ~4 dm²/2
+      const x0 = Math.min(_ga.x, _gb.x, _gc.x), x1 = Math.max(_ga.x, _gb.x, _gc.x), y0 = Math.min(_ga.y, _gb.y, _gc.y), y1 = Math.max(_ga.y, _gb.y, _gc.y), z0 = Math.min(_ga.z, _gb.z, _gc.z), z1 = Math.max(_ga.z, _gb.z, _gc.z);
+      if (I && (x1 < I.x0 - rand || x0 > I.x1 + rand || z1 < I.z0 - rand || z0 > I.z1 + rand || y0 > I.y1 + rand)) continue;   // weit außerhalb des Kamerabereichs
+      const cx0 = Math.floor(x0 / GZ), cx1 = Math.floor(x1 / GZ), cy0 = Math.floor(y0 / GZ), cy1 = Math.floor(y1 / GZ), cz0 = Math.floor(z0 / GZ), cz1 = Math.floor(z1 / GZ);
+      if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) * (cz1 - cz0 + 1) > 6000 || Math.max(Math.abs(cx0), Math.abs(cx1), Math.abs(cz0), Math.abs(cz1), Math.abs(cy0), Math.abs(cy1)) > 500) continue;   // Gelände, Himmel
+      const t = tris.length / 9; tris.push(_ga.x, _ga.y, _ga.z, _gb.x, _gb.y, _gb.z, _gc.x, _gc.y, _gc.z);
+      for (let x = cx0; x <= cx1; x++) for (let y = cy0; y <= cy1; y++) for (let z = cz0; z <= cz1; z++) {
+        const k = gKey(x, y, z); let l = zellen.get(k); if (!l) zellen.set(k, l = []); l.push(t);
+      }
+    }
+  });
+  const g = { tris: new Float32Array(tris), zellen, stempel: new Uint32Array(tris.length / 9), lauf: 0, ms: Math.round(performance.now() - t0) };
+  return g;
+}
+function gitterStrahl(g, ray, lang) {   // Abstand bis zum ersten Dreieck auf dem Strahl (höchstens lang)
+  const T = g.tris, st = g.stempel, lauf = ++g.lauf; let best = Infinity;
+  for (let s = 0; s <= lang + GZ / 2; s += GZ / 2) {
+    if (best < s - GZ) break;   // näher kommt nichts mehr
+    ray.at(Math.min(s, lang), _gp);
+    const l = g.zellen.get(gKey(Math.floor(_gp.x / GZ), Math.floor(_gp.y / GZ), Math.floor(_gp.z / GZ))); if (!l) continue;
+    for (const t of l) {
+      if (st[t] === lauf) continue; st[t] = lauf;
+      const o = t * 9; _ga.set(T[o], T[o + 1], T[o + 2]); _gb.set(T[o + 3], T[o + 4], T[o + 5]); _gc.set(T[o + 6], T[o + 7], T[o + 8]);
+      if (ray.intersectTriangle(_ga, _gb, _gc, false, _gh)) { const d = _gh.distanceTo(ray.origin); if (d < best && d > 0.05) best = d; }
+    }
+  }
+  return best;
 }
 // Gesprächspartner der gesteuerten Figur: wer gerade spricht (oder im Dialog steht), im selben Raum
 // ---------- Vorspann-Kino: Sprecher im Halbprofil (Seiten im Wechsel), Läufer begleiten, dazwischen langsame Raumtotale ----------
@@ -2878,7 +2948,7 @@ export function frame(t, actors, pxW, ctx) {
   schilderTick(R);
   if (R.req) requisitenBewegen(R.req, s, ctx);
   if (R.home) kartenStellen(R, ctx.karten);
-  if (R.innen && R.innen.deko) R.innen.deko.visible = freiAktiv();
+  if (R.innen && R.innen.deko) R.innen.deko.visible = freiAktiv() && camera.position.z < R.innen.z1 - 0.15;   // erst, wenn die Kamera wirklich im Raum ist (sonst sieht man auf der Rückfahrt die Rückseiten der Möbel)
   // Zustände: sichtbar, wenn ein eingeschalteter Zustand es zeigt; ausgeblendet, wenn einer es versteckt
   if (R.data.zustaende) {
     _vis.clear(); const weg = new Set();
@@ -3057,11 +3127,27 @@ export function frame(t, actors, pxW, ctx) {
       f.root.position.y = Math.sin(t * 0.002 + a.x) * 0.006;   // Gäste: ruhiges Atmen
     }
   }
-  // Mitspieler und Gäste direkt vor der Linse ausblenden (sonst füllt ein Hinterkopf das halbe Bild)
+  // Mitspieler und Gäste vor der Linse oder zwischen Kamera und Spielfigur werden durchsichtig (dicht davor ganz weg) –
+  // sonst füllt ein Hinterkopf oder ein Riesententakel das halbe Bild
+  const ichKind = curKind(actors);
   for (const f of Object.values(figs)) {
-    let v = seen.has(f.id) && f.holder.parent === R.scene;
-    if (v && f.id !== curKind(actors) && freiAktiv()) { _v2.copy(f.holder.position); _v2.y += 1.0; if (_v2.distanceTo(camera.position) < 1.5) v = false; }
+    let v = seen.has(f.id) && f.holder.parent === R.scene, ziel = 1;
+    if (v && f.id !== ichKind && freiAktiv()) {
+      const fx = f.holder.position.x - camera.position.x, fz = f.holder.position.z - camera.position.z, nah = Math.hypot(fx, fz);
+      _v2.copy(f.holder.position); _v2.y += 1.0;
+      if (_v2.distanceTo(camera.position) < 1.0 || nah < 0.8) v = false;
+      else {
+        ziel = Math.min(1, Math.max(0.18, (nah - 1.0) / 1.4));   // bis 2,4 m vor der Linse langsam durchsichtig
+        if (R.ichPos) {   // steht sie zwischen Kamera und mir?
+          const mx = R.ichPos.x - camera.position.x, mz = R.ichPos.z - camera.position.z, ml = mx * mx + mz * mz;
+          const u = ml > 1e-4 ? (fx * mx + fz * mz) / ml : 2;
+          if (u > 0 && u < 0.92 && Math.hypot(fx - u * mx, fz - u * mz) < 0.6) ziel = Math.min(ziel, 0.3);
+        }
+      }
+    }
     f.holder.visible = v;
+    f.alphaS = (f.alphaS == null ? 1 : f.alphaS) + (ziel - (f.alphaS == null ? 1 : f.alphaS)) * Math.min(1, dt / 160);
+    if (v) figurAlpha(f, f.alphaS > 0.985 ? 1 : f.alphaS);
   }
   schattenN = (schattenN + 1) % 2;
   if (renderer.shadowMap.enabled && (schattenN === 0 || R !== letzterSchatten)) { renderer.shadowMap.needsUpdate = true; letzterSchatten = R; }
@@ -3101,6 +3187,22 @@ export function ausgangLage(id, key, gx, gy) {
   return out;
 }
 export function spielerLage(a, id) { const R = rooms[id || a.room]; if (!R || !R.ready || !R.home) return null; const p = toWorld(R.home, a.x, a.y, new THREE.Vector3()); return [p.x, p.z]; }
+export function wasIstDa(nx, ny, id) {   // Fehlersuche: was liegt an dieser Bildschirmstelle (NDC)? Namen der Treffer samt Eltern
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
+  const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(nx, ny), R.camera);
+  return rc.intersectObjects(R.scene.children, true).slice(0, 4).map(h => { const n = []; for (let o = h.object; o && n.length < 4; o = o.parent) n.push(o.name || o.type); return h.distance.toFixed(2) + ' ' + n.join(' < '); });
+}
+export function szeneKinder(id, i, an, pfad = []) {   // Fehlersuche: Teile der Szene auflisten / einzeln ein- und ausschalten
+  const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
+  let o = R.scene; for (const k of pfad) o = o.children[k];
+  if (i != null) o.children[i].visible = an;
+  return o.children.map((c, k) => {
+    const m = c.material, b = c.geometry && (c.geometry.boundingBox || (c.geometry.computeBoundingBox(), c.geometry.boundingBox));
+    return k + ' ' + (c.name || c.type) + (c.visible ? '' : ' (aus)') + (m ? ' #' + (m.color ? m.color.getHexString() : '?') + (m.side === THREE.DoubleSide ? ' 2s' : m.side === THREE.BackSide ? ' bs' : '') + (m.map ? ' tex' : '') : '') +
+      (b ? ' [' + [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z].map(v => v.toFixed(1)).join(' ') + ']' : '');
+  });
+}
+export function gitterInfo(id) { const R = rooms[id || letzterRaum]; const g = R && R.blickGitter; return g ? { dreiecke: g.tris.length / 9, zellen: g.zellen.size, ms: g.ms } : g; }
 export function raumInfo(id) {   // Fehlersuche: Innenmaße und Kameralage
   const R = rooms[id || letzterRaum]; if (!R || !R.ready) return null;
   const c = R.camera.position;
