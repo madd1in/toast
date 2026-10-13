@@ -18,6 +18,9 @@ function echt3dBreite(voll) {
   const jetzt = performance.now(), d = ECHT3D_Q.letzt ? Math.min(120, jetzt - ECHT3D_Q.letzt) : 16; ECHT3D_Q.letzt = jetzt;
   ECHT3D_Q.ema += (d - ECHT3D_Q.ema) * 0.05;
   if (ECHT3D_Q.ema > 24) ECHT3D_Q.k = Math.max(0.62, ECHT3D_Q.k - 0.004); else if (ECHT3D_Q.ema < 17.5) ECHT3D_Q.k = Math.min(1, ECHT3D_Q.k + 0.0015);   // Ziel: flüssige 50–60 Bilder
+  // erste Stufe, still: die Umgebungsverdeckung (SSAO) ist der teuerste Bildschritt – sie geht zuerst
+  if (ECHT3D_Q.k <= 0.75 && ECHT3D_Q.ema > 22 && !ECHT3D_Q.ohneAO && ECHT3D.mod && ECHT3D.mod.postWerte) { ECHT3D_Q.aoZeit = (ECHT3D_Q.aoZeit || 0) + d; if (ECHT3D_Q.aoZeit > 3000) { ECHT3D_Q.ohneAO = true; ECHT3D.mod.postWerte({ ao: 0 }); } }
+  else ECHT3D_Q.aoZeit = 0;
   // bleibt es trotz kleinster Auflösung ruckelig: Leuchten, Linse und Tiefenunschärfe abschalten (einmal, mit Hinweis)
   if (ECHT3D_Q.k <= 0.62 && ECHT3D_Q.ema > 30) { ECHT3D_Q.amBoden = (ECHT3D_Q.amBoden || 0) + d; if (ECHT3D_Q.amBoden > 8000 && !ECHT3D_Q.einfach && ECHT3D.mod && ECHT3D.mod.nachbearbeitung) { ECHT3D_Q.einfach = true; ECHT3D.mod.nachbearbeitung(false); ECHT3D_Q.k = 0.85; note('Grafik vereinfacht, damit es flüssig läuft.'); } }
   else ECHT3D_Q.amBoden = 0;

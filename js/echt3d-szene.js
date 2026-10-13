@@ -659,7 +659,8 @@ function fischBauen() {
 // Szene ins Zwischenbild (mit 4× Kantenglättung, mit Linse 1,35× feiner); helle Stellen (Lampen, Fenster, Goldtoast,
 // Glibber) werden auf Viertelgröße herausgezogen und weichgezeichnet, dann alles in einem Schritt zusammengesetzt.
 const HANDY = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;   // Telefone und kleine Tablets
-const POST = { an: !SPARSAM && !HANDY, bloom: 0.6, schwelle: 0.8, saett: 1.14, waerme: [1.035, 1.0, 0.965], schattenLila: [0.014, 0.005, 0.024], vignette: 0.32 };
+const POST = { an: !SPARSAM && !HANDY, ao: 0.72, aoRadius: 0.65, bloom: 0.6, schwelle: 0.8, saett: 1.14, waerme: [1.035, 1.0, 0.965], schattenLila: [0.014, 0.005, 0.024], vignette: 0.32 };
+let aoMat = null, aoWeichMat = null, aoA = null, aoB = null;
 let farbA = null, farbB = null, postRT = { 1: null, 2: null }, glanzA = null, glanzB = null, hellMat = null, weichMat = null, postMat = null, postSzene = null, postKam = null, postQuad = null;
 const POST_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 function postBauen() {
@@ -676,15 +677,50 @@ function postBauen() {
       c += (texture2D(tex, vUv + schritt * 3.2308).rgb + texture2D(tex, vUv - schritt * 3.2308).rgb) * 0.070270;
       gl_FragColor = vec4(c, 1.0);
     }`);
-  postMat = shader({ tiefe: { value: null }, unscharf: { value: null }, dof: { value: 0 }, fokus: { value: 8 }, nah: { value: 0.1 }, fern: { value: 500 }, tex: { value: null }, glanz: { value: null }, k: { value: 0 }, z: { value: 1 }, asp: { value: ASP }, bloom: { value: POST.bloom }, saett: { value: POST.saett },
+  // Umgebungsverdeckung (SSAO): Ecken, Fugen und der Boden unter Möbeln und Figuren werden weich dunkler – aus dem
+  // Tiefenbild rekonstruiert (Lage + Normale), 12 Proben auf einer gedrehten Spirale, halbe Auflösung
+  aoMat = shader({ tiefe: { value: null }, aufl: { value: new THREE.Vector2() }, nah: { value: 0.1 }, fern: { value: 500 }, proj: { value: new THREE.Vector4() }, radius: { value: POST.aoRadius } },
+  `uniform sampler2D tiefe; uniform vec2 aufl; uniform float nah; uniform float fern; uniform vec4 proj; uniform float radius; varying vec2 vUv;
+    float lin(vec2 uv) { float zn = textureLod(tiefe, uv, 0.0).x * 2.0 - 1.0; return 2.0 * nah * fern / (fern + nah - zn * (fern - nah)); }
+    vec3 lage(vec2 uv) { float d = lin(uv); vec2 n = uv * 2.0 - 1.0; return vec3(d * (n.x + proj.z) / proj.x, d * (n.y + proj.w) / proj.y, -d); }
+    void main() {
+      vec3 P = lage(vUv); float d = -P.z;
+      if (d > fern * 0.5) { gl_FragColor = vec4(1.0, d, 0.0, 1.0); return; }
+      vec2 px = 1.0 / aufl;
+      vec3 Pr = lage(vUv + vec2(px.x, 0.0)), Pl = lage(vUv - vec2(px.x, 0.0)), Pu = lage(vUv + vec2(0.0, px.y)), Pd = lage(vUv - vec2(0.0, px.y));
+      vec3 dx = abs(Pr.z - P.z) < abs(P.z - Pl.z) ? Pr - P : P - Pl, dy = abs(Pu.z - P.z) < abs(P.z - Pd.z) ? Pu - P : P - Pd;
+      vec3 N = normalize(cross(dx, dy)); if (N.z < 0.0) N = -N;
+      float rs = min(radius * proj.y * 0.5 / d, 0.1), dreh = 6.2832 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      float occ = 0.0;
+      for (int i = 0; i < 12; i++) {
+        float fi = (float(i) + 0.5) / 12.0, w = float(i) * 2.39996 + dreh;
+        vec2 o = vec2(cos(w), sin(w)) * sqrt(fi) * rs * vec2(aufl.y / aufl.x, 1.0);
+        vec3 v = lage(vUv + o) - P; float l = length(v);
+        occ += max(0.0, dot(v / max(l, 1e-4), N) - 0.12) * (1.0 - smoothstep(radius * 0.6, radius * 1.8, l));
+      }
+      gl_FragColor = vec4(clamp(1.0 - occ / 12.0 * 2.3, 0.0, 1.0), d, 0.0, 1.0);
+    }`);
+  // weichzeichnen, aber nur zwischen Punkten ähnlicher Tiefe – sonst bekämen Figuren einen dunklen Hof
+  aoWeichMat = shader({ tex: { value: null }, schritt: { value: new THREE.Vector2() } }, `uniform sampler2D tex; uniform vec2 schritt; varying vec2 vUv;
+    void main() {
+      vec2 m = textureLod(tex, vUv, 0.0).rg; float s = 0.0, g = 0.0;
+      for (int x = -2; x <= 1; x++) for (int y = -2; y <= 1; y++) {
+        vec2 q = textureLod(tex, vUv + (vec2(float(x), float(y)) + 0.5) * schritt, 0.0).rg;
+        float w = max(0.0, 1.0 - abs(q.y - m.y) / (0.04 * m.y + 0.02)) + 1e-4; s += q.x * w; g += w;
+      }
+      gl_FragColor = vec4(s / g, m.y, 0.0, 1.0);
+    }`);
+  postMat = shader({ ao: { value: null }, aoStark: { value: 0 }, aoZeigen: { value: 0 }, tiefe: { value: null }, unscharf: { value: null }, dof: { value: 0 }, fokus: { value: 8 }, nah: { value: 0.1 }, fern: { value: 500 }, tex: { value: null }, glanz: { value: null }, k: { value: 0 }, z: { value: 1 }, asp: { value: ASP }, bloom: { value: POST.bloom }, saett: { value: POST.saett },
     waerme: { value: new THREE.Vector3(...POST.waerme) }, lila: { value: new THREE.Vector3(...POST.schattenLila) }, vignette: { value: POST.vignette } },
-  `uniform sampler2D tex; uniform sampler2D glanz; uniform sampler2D tiefe; uniform sampler2D unscharf; uniform float dof; uniform float fokus; uniform float nah; uniform float fern;
+  `uniform sampler2D tex; uniform sampler2D glanz; uniform sampler2D tiefe; uniform sampler2D unscharf; uniform sampler2D ao; uniform float aoStark; uniform float aoZeigen; uniform float dof; uniform float fokus; uniform float nah; uniform float fern;
     uniform float k; uniform float z; uniform float asp; uniform float bloom; uniform float saett;
     uniform vec3 waerme; uniform vec3 lila; uniform float vignette; varying vec2 vUv;
     void main() {
       vec2 p = vUv * 2.0 - 1.0, a = vec2(p.x * asp, p.y);
       vec2 uv = p * (1.0 + k * dot(a, a)) * z * 0.5 + 0.5;   // Fischauge (k = 0: unverzerrt)
       vec3 c = texture2D(tex, uv).rgb;
+      if (aoZeigen > 0.5) { gl_FragColor = vec4(vec3(texture2D(ao, uv).r), 1.0); return; }   // Prüfansicht
+      if (aoStark > 0.0) c *= mix(1.0, texture2D(ao, uv).r, aoStark * (1.0 - smoothstep(0.65, 1.0, dot(c, vec3(0.3333)))));   // Lampen bleiben hell
       if (dof > 0.0) {   // Kamerafahrt: was weit hinter dem Tentakel liegt, wird weich (Kino-Tiefenunschärfe)
         float zn = texture2D(tiefe, uv).x * 2.0 - 1.0, d = 2.0 * nah * fern / (fern + nah - zn * (fern - nah));
         c = mix(c, texture2D(unscharf, uv).rgb, smoothstep(fokus + 4.0, fokus + 26.0, d) * dof);
@@ -699,6 +735,7 @@ function postBauen() {
       #include <colorspace_fragment>
     }`);
 }
+export function postWerte(o) { if (o) Object.assign(POST, o); return POST; }   // zum Abstimmen und Vergleichen
 export function nachbearbeitung(an) { if (an != null) POST.an = !!an && !SPARSAM && !HANDY; return POST.an; }   // Schalter (Einstellungen, Messen)
 function postPass(mat, ziel) { postQuad.material = mat; renderer.setRenderTarget(ziel); renderer.render(postSzene, postKam); }
 function postRender(R, camera, w, h) {
@@ -708,7 +745,7 @@ function postRender(R, camera, w, h) {
   if (!rt || rt.width !== rw || rt.height !== rh) {
     if (rt) rt.dispose();
     rt = postRT[art] = new THREE.WebGLRenderTarget(rw, rh, { samples: fein ? 0 : 4, colorSpace: THREE.SRGBColorSpace });
-    if (fein) rt.depthTexture = new THREE.DepthTexture(rw, rh);   // für die Tiefenunschärfe in Kamerafahrten
+    rt.depthTexture = new THREE.DepthTexture(rw, rh);   // für Umgebungsverdeckung und die Tiefenunschärfe in Kamerafahrten
   }
   const qw = Math.max(64, Math.round(w / 4)), qh = Math.max(32, Math.round(h / 4));
   if (!glanzA || glanzA.width !== qw || glanzA.height !== qh) {
@@ -723,6 +760,19 @@ function postRender(R, camera, w, h) {
     weichMat.uniforms.tex.value = glanzA.texture; weichMat.uniforms.schritt.value.set(weit / qw, 0); postPass(weichMat, glanzB);
     weichMat.uniforms.tex.value = glanzB.texture; weichMat.uniforms.schritt.value.set(0, weit / qh); postPass(weichMat, glanzA);
   }
+  const aoAn = POST.ao > 0 && !R.ohneAO;
+  if (aoAn) {
+    const aw = Math.max(64, Math.round(rw / 2)), ah = Math.max(32, Math.round(rh / 2));
+    if (!aoA || aoA.width !== aw || aoA.height !== ah) {
+      if (aoA) { aoA.dispose(); aoB.dispose(); }
+      aoA = new THREE.WebGLRenderTarget(aw, ah, { type: THREE.HalfFloatType }); aoB = new THREE.WebGLRenderTarget(aw, ah, { type: THREE.HalfFloatType });
+    }
+    const pe = camera.projectionMatrix.elements, u = aoMat.uniforms;
+    u.tiefe.value = rt.depthTexture; u.aufl.value.set(rw, rh); u.nah.value = camera.near; u.fern.value = camera.far; u.proj.value.set(pe[0], pe[5], pe[8], pe[9]);
+    postPass(aoMat, aoA);
+    aoWeichMat.uniforms.tex.value = aoA.texture; aoWeichMat.uniforms.schritt.value.set(1 / aw, 1 / ah); postPass(aoWeichMat, aoB);
+  }
+  postMat.uniforms.ao.value = aoAn ? aoB.texture : null; postMat.uniforms.aoStark.value = aoAn ? POST.ao : 0; postMat.uniforms.aoZeigen.value = aoAn && POST.aoZeigen ? 1 : 0;
   const kino = !!(R.flug && fein && rt.depthTexture);
   if (kino) {   // unscharfe Farbfassung (Viertelgröße) für den Hintergrund
     weichMat.uniforms.tex.value = rt.texture; weichMat.uniforms.schritt.value.set(1 / qw, 0); postPass(weichMat, farbB);
