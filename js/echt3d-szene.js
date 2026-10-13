@@ -2573,8 +2573,12 @@ export function huepfen(a) {
 export function sprungLos(a) { if (a && (a._vz3d || 0) > 2.4) a._vz3d *= 0.55; }   // Knopf früh losgelassen: kleinerer Hüpfer
 function sprungAbheben(a, now) {
   if (!a._vorT3d || now - a._vorT3d < HOCKE_MS) return;
-  a._vorT3d = null; a._vz3d = SPRUNG_V0; a._jumpT3d = now;
-  if (typeof Sound !== 'undefined') Sound.sfx('hopp');
+  // Kombo wie in Super Mario 64: im Laufen direkt nach der Landung wieder abspringen – höher, beim dritten mit Salto
+  const kombo = a.walking && now - (a._gelandetT3d || 0) < 240 ? ((a._kombo3d || 0) + 1) % 3 : 0;   // nach dem Salto wieder von vorn
+  a._kombo3d = kombo;
+  a._vorT3d = null; a._vz3d = SPRUNG_V0 * [1, 1.17, 1.38][kombo]; a._jumpT3d = now;
+  if (kombo === 2) a._saltoT3d = now;
+  if (typeof Sound !== 'undefined') Sound.sfx(['hopp', 'hopp2', 'hopp3'][kombo]);
   a._z3d = Math.max(a._z3d || 0, 0.0002);   // in der Luft: ab jetzt rechnet die Schwerkraft
 }
 export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py = Blender-Weltposition der Figur
@@ -2591,6 +2595,7 @@ export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py 
   const boden = plattformHoehe(id, px, py, z);
   if (z <= boden && vz <= 0) {
     if (vz < -2.2) { a._landT3d = performance.now(); a._landV3d = Math.min(1, -vz / 9); if (typeof Sound !== 'undefined') Sound.sfx('plumps'); }   // Platsch: Squash bei der Landung
+    if (vz < -0.6) a._gelandetT3d = performance.now();   // echte Landung (für den Kombo-Sprung)
     z = boden; a._vz3d = 0; a._bodenT3d = performance.now();
     if (z > 0.02) a._checkpoint3d = [a.x, a.y, z];
     if (a._sprungWunsch3d && performance.now() - a._sprungWunsch3d < 180) { a._sprungWunsch3d = 0; a._vorT3d = performance.now() - HOCKE_MS + 25; }   // vorgemerkter Sprung
@@ -2840,13 +2845,18 @@ export function frame(t, actors, pxW, ctx) {
       const dx = R.ichPos.x - p.x, dz = R.ichPos.z - p.z, d2 = dx * dx + dz * dz;
       if (d2 < 20 && d2 > 0.05) want = Math.atan2(-dz, dx);
     }
+    const jubel = a._jubelT3d && now - a._jubelT3d < 1300;   // goldener Toast: zur Kamera drehen und jubeln
+    if (jubel) want = Math.atan2(-(camera.position.z - p.z), camera.position.x - p.x);
     let dy = want - f.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     f.yaw += dy * Math.min(1, dt / 120);
     const dreh = a._schub3d ? (now - a._schub3d.t0) * 0.03 : 0;   // getroffen: Figur wirbelt um sich selbst
-    f.holder.rotation.set(0, f.yaw + dreh, (mf && mf.rot ? -mf.rot : 0) - kipp, 'YXZ');   // Mimik-Neigung, Losflitzen
+    const salto = a._saltoT3d && now - a._saltoT3d < 620 ? (now - a._saltoT3d) / 620 : 0;   // dritter Kombo-Sprung: Salto vorwärts
+    if (a._saltoT3d && !salto) a._saltoT3d = null;
+    f.holder.rotation.set(0, f.yaw + dreh, (mf && mf.rot ? -mf.rot : 0) - kipp - salto * Math.PI * 2, 'YXZ');   // Mimik-Neigung, Losflitzen, Salto um die Seitenachse (vorn ist +x)
     if (f.rig) {
       let p0 = pose(f.rig, {});
-      if (a._vorT3d) p0 = pose(f.rig, { aR: 0.5, eR: 0.4, aL: -0.5, eL: 0.4, tR: -0.7, tL: -0.7, kR: 1.3, kL: 1.3, lean: 0.25 });   // Hocke, Arme nach hinten
+      if (a._jubelT3d && now - a._jubelT3d < 1300) { const w = Math.sin((now - a._jubelT3d) * 0.018) * 0.25; p0 = pose(f.rig, { aR: -2.7 + w, eR: 0.2, aL: 2.7 - w, eL: 0.2, xR: -0.4, xL: 0.4, lean: -0.12 }); }   // Arme hoch!
+      else if (a._vorT3d) p0 = pose(f.rig, { aR: 0.5, eR: 0.4, aL: -0.5, eL: 0.4, tR: -0.7, tL: -0.7, kR: 1.3, kL: 1.3, lean: 0.25 });   // Hocke, Arme nach hinten
       else if ((a._vz3d || 0) < -3.2 || a._schub3d) {   // freier Fall: Arme rudern wie Windmühlen, Beine strampeln
         const w = t * 0.03;
         p0 = pose(f.rig, { aR: -1.6 + Math.sin(w) * 1.4, eR: 0.3, aL: 1.6 + Math.sin(w + 1.6) * 1.4, eL: 0.3, xR: -1.2, xL: 1.2, tR: Math.sin(w * 1.3) * 0.7, tL: -Math.sin(w * 1.3) * 0.7, kR: 0.6, kL: 0.6, lean: -0.15 });

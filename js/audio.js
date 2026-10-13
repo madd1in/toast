@@ -649,6 +649,8 @@ const Sound = (() => {
     }])),
     // Sprung (Cartoon-Flöte nach oben) und Landung (weiches Plumps)
     hopp: t => { osc('sine', 330, t, 0.16, 0.05, sfxBus, { f2: 880, attack: 0.01 }); nz(t, 0.06, 0.03, sfxBus, { type: 'highpass', f: 2000 }); },
+    hopp2: t => { osc('sine', 392, t, 0.18, 0.05, sfxBus, { f2: 1175, attack: 0.01 }); nz(t, 0.06, 0.03, sfxBus, { type: 'highpass', f: 2200 }); },
+    hopp3: t => { osc('sine', 440, t, 0.3, 0.055, sfxBus, { f2: 1568, attack: 0.01 }); osc('triangle', 1760, t + 0.18, 0.2, 0.025, sfxBus, { f2: 2637, decay: true }); nz(t, 0.25, 0.03, sfxBus, { type: 'bandpass', f: 1800, f2: 4000, q: 2 }); },   // Salto: mit Wusch
     plumps: t => { osc('sine', 150, t, 0.14, 0.09, sfxBus, { f2: 60, decay: true }); nz(t, 0.08, 0.05, sfxBus, { type: 'lowpass', f: 700 }); },
     // ein goldener Toast in der Nähe: zwei feine Glitzertöne
     funkeln: t => { const f = 2600 + Math.random() * 900; osc('triangle', f, t, 0.09, 0.012, sfxBus, { decay: true }); osc('sine', f * 1.5, t + 0.06, 0.12, 0.008, sfxBus, { decay: true }); },

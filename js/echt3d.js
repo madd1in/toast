@@ -392,6 +392,7 @@ function echt3dLenkSchritt(dt) {
   const a = G.state && me();
   if (!a || !a._gelenkt || !ECHT3D.mod || !ECHT3D.mod.lenken || a.room !== viewRoomId() || !echt3dAktiv()) return;
   if (a.target) { a._gelenkt = false; a._v3d = null; return; }   // ein Klick hat übernommen
+  if (a._jubelT3d && performance.now() - a._jubelT3d < 1100) { a.walking = false; a._v3d = null; return; }   // Jubelpose: kurz stillhalten
   const e = a._eingabe3d, frisch = e && performance.now() - e.t < 150 && echt3dSteuerungErlaubt();
   const sek = Math.min(0.1, dt / 1000);   // auch bei wenig Bildern pro Sekunde richtig schnell
   const r = ECHT3D.mod.lenken(a, frisch ? e.x : 0, frisch ? e.y : 0, sek, a.room);
@@ -469,6 +470,7 @@ function echt3dGoldtoastPruefen(p) {
     G.state.flags['goldtoast_' + id] = 1;
     if (typeof progress === 'function' && typeof MILESTONES !== 'undefined') Sound.setIntensity(progress() / MILESTONES.length);
     m.goldtoastWeg(id); Sound.sfx('goldtoast'); rumble(180, 0.4, 0.6);
+    p._jubelT3d = performance.now(); if (!p._vz3d) { p._vz3d = 3.6; p._z3d = Math.max(p._z3d || 0, 0.0002); }   // kleiner Freudensprung
     if (Sound.duck) { Sound.duck(true); setTimeout(() => { if (!G.speech) Sound.duck(false); }, 1400); }   // Musik kurz leiser: die Fanfare gehört dem Toast
     if (typeof mimikStart === 'function') mimikStart(p, 'freude');
     const n = goldtoastZahl(), alle = GOLDTOAST_RAEUME.length;
