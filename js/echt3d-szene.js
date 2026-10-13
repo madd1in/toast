@@ -620,7 +620,7 @@ function walkPoseRoh(r, ph) {
 // k: Stärke (Mitte 1 + k·(Seitenverhältnis² + 1) mal vergrößert), ss: Zwischenbild entsprechend feiner gerechnet, damit
 // die vergrößerte Mitte nicht pixelig wird (statt 4× Kantenglättung – das Überabtasten glättet die Kanten mit)
 const FISCH = { k: 0.06, fovPlus: 11, ss: 1.35 };
-const fischPlus = () => SPARSAM ? 0 : FISCH.fovPlus;   // Xbox und schwache Geräte: ohne Linse (spart einen ganzen Bildschritt)
+const fischPlus = () => SPARSAM || !POST.an ? 0 : FISCH.fovPlus;   // Xbox und schwache Geräte: ohne Linse (spart einen ganzen Bildschritt)
 const ASP = 960 / 440;
 let fischS = 0, fischRT = null, fischMat = null, fischSzene = null, fischKam = null;
 const fischZ = k => 1 / (1 + k * (ASP * ASP + 1));   // Ecken bleiben Ecken: nichts außerhalb des Zwischenbilds
@@ -635,7 +635,7 @@ function fischZurueck(v) {   // Punkt im unverzerrten Bild (NDC) -> Stelle auf d
   for (let i = 0; i < 8; i++) { const px = sx * ASP, f = (1 + k * (px * px + sy * sy)) * z; sx = ux / f; sy = uy / f; }
   return v.set(sx, sy, v.z);
 }
-function fischZiel(R) { if (SPARSAM) return 0; if (R.flug) return 1; const o = R.orbit; return o ? Math.min(1, Math.max(0, o.w || 0)) : 0; }
+function fischZiel(R) { if (SPARSAM || !POST.an) return 0; if (R.flug) return 1; const o = R.orbit; return o ? Math.min(1, Math.max(0, o.w || 0)) : 0; }
 function fischBauen() {
   fischKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   fischMat = new THREE.ShaderMaterial({
@@ -658,7 +658,8 @@ function fischBauen() {
 // ---------- Nachbearbeitung (Psychonauts-2-Look): Leuchten (Bloom), Farbgebung, Vignette – und die Fischaugen-Linse ----------
 // Szene ins Zwischenbild (mit 4× Kantenglättung, mit Linse 1,35× feiner); helle Stellen (Lampen, Fenster, Goldtoast,
 // Glibber) werden auf Viertelgröße herausgezogen und weichgezeichnet, dann alles in einem Schritt zusammengesetzt.
-const POST = { an: !SPARSAM, bloom: 0.6, schwelle: 0.8, saett: 1.14, waerme: [1.035, 1.0, 0.965], schattenLila: [0.014, 0.005, 0.024], vignette: 0.32 };
+const HANDY = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;   // Telefone und kleine Tablets
+const POST = { an: !SPARSAM && !HANDY, bloom: 0.6, schwelle: 0.8, saett: 1.14, waerme: [1.035, 1.0, 0.965], schattenLila: [0.014, 0.005, 0.024], vignette: 0.32 };
 let farbA = null, farbB = null, postRT = { 1: null, 2: null }, glanzA = null, glanzB = null, hellMat = null, weichMat = null, postMat = null, postSzene = null, postKam = null, postQuad = null;
 const POST_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 function postBauen() {
@@ -698,7 +699,7 @@ function postBauen() {
       #include <colorspace_fragment>
     }`);
 }
-export function nachbearbeitung(an) { if (an != null) POST.an = !!an && !SPARSAM; return POST.an; }   // Schalter (Einstellungen, Messen)
+export function nachbearbeitung(an) { if (an != null) POST.an = !!an && !SPARSAM && !HANDY; return POST.an; }   // Schalter (Einstellungen, Messen)
 function postPass(mat, ziel) { postQuad.material = mat; renderer.setRenderTarget(ziel); renderer.render(postSzene, postKam); }
 function postRender(R, camera, w, h) {
   if (!postMat) postBauen();

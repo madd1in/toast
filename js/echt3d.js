@@ -18,6 +18,9 @@ function echt3dBreite(voll) {
   const jetzt = performance.now(), d = ECHT3D_Q.letzt ? Math.min(120, jetzt - ECHT3D_Q.letzt) : 16; ECHT3D_Q.letzt = jetzt;
   ECHT3D_Q.ema += (d - ECHT3D_Q.ema) * 0.05;
   if (ECHT3D_Q.ema > 24) ECHT3D_Q.k = Math.max(0.62, ECHT3D_Q.k - 0.004); else if (ECHT3D_Q.ema < 17.5) ECHT3D_Q.k = Math.min(1, ECHT3D_Q.k + 0.0015);   // Ziel: flüssige 50–60 Bilder
+  // bleibt es trotz kleinster Auflösung ruckelig: Leuchten, Linse und Tiefenunschärfe abschalten (einmal, mit Hinweis)
+  if (ECHT3D_Q.k <= 0.62 && ECHT3D_Q.ema > 30) { ECHT3D_Q.amBoden = (ECHT3D_Q.amBoden || 0) + d; if (ECHT3D_Q.amBoden > 8000 && !ECHT3D_Q.einfach && ECHT3D.mod && ECHT3D.mod.nachbearbeitung) { ECHT3D_Q.einfach = true; ECHT3D.mod.nachbearbeitung(false); ECHT3D_Q.k = 0.85; note('Grafik vereinfacht, damit es flüssig läuft.'); } }
+  else ECHT3D_Q.amBoden = 0;
   return Math.max(Math.min(800, Math.round(voll)), Math.round(voll * ECHT3D_Q.k / 160) * 160);   // nie unter 800 Bildpunkte Breite (sonst pixelig)   // in Stufen, damit der Renderer nicht dauernd neu anlegt
 }
 function echt3dWanted(room) { return !!(G.settings.echt3d && room && ECHT3D.rooms[room.id] && !cx.isPix); }
@@ -809,7 +812,12 @@ let echt3dAktionsKnopf = null;
     if (G.inIntro) return;   // im Vorspann keine Hinweise und keine Steuerung
     if (drei && raum !== letzterRaum) {
       if (KURS[raum]) note(KURS[raum]);
-      else if (!hinweisDirekt) { hinweisDirekt = true; note('Echtzeit-3D: WASD oder linker Stick laufen, Leertaste/A springt, E benutzt das Nächste. Ziehen dreht die Kamera um dich.'); }
+      else if (!hinweisDirekt) {
+        hinweisDirekt = true;
+        note(G.pointer === 'touch' || COARSE ? 'Echtzeit-3D: links laufen, A springt, der Knopf darüber benutzt, was in der Nähe ist. Wischen dreht die Kamera.'
+          : G.pointer === 'pad' ? 'Echtzeit-3D: linker Stick läuft, A springt, X benutzt das Nächste, rechter Stick dreht die Kamera.'
+            : 'Echtzeit-3D: WASD laufen, Leertaste springt, E benutzt das Nächste. Ziehen dreht die Kamera um dich.');
+      }
     }
     letzterRaum = drei ? raum : null;
     const p = me();
