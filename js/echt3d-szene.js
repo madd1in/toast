@@ -2734,6 +2734,12 @@ function sprungAbheben(a, now) {
   a._vorT3d = null; a._vz3d = SPRUNG_V0 * [1, 1.17, 1.38][kombo]; a._jumpT3d = now;
   if (kombo === 2) a._saltoT3d = now;
   if (typeof Sound !== 'undefined') Sound.sfx(['hopp', 'hopp2', 'hopp3'][kombo]);
+  // Kombo-Sprünge mit Stimme: „Hup!“ beim zweiten, „Wa-huu!“ beim Salto – in der Plapperstimme der Figur, höher gezogen
+  if (kombo && a.voice && typeof Sound !== 'undefined' && typeof G !== 'undefined' && G.settings.babble) {
+    const v = f => Object.assign({}, a.voice, { blip: (a.voice.blip || 220) * f });
+    Sound.blip(v(1.3));
+    if (kombo === 2) setTimeout(() => Sound.blip(v(1.65)), 120);
+  }
   a._z3d = Math.max(a._z3d || 0, 0.0002);   // in der Luft: ab jetzt rechnet die Schwerkraft
 }
 export function schwerkraft(a, dt, id, px, py) {   // einen Frame Physik; px/py = Blender-Weltposition der Figur

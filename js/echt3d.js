@@ -446,7 +446,7 @@ function echt3dLenkSchritt(dt) {
   a.phase = (a.phase || 0) + sek * r.tempo * 2.3;
   if (room && Math.floor(a.phase / Math.PI) !== vorher && a.walking && (a._z3d || 0) < 0.05) {
     const st = (typeof STEP_STYLE !== 'undefined' && STEP_STYLE[a.id]) || [null, (a.bw || 50) / 55];
-    Sound.step(room.floor, panX(a.x), st[1], false, st[0]);
+    Sound.step(room.floor, panX(a.x), st[1], echt3dNass(room) > 0.2, st[0]);   // nach dem Regen platscht es
   }
 }
 { const updateOhneLenkung = updateActors; updateActors = function (dt) { echt3dLenkSchritt(dt); updateOhneLenkung(dt); }; }
